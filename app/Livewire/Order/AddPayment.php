@@ -14,11 +14,22 @@ use Livewire\Component;
 use Illuminate\Support\Facades\Log;
 use App\Events\SendOrderBillEvent;
 use App\Services\RestaurantAvailabilityService;
+use App\Services\BakongKhqrService;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Writer\PngWriter;
+use Illuminate\Support\Str;
 
 class AddPayment extends Component
 {
     use LivewireAlert;
 
+    public $khqrPayload = null;
+    public $khqrMd5 = null;
+    public $khqrImage = null;
+    public $showKhqrModal = false;
+    public $khqrReference = null;
+    public $khqrStatus = null;
+    public $khqrMessage = null;
     public $order;
     public $showAddPaymentModal = false;
     public $paymentMethod = 'cash';
@@ -104,6 +115,9 @@ class AddPayment extends Component
         $this->totalExtraCharges = collect($extraCharges)->sum('amount');
 
         $this->updateAmountDetails();
+        $this->khqrPayload = null;
+        $this->khqrMd5 = null;
+        $this->khqrImage = null;
         $this->showAddPaymentModal = true;
 
         // Refresh available items data
@@ -312,11 +326,183 @@ class AddPayment extends Component
         }
     }
 
-    public function setPaymentMethod($method)
-    {
-        $this->paymentMethod = $method;
+  public function setPaymentMethod($method)
+{
+    $this->paymentMethod = $method;
+
+    if ($method === 'khqr') {
+        $this->paymentAmount = $this->dueAmount;
         $this->updatedPaymentAmount();
+
+        $this->khqrPayload = null;
+        $this->khqrMd5 = null;
+        $this->khqrImage = null;
+        $this->khqrReference = null;
+        $this->khqrStatus = 'waiting';
+        $this->khqrMessage = 'Waiting for customer payment...';
+        $this->showKhqrModal = true;
+
+        $this->generateKhqr();
+
+        return;
     }
+
+    $this->khqrPayload = null;
+    $this->khqrMd5 = null;
+    $this->khqrImage = null;
+    $this->khqrReference = null;
+    $this->khqrStatus = null;
+    $this->khqrMessage = null;
+    $this->showKhqrModal = false;
+
+    $this->updatedPaymentAmount();
+}
+public function generateKhqr()
+{
+    try {
+        $amount = (float) ($this->paymentAmount ?: $this->dueAmount);
+
+        if ($amount <= 0) {
+            $this->alert('error', 'Invalid KHQR amount.', ['toast' => true]);
+            return;
+        }
+
+        $orderId = $this->order?->id ?? 'TEMP';
+        $billNumber = 'O' . $orderId . now()->format('His') . strtoupper(\Illuminate\Support\Str::random(3));
+        $billNumber = substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($billNumber)), 0, 20);
+
+        $this->khqrPayload = null;
+        $this->khqrMd5 = null;
+        $this->khqrImage = null;
+        $this->khqrReference = null;
+        $this->khqrStatus = 'waiting';
+        $this->khqrMessage = 'Waiting for customer payment...';
+
+        $khqr = app(\App\Services\BakongKhqrService::class)->generate($amount, $billNumber);
+
+        $this->khqrPayload = $khqr['payload'];
+        $this->khqrMd5 = $khqr['md5'];
+        $this->khqrReference = $khqr['reference'];
+        $this->khqrImage = null;
+
+        $this->saveKhqrToPaymentTable($amount);
+
+        $this->dispatch('khqr-generated', payload: $this->khqrPayload, md5: $this->khqrMd5);
+
+    } catch (\Throwable $e) {
+        \Log::error('KHQR generate error: ' . $e->getMessage(), [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        $this->khqrPayload = null;
+        $this->khqrMd5 = null;
+        $this->khqrImage = null;
+        $this->khqrReference = null;
+        $this->khqrStatus = 'error';
+        $this->khqrMessage = $e->getMessage();
+
+        $this->alert('error', $e->getMessage(), ['toast' => true]);
+    }
+}
+private function saveKhqrToPaymentTable(float $amount): void
+{
+    if (!$this->order || empty($this->khqrPayload) || empty($this->khqrMd5)) {
+        return;
+    }
+
+    $paymentQuery = $this->order->payments()
+        ->where('payment_method', 'khqr');
+
+    if (\Illuminate\Support\Facades\Schema::hasColumn('payments', 'khqr_md5')) {
+        $paymentQuery->whereNotNull('khqr_md5');
+    }
+
+    $payment = $paymentQuery
+        ->latest()
+        ->first();
+
+    $data = [
+        'amount' => $amount,
+        'payment_method' => 'khqr',
+        'transaction_id' => $this->khqrReference,
+        'khqr_payload' => $this->khqrPayload,
+        'khqr_md5' => $this->khqrMd5,
+    ];
+
+    if (\Illuminate\Support\Facades\Schema::hasColumn('payments', 'payment_status')) {
+        $data['payment_status'] = 'pending';
+    }
+
+    if (!$payment) {
+        $this->order->payments()->create($data);
+        return;
+    }
+
+    $payment->update($data);
+}
+public function checkKhqrPaymentStatus()
+{
+    if ($this->paymentMethod !== 'khqr') {
+        return;
+    }
+
+    if ($this->khqrStatus === 'paid') {
+        return;
+    }
+
+    $payment = null;
+
+    if ($this->order) {
+        $payment = $this->order->payments()
+            ->where('payment_method', 'khqr')
+            ->whereNotNull('khqr_md5')
+            ->latest()
+            ->first();
+    }
+
+    $md5 = $this->khqrMd5 ?: $payment?->khqr_md5;
+
+    if (empty($md5)) {
+        $this->khqrStatus = 'waiting';
+        $this->khqrMessage = 'No KHQR payment reference found.';
+        return;
+    }
+
+    $result = app(\App\Services\BakongKhqrService::class)->checkPaymentByMd5($md5);
+
+    $paid = (($result['status'] ?? null) === 'paid') || (($result['paid'] ?? false) === true);
+
+    if (!$paid) {
+        $this->khqrStatus = 'waiting';
+        $this->khqrMessage = $result['message'] ?? 'Waiting for customer payment...';
+        return;
+    }
+
+    $this->khqrStatus = 'paid';
+    $this->khqrMessage = 'Payment received successfully.';
+
+    if ($payment && \Illuminate\Support\Facades\Schema::hasColumn('payments', 'payment_status')) {
+        $payment->update([
+            'payment_status' => 'paid',
+        ]);
+    }
+
+    if ($this->order) {
+        $this->order->update([
+            'payment_status' => 'paid',
+            'status' => 'paid',
+        ]);
+    }
+
+    $this->dispatch('khqr-paid');
+
+    $this->alert('success', 'KHQR payment received successfully.', ['toast' => true]);
+}
+public function closeKhqrModal()
+{
+    $this->showKhqrModal = false;
+}
 
     public function quickAmount($amount)
     {
@@ -468,7 +654,7 @@ class AddPayment extends Component
         }
     }
 
-    public function submitForm()
+    public function submitForm($print = false)
     {
         $this->order = $this->order->fresh(['items', 'items.menuItem', 'taxes', 'payments', 'splitOrders.items']);
         if ($this->order->status === 'paid') {
@@ -513,12 +699,15 @@ class AddPayment extends Component
                     ->exists();
 
                 $paymentAmount = $this->paymentAmount - $this->returnAmount;
-
+                
                 Payment::create([
                     'order_id' => $this->order->id,
                     'payment_method' => $this->paymentMethod,
                     'amount' => $paymentAmount,
                     'balance' => $this->returnAmount,
+                    'transaction_id' => $this->paymentMethod === 'khqr' ? $this->khqrMd5 : null,
+                    'khqr_payload' => $this->paymentMethod === 'khqr' ? $this->khqrPayload : null,
+                    'khqr_md5' => $this->paymentMethod === 'khqr' ? $this->khqrMd5 : null,
                     'is_due' => $this->paymentMethod === 'due',
                     'due_amount_received' => ($hasDuePayments && $this->paymentMethod !== 'due') ? $paymentAmount : null
                 ]);
@@ -547,6 +736,7 @@ class AddPayment extends Component
         // Fire event when order becomes paid (for loyalty points)
         if ($this->order->status === 'paid' && !$wasPaid) {
             \App\Events\SendNewOrderReceived::dispatch($this->order);
+             app(\App\Services\LoyaltyRewardCheckerService::class)->checkOrder($this->order);
         }
 
         // Handle due payments - always delete existing due payments first
@@ -585,6 +775,11 @@ class AddPayment extends Component
         $this->dispatch('refreshOrders');
         $this->dispatch('resetPos');
         $this->dispatch('refreshPayments');
+        if ($print) {
+    $url = route('orders.print', $this->order->id);
+    $this->dispatch('print_location', $url);
+}
+
         $this->showAddPaymentModal = false;
     }
 

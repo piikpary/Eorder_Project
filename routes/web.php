@@ -8,12 +8,14 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\KotController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\AreaController;
+use App\Http\Controllers\BakongPaymentController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ShopController;
 use App\Http\Middleware\DisableFrontend;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\CustomerLoyaltyPortalController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\TableController;
 use App\Http\Middleware\LocaleMiddleware;
@@ -74,6 +76,17 @@ use App\Http\Controllers\SuperAdmin\PaystackWebhookController;
 use App\Http\Controllers\SuperAdmin\RazorpayWebhookController;
 use App\Http\Controllers\SuperAdmin\FlutterwaveWebhookController;
 use App\Http\Middleware\EnsureDeliveryExecutiveAuthenticated;
+
+
+  ///loyalty program 
+Route::get('/loyalty', [CustomerLoyaltyPortalController::class, 'login'])->name('loyalty.login');
+Route::post('/loyalty', [CustomerLoyaltyPortalController::class, 'find'])->name('loyalty.find');
+Route::get('/loyalty/card/{token}', [CustomerLoyaltyPortalController::class, 'card'])->name('loyalty.card');
+Route::get('/loyalty/scan/{token}', [CustomerLoyaltyPortalController::class, 'scan'])->name('loyalty.scan');
+Route::get('/loyalty/register', [CustomerLoyaltyPortalController::class, 'register'])
+    ->name('loyalty.register');
+Route::post('/loyalty/register', [CustomerLoyaltyPortalController::class, 'store'])
+    ->name('loyalty.store');
 
 Route::get('/manifest.json', [HomeController::class, 'manifest'])->name('manifest');
 
@@ -471,4 +484,19 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         // Hotel room-service integrations for AJAX POS
         Route::get('/hotel/stays', [PosAjaxController::class, 'getHotelStays'])->name('ajax.pos.hotel.stays');
     });
+
+    Route::get('/test-bakong-config', [BakongPaymentController::class, 'testConfig']);
+    Route::get('/test-bakong-qr/{amount?}', [BakongPaymentController::class, 'testQr']);
+    Route::get('/test-bakong-check/{md5?}', [BakongPaymentController::class, 'testCheck']);
+
+    Route::get('/orders/{order}/bakong-payment', [BakongPaymentController::class, 'showOrderPayment'])
+        ->name('bakong.order.payment');
+
+    Route::get('/orders/{order}/bakong-check', [BakongPaymentController::class, 'checkOrderPayment'])
+        ->name('bakong.order.check');
+
+
+
 });
+
+  

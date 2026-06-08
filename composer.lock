@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b264c92e9301f00c5603e018151621ff",
+    "content-hash": "bcf08db33cf29653890fa0f45c828139",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -1494,21 +1494,21 @@
         },
         {
             "name": "endroid/qr-code",
-            "version": "5.1.0",
+            "version": "6.0.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/endroid/qr-code.git",
-                "reference": "393fec6c4cbdc1bd65570ac9d245704428010122"
+                "reference": "21e888e8597440b2205e2e5c484b6c8e556bcd1a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/endroid/qr-code/zipball/393fec6c4cbdc1bd65570ac9d245704428010122",
-                "reference": "393fec6c4cbdc1bd65570ac9d245704428010122",
+                "url": "https://api.github.com/repos/endroid/qr-code/zipball/21e888e8597440b2205e2e5c484b6c8e556bcd1a",
+                "reference": "21e888e8597440b2205e2e5c484b6c8e556bcd1a",
                 "shasum": ""
             },
             "require": {
                 "bacon/bacon-qr-code": "^3.0",
-                "php": "^8.1"
+                "php": "^8.2"
             },
             "require-dev": {
                 "endroid/quality": "dev-main",
@@ -1525,7 +1525,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "5.x-dev"
+                    "dev-main": "6.x-dev"
                 }
             },
             "autoload": {
@@ -1554,7 +1554,7 @@
             ],
             "support": {
                 "issues": "https://github.com/endroid/qr-code/issues",
-                "source": "https://github.com/endroid/qr-code/tree/5.1.0"
+                "source": "https://github.com/endroid/qr-code/tree/6.0.9"
             },
             "funding": [
                 {
@@ -1562,7 +1562,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-09-08T08:52:55+00:00"
+            "time": "2025-07-13T19:59:45+00:00"
         },
         {
             "name": "ezyang/htmlpurifier",
@@ -1687,6 +1687,65 @@
                 "source": "https://github.com/FakerPHP/Faker/tree/v1.24.1"
             },
             "time": "2024-11-21T13:46:39+00:00"
+        },
+        {
+            "name": "fidele007/bakong-khqr-php",
+            "version": "v1.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/fidele007/bakong-khqr-php.git",
+                "reference": "274ba40d9cea86a83055285839dafd6c1edea337"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/fidele007/bakong-khqr-php/zipball/274ba40d9cea86a83055285839dafd6c1edea337",
+                "reference": "274ba40d9cea86a83055285839dafd6c1edea337",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.4"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.21",
+                "phpstan/phpstan": "^2.1.8",
+                "phpunit/phpunit": "^9.6",
+                "rector/rector": "^2.0.10",
+                "roave/security-advisories": "dev-latest"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "KHQR\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Force Fidele KIEN",
+                    "email": "forcefidele@gmail.com",
+                    "homepage": "https://fidele007.github.io",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A pure PHP implementation of the Bakong KHQR SDK",
+            "keywords": [
+                "bakong",
+                "khqr"
+            ],
+            "support": {
+                "issues": "https://github.com/fidele007/bakong-khqr-php/issues",
+                "source": "https://github.com/fidele007/bakong-khqr-php/tree/v1.2.0"
+            },
+            "funding": [
+                {
+                    "url": "https://www.github.com/sponsors/fidele007",
+                    "type": "github"
+                }
+            ],
+            "time": "2025-05-09T14:30:10+00:00"
         },
         {
             "name": "firebase/php-jwt",

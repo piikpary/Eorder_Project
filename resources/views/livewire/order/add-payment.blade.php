@@ -1,3 +1,4 @@
+
 <div>
     <x-dialog-modal wire:model.live="showAddPaymentModal" maxWidth="4xl" class="w-full max-w-full">
         <x-slot name="title">
@@ -65,12 +66,20 @@
                                 <span class="text-sm">@lang('modules.order.card')</span>
                             </button>
 
-                            <button wire:click="setPaymentMethod('upi')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'upi' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                            <button wire:click="setPaymentMethod('khqr')"
+                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'khqr' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-qr-code-scan w-6 h-6 mx-auto mb-1" viewBox="0 0 16 16"><path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/><path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/><path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z"/><path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z"/><path d="M12 9h2V8h-2z"/></svg>
-                                <span class="text-sm">@lang('modules.order.upi')</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-qr-code-scan w-6 h-6 mx-auto mb-1" viewBox="0 0 16 16">
+                                    <path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/>
+                                    <path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/>
+                                    <path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z"/>
+                                    <path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z"/>
+                                    <path d="M12 9h2V8h-2z"/>
+                                </svg>
+
+                                <span class="text-sm">KHQR</span>
                             </button>
+                          
 
                             <button wire:click="setPaymentMethod('bank_transfer')"
                                 class="p-3 text-center border rounded-lg {{ $paymentMethod === 'bank_transfer' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
@@ -203,6 +212,8 @@
                             </div>
                             @endif
                         </div>
+
+
                     </div>
 
                     <!-- Right Side - Numpad -->
@@ -717,18 +728,35 @@
             @endif
         </x-slot>
 
-        <x-slot name="footer">
-            @if($order)
-            <div class="flex flex-row w-full gap-3">
-                <x-button-cancel class="flex-1 px-6 py-3 text-base font-medium text-gray-700 hover:bg-gray-100 rounded-lg" wire:click="$toggle('showAddPaymentModal')" wire:loading.attr="disabled" wire:target="submitForm">
-                    {{ __('app.cancel') }}
-                </x-button-cancel>
-                <x-button wire:click="submitForm" wire:loading.attr="disabled" wire:target="submitForm" class="flex-1 px-6 py-3 text-base font-medium bg-skin-base text-white rounded-lg hover:bg-skin-base-600">
-                    {{ __('modules.order.completePayment') }}
-                </x-button>
-                </div>
-            @endif
-        </x-slot>
+       <x-slot name="footer">
+    @if($order)
+        <div class="flex flex-row w-full gap-3">
+            <x-button-cancel
+                class="flex-1 px-6 py-3 text-base font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
+                wire:click="$toggle('showAddPaymentModal')"
+                wire:loading.attr="disabled"
+                wire:target="submitForm">
+                {{ __('app.cancel') }}
+            </x-button-cancel>
+
+            <x-button
+                wire:click="submitForm(true)"
+                wire:loading.attr="disabled"
+                wire:target="submitForm"
+                class="flex-1 px-6 py-3 text-base font-medium bg-skin-base text-white rounded-lg hover:bg-skin-base-600">
+                Complete Payment & Print
+            </x-button>
+
+            <x-button
+                wire:click="submitForm(false)"
+                wire:loading.attr="disabled"
+                wire:target="submitForm"
+                class="flex-1 px-6 py-3 text-base font-medium bg-skin-base text-white rounded-lg hover:bg-skin-base-600">
+                {{ __('modules.order.completePayment') }}
+            </x-button>
+        </div>
+    @endif
+</x-slot>
 
     </x-dialog-modal>
 
@@ -871,4 +899,213 @@
             </div>
         </x-slot>
     </x-dialog-modal>
+   @if($showKhqrModal && $paymentMethod === 'khqr')
+    @php
+        $khqrReceiver = config('services.bakong_khqr.merchant_name', config('services.bakong.merchant_name', 'VANNY MEAS'));
+        $khqrCurrency = strtoupper(config('services.bakong_khqr.currency', config('services.bakong.currency', 'USD')));
+        $displayAmount = $paymentAmount ?: $dueAmount;
+    @endphp
+
+    <div
+        x-data="{ open: @entangle('showKhqrModal').live }"
+        x-show="open"
+        x-cloak
+        class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+        @keydown.escape.window="$wire.closeKhqrModal()"
+    >
+        <div
+            x-show="open"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="absolute inset-0 bg-slate-950/75 backdrop-blur-sm"
+            wire:click="closeKhqrModal"
+        ></div>
+
+        <div
+            x-show="open"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 scale-90 translate-y-6"
+            x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+            x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+            class="relative w-full max-w-md"
+        >
+            <div class="overflow-hidden rounded-[30px] bg-white shadow-[0_25px_80px_rgba(0,0,0,0.35)] border border-white/60">
+                @if($khqrStatus === 'paid')
+                    <div class="px-6 pt-7 pb-8 text-center">
+                        <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
+                            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white text-5xl font-bold shadow-lg">
+                                ✓
+                            </div>
+                        </div>
+
+                        <h3 class="mt-5 text-2xl font-extrabold text-gray-900">
+                            Payment Successful
+                        </h3>
+
+                        <p class="mt-2 text-sm text-gray-500">
+                            KHQR payment has been received successfully.
+                        </p>
+
+                        @if(!empty($khqrReference))
+                            <p class="mt-3 text-xs text-gray-400 break-all">
+                                Ref: {{ $khqrReference }}
+                            </p>
+                        @endif
+
+                        <button
+                            type="button"
+                            wire:click="closeKhqrModal"
+                            class="mt-6 w-full rounded-2xl bg-green-500 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-green-600"
+                        >
+                            Done
+                        </button>
+                    </div>
+                @else
+                    <div class="relative overflow-hidden">
+                        <div class="bg-red-600 px-5 py-4 text-center text-white">
+                            <h3 class="text-lg font-extrabold tracking-wide">KHQR Payment</h3>
+                            <p class="mt-1 text-xs text-red-100">Scan and pay with your banking app</p>
+                        </div>
+
+                        <button
+                            type="button"
+                            wire:click="closeKhqrModal"
+                            class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 shadow-md transition hover:bg-gray-100"
+                        >
+                            ✕
+                        </button>
+
+                        <div class="px-6 py-6" wire:poll.3s="checkKhqrPaymentStatus">
+                            <div class="text-center">
+                                <p class="text-[11px] uppercase tracking-[0.18em] text-gray-400">Receiver Name</p>
+                                <p class="mt-1 text-xl font-extrabold text-gray-900">{{ $khqrReceiver }}</p>
+
+                                <p class="mt-4 text-[11px] uppercase tracking-[0.18em] text-gray-400">Amount</p>
+                                <p class="mt-1 text-4xl font-extrabold text-gray-900 leading-none">
+                                    @if($khqrCurrency === 'USD')
+                                        ${{ number_format((float) $displayAmount, 2) }}
+                                    @else
+                                        {{ number_format((float) $displayAmount, 0) }}
+                                        <span class="text-base font-semibold">{{ $khqrCurrency }}</span>
+                                    @endif
+                                </p>
+                            </div>
+
+                            <div class="mt-6 flex justify-center">
+                                <div class="rounded-[24px] border border-gray-200 bg-white p-4 shadow-sm">
+                                    @if(!empty($khqrPayload))
+                                        <div class="relative">
+                                            <div class="absolute inset-0 rounded-2xl bg-red-100 blur-xl opacity-40 animate-pulse"></div>
+
+                                            <div
+                                                wire:ignore
+                                                id="khqr-livewire-qr"
+                                                wire:key="khqr-{{ $khqrMd5 }}"
+                                                data-payload="{{ $khqrPayload }}"
+                                                class="relative flex h-56 w-56 items-center justify-center rounded-2xl bg-white"
+                                                style="min-width:224px; min-height:224px;"
+                                            ></div>
+                                        </div>
+                                    @else
+                                        <div class="flex h-56 w-56 items-center justify-center rounded-2xl bg-gray-50 text-center text-xs text-red-500">
+                                            KHQR not generated.<br>
+                                            Please select KHQR again.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            @if(!empty($khqrReference))
+                                <p class="mt-4 text-center text-[11px] text-gray-400 break-all">
+                                    Ref: {{ $khqrReference }}
+                                </p>
+                            @endif
+
+                            <div class="mt-4 text-center">
+                                @if($khqrStatus === 'error')
+                                    <div class="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">
+                                        <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+                                        {{ $khqrMessage ?: 'Could not generate KHQR.' }}
+                                    </div>
+                                @else
+                                    <div class="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                                        <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        {{ $khqrMessage ?: 'Waiting for customer payment...' }}
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="mt-6 rounded-2xl bg-gray-50 px-4 py-4 text-center">
+                                <p class="text-sm font-semibold text-gray-700">
+                                    Scan with Bakong / ABA / Wing / ACLEDA App
+                                </p>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    The system will detect payment automatically.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                wire:click="closeKhqrModal"
+                                class="mt-5 w-full rounded-2xl border border-gray-300 bg-white py-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+@endif
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+    function drawKhqrQr(payload = null) {
+        const qrBox = document.getElementById('khqr-livewire-qr');
+
+        if (!qrBox) {
+            return;
+        }
+
+        const qrPayload = payload || qrBox.getAttribute('data-payload');
+
+        if (!qrPayload || typeof QRCode === 'undefined') {
+            return;
+        }
+
+        qrBox.innerHTML = '';
+
+        new QRCode(qrBox, {
+            text: qrPayload,
+            width: 224,
+            height: 224,
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        setTimeout(() => drawKhqrQr(), 300);
+    });
+
+    document.addEventListener('livewire:init', function () {
+        Livewire.on('khqr-generated', function (event) {
+            setTimeout(function () {
+                const payload = event?.payload || event?.[0]?.payload || null;
+                drawKhqrQr(payload);
+            }, 300);
+        });
+
+        Livewire.hook('morph.updated', function () {
+            setTimeout(() => drawKhqrQr(), 300);
+        });
+    });
+</script>
