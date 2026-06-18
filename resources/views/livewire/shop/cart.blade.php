@@ -1,10 +1,12 @@
+
 @php
-
-app()->setLocale(session('customer_locale', app()->getLocale()));
+app()->setLocale(session('customer_locale', 'en'));
+$useClientMenuCatalog = !empty($clientShopCatalog) && !empty($clientShopBrowseConfig);
+$useJsOrderTypeModal = $useClientMenuCatalog && ($clientShopBrowseConfig['use_js_order_type_modal'] ?? false);
 @endphp
-
 <div>
-    <!-- Order Type Selection Modal -->
+    <!-- Order Type Selection Modal (skipped when Alpine client catalog handles it) -->
+    @if (!$useJsOrderTypeModal)
     <x-dialog-modal wire:model.live="showOrderTypeModal" maxWidth="xl">
         <x-slot name="title">
             <div class="text-center">
@@ -64,9 +66,18 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
         </x-slot>
 
         <x-slot name="footer">
-            <!-- No footer buttons - force selection -->
+            @if ($clientShopBrowseConfig['show_book_table_escape'] ?? false)
+                <div class="w-full text-center">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">@lang('messages.bookTableInstead')</p>
+                    <a href="{{ $clientShopBrowseConfig['book_table_url'] }}"
+                        class="inline-flex items-center justify-center mt-2 text-sm font-semibold text-skin-base hover:underline">
+                        @lang('menu.bookTable')
+                    </a>
+                </div>
+            @endif
         </x-slot>
     </x-dialog-modal>
+    @endif
 
     <!-- Location Access Modal -->
     <x-dialog-modal wire:model.defer="showLocationModal" maxWidth="sm">
@@ -119,83 +130,72 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                         {{ $headerText }}
                     </h1>
                 </div>
-                @elseif($headerType === 'image' && count($headerImages) > 0)
-                <!-- Image Carousel -->
+            @elseif($headerType === 'image' && count($headerImages) > 0)
                 <div id="default-carousel" class="relative w-full touch-pan-y" data-carousel="slide">
-                    <!-- Carousel wrapper -->
                     <div class="relative h-24 overflow-hidden border border-gray-200 rounded-lg shadow-lg sm:h-32 md:h-40 lg:h-48 dark:border-gray-700">
                         @foreach($headerImages as $index => $image)
-                            <!-- Item {{ $index + 1 }} -->
                             <div class="hidden duration-700 ease-in-out" data-carousel-item>
                                 <img src="{{ $image->image_url }}"
-                                    class="absolute block object-cover w-full -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
+                                    class="absolute block object-cover w-full -translate-x-1/2  top-1/2 left-1/2"
                                     alt="{{ $image->alt_text ?? 'Header Image' }}">
                             </div>
                         @endforeach
                     </div>
-                @elseif($headerType === 'image' && count($headerImages) > 0)
-                    <!-- Image Carousel -->
-                    <div id="default-carousel" class="relative w-full touch-pan-y" data-carousel="slide">
-                        <!-- Carousel wrapper -->
-                        <div class="relative h-24 overflow-hidden border border-gray-200 rounded-lg shadow-lg sm:h-32 md:h-40 lg:h-48 dark:border-gray-700">
+
+                    @if(count($headerImages) > 1)
+                        <div class="absolute z-30 flex space-x-2 -translate-x-1/2 bottom-3 sm:bottom-5 left-1/2 sm:space-x-3 rtl:space-x-reverse">
                             @foreach($headerImages as $index => $image)
-                                <!-- Item {{ $index + 1 }} -->
-                                <div class="hidden duration-700 ease-in-out" data-carousel-item>
-                                    <img src="{{ $image->image_url }}"
-                                        class="absolute block object-cover w-full -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
-                                        alt="{{ $image->alt_text ?? 'Header Image' }}">
-                                </div>
+                                <button type="button"
+                                        class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full transition-all duration-200 {{ $index === 0 ? 'bg-white dark:bg-gray-200' : 'bg-white/50 dark:bg-gray-200/50 hover:bg-white/75 dark:hover:bg-gray-200/75' }}"
+                                        aria-current="{{ $index === 0 ? 'true' : 'false' }}"
+                                        aria-label="Slide {{ $index + 1 }}"
+                                        data-carousel-slide-to="{{ $index }}"></button>
                             @endforeach
                         </div>
 
-                        @if(count($headerImages) > 1)
-                            <!-- Slider indicators -->
-                            <div class="absolute z-30 flex space-x-2 -translate-x-1/2 bottom-3 sm:bottom-5 left-1/2 sm:space-x-3 rtl:space-x-reverse">
-                                @foreach($headerImages as $index => $image)
-                                    <button type="button"
-                                            class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full transition-all duration-200 {{ $index === 0 ? 'bg-white dark:bg-gray-200' : 'bg-white/50 dark:bg-gray-200/50 hover:bg-white/75 dark:hover:bg-gray-200/75' }}"
-                                            aria-current="{{ $index === 0 ? 'true' : 'false' }}"
-                                            aria-label="Slide {{ $index + 1 }}"
-                                            data-carousel-slide-to="{{ $index }}"></button>
-                                @endforeach
-                            </div>
-
-                            <!-- Slider controls - Hidden on mobile for better touch experience -->
-                            <button type="button" class="absolute top-0 z-30 items-center justify-center hidden h-full px-2 cursor-pointer start-0 sm:flex sm:px-4 group focus:outline-none" data-carousel-prev>
-                                <span class="inline-flex items-center justify-center w-8 h-8 transition-all duration-200 rounded-full sm:w-10 sm:h-10 bg-white/30 dark:bg-gray-800/30 group-hover:bg-white/50 dark:group-hover:bg-gray-800/60 group-focus:ring-4 group-focus:ring-white dark:group-focus:ring-gray-800/70 group-focus:outline-none">
-                                    <svg class="w-3 h-3 text-white sm:w-4 sm:h-4 dark:text-gray-200 rtl:rotate-180" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 1 1 5l4 4"/>
-                                    </svg>
-                                    <span class="sr-only">Previous</span>
-                                </span>
-                            </button>
-                            <button type="button" class="absolute top-0 z-30 items-center justify-center hidden h-full px-2 cursor-pointer end-0 sm:flex sm:px-4 group focus:outline-none" data-carousel-next>
-                                <span class="inline-flex items-center justify-center w-8 h-8 transition-all duration-200 rounded-full sm:w-10 sm:h-10 bg-white/30 dark:bg-gray-800/30 group-hover:bg-white/50 dark:group-hover:bg-gray-800/60 group-focus:ring-4 group-focus:ring-white dark:group-focus:ring-gray-800/70 group-focus:outline-none">
-                                    <svg class="w-3 h-3 text-white sm:w-4 sm:h-4 dark:text-gray-200 rtl:rotate-180" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
-                                    </svg>
-                                    <span class="sr-only">Next</span>
-                                </span>
-                            </button>
-                        @endif
-                    </div>
-                @else
-                    <!-- Default header if no custom settings -->
-                    <div
-                    class="py-4 px-4 mx-auto max-w-screen-xl text-center lg:py-8 lg:px-12 bg-skin-base/[.1] dark:bg-gray-800 rounded-lg">
-                    <h1
-                        class="text-4xl font-extrabold leading-none tracking-tight text-gray-900 md:text-5xl lg:text-3xl dark:text-white">
-                            @lang('messages.frontHeroHeading')</h1>
-                    </div>
-                @endif
+                        <button type="button" class="absolute top-0 z-30 items-center justify-center hidden h-full px-2 cursor-pointer start-0 sm:flex sm:px-4 group focus:outline-none" data-carousel-prev>
+                            <span class="inline-flex items-center justify-center w-8 h-8 transition-all duration-200 rounded-full sm:w-10 sm:h-10 bg-white/30 dark:bg-gray-800/30 group-hover:bg-white/50 dark:group-hover:bg-gray-800/60 group-focus:ring-4 group-focus:ring-white dark:group-focus:ring-gray-800/70 group-focus:outline-none">
+                                <svg class="w-3 h-3 text-white sm:w-4 sm:h-4 dark:text-gray-200 rtl:rotate-180" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 1 1 5l4 4"/>
+                                </svg>
+                                <span class="sr-only">Previous</span>
+                            </span>
+                        </button>
+                        <button type="button" class="absolute top-0 z-30 items-center justify-center hidden h-full px-2 cursor-pointer end-0 sm:flex sm:px-4 group focus:outline-none" data-carousel-next>
+                            <span class="inline-flex items-center justify-center w-8 h-8 transition-all duration-200 rounded-full sm:w-10 sm:h-10 bg-white/30 dark:bg-gray-800/30 group-hover:bg-white/50 dark:group-hover:bg-gray-800/60 group-focus:ring-4 group-focus:ring-white dark:group-focus:ring-gray-800/70 group-focus:outline-none">
+                                <svg class="w-3 h-3 text-white sm:w-4 sm:h-4 dark:text-gray-200 rtl:rotate-180" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
+                                </svg>
+                                <span class="sr-only">Next</span>
+                            </span>
+                        </button>
+                    @endif
+                </div>
+            @else
+                <div class="py-4 px-4 mx-auto max-w-screen-xl text-center lg:py-8 lg:px-12 bg-skin-base/[.1] dark:bg-gray-800 rounded-lg">
+                    <h1 class="text-4xl font-extrabold leading-none tracking-tight text-gray-900 md:text-5xl lg:text-3xl dark:text-white">
+                        @lang('messages.frontHeroHeading')
+                    </h1>
+                </div>
+            @endif
         </section>
+    @endif
+
+
+
+    @if (!$showCart)
+        @if ($useClientMenuCatalog)
+            @include('livewire.shop.partials.cart-client-menu')
+        @elseif (!$showOrderTypeModal)
+
+        @if (!$cameFromQR)
+            @include('livewire.shop.partials.order-type-selector', [
+                'orderTypes' => $this->orderTypes,
+                'selectedOrderTypeId' => $orderTypeId,
+            ])
         @endif
 
-
-
-    @if (!$showCart && !$showOrderTypeModal)
-
-        <div class="flex flex-col px-4 my-4" x-data="{ showAll: false }">
+        <div class="flex flex-col px-4 mt-4 mb-4" x-data="{ showAll: false }">
             <!-- Card Section -->
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
 
@@ -204,7 +204,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                     'group flex items-center border shadow-sm rounded-lg hover:shadow-md transition dark:bg-gray-700 dark:border-gray-600',
                     'bg-skin-base dark:bg-skin-base' => is_null($menuId),
                     'bg-white' => !is_null($menuId),
-                    ]) wire:key='menu-{{ 'all-' . microtime() }}'
+                ]) wire:key='menu-{{ 'all-' . microtime() }}'
                     wire:click='filterMenuItems(null)' href="javascript:;">
                     <div class="p-2 sm:p-3">
                         <div class="flex items-center gap-3">
@@ -400,9 +400,10 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
 
         </div>
 
+        @endif
     @endif
 
-    @if ($showMenu && !$showOrderTypeModal)
+    @if ($showMenu && !$showOrderTypeModal && !$useClientMenuCatalog)
         <div class="px-4 mb-32 space-y-4 lg:gap-8"
             x-data="{
                 loadedCount: @entangle('menuItemsLoaded'),
@@ -439,91 +440,115 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
             "
             @scroll.window.throttle.200ms="scrollHandler()">
 
-            @forelse ($this->menuItems as $key => $itemCat)
-                <h3 class="my-4 text-base font-semibold text-gray-900 lg:text-xl dark:text-white">{{ $key }}
-                </h3>
-                <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-8">
-                    @foreach ($itemCat as $item)
-                        <div @class([
-                            'flex items-center justify-between gap-6 border shadow-sm rounded-lg hover:shadow-md transition dark:border-gray-600 dark:lg:bg-gray-900 dark:shadow-sm lg:rounded-md',
-                            'bg-gray-100 dark:bg-gray-800' => !$item->in_stock,
-                            'bg-white dark:bg-gray-900' => $item->in_stock,
-                                ]) wire:key='menu-item-{{ $item->id . microtime() }}'>
-                             <div class="flex w-full p-3 space-x-4">
-                                @if ($restaurant && !$restaurant->hide_menu_item_image_on_customer_site)
-                                    <img class="object-cover w-16 h-16 rounded-md cursor-pointer lg:w-24 lg:h-24"
-                                        wire:click="showItemDetail({{ $item->id }})"
-                                        src="{{ $item->item_photo_url }}" alt="{{ $item->item_name }}">
-                                @endif
-                                <div
-                                    class="flex flex-col w-full gap-1 text-sm font-normal text-gray-500 lg:text-base dark:text-gray-400">
-                                    <div
-                                        class="inline-flex items-center text-sm font-semibold text-gray-900 lg:text-base dark:text-white">
-                                        <img src="{{ asset('img/' . $item->type . '.svg') }}" class="h-4 mr-1"
-                                            title="@lang('modules.menu.' . $item->type)" alt="" />
-                                        {{ $item->getTranslatedValue('item_name', session('locale')) }}
-                                    </div>
-                                    @if ($item->description)
-                                        <div class="w-full text-xs font-normal text-gray-500 cursor-pointer lg:text-sm dark:text-gray-400"
-                                            wire:click="showItemDetail({{ $item->id }})">
-                                            {{ str($item->getTranslatedValue('description', session('locale')))->limit(50) }}
-                                        </div>
-                                    @endif
+            @php
+                $menuCardEuSelectable = $restaurant ? $restaurant->selectableEuAllergenKeys() : [];
+                $menuCardEuEnabled = count($menuCardEuSelectable) > 0;
+            @endphp
 
-                                    @if ($item->preparation_time)
-                                        <div
-                                            class="inline-flex items-center my-1 text-xs font-normal text-gray-700 dark:text-gray-400 max-w-56">
-                                            @lang('modules.menu.preparationTime') :
-                                            {{ $item->preparation_time }} @lang('modules.menu.minutes')</div>
-                                    @endif
-                                    <div class="flex items-center justify-between w-full">
-                                        <div>
-                                            @if ($item->variations_count == 0)
-                                                <span
-                                                    class="font-semibold text-gray-900 dark:text-white">{{ currency_format($item->price, $restaurant->currency_id) }}</span>
+
+
+            @forelse ($this->menuItems as $key => $itemCat)
+                <section>
+                    <h3 class="mb-5 mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                        {{ $key }}
+                    </h3>
+
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-9 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                        @foreach ($itemCat as $item)
+                            @php
+                                $menuCardAllergenKeys = [];
+
+                                if ($menuCardEuEnabled && !empty($item->eu_allergen_keys)) {
+                                    $menuCardAllergenKeys = array_values(array_unique(array_intersect(
+                                        \App\Support\EuAnnexIiAllergens::keys(),
+                                        $menuCardEuSelectable,
+                                        array_filter((array) $item->eu_allergen_keys, 'is_string')
+                                    )));
+                                }
+
+                                $menuCardDietaryKeys = \App\Support\DietaryLabels::normalize(
+                                    is_array($item->dietary_labels ?? null)
+                                        ? $item->dietary_labels
+                                        : []
+                                );
+                            @endphp
+
+                            <article
+                                class="min-w-0"
+                                wire:key="menu-item-{{ $item->id . microtime() }}"
+                            >
+                                <div class="relative">
+                                    <button
+                                        type="button"
+                                        wire:click="showItemDetail({{ $item->id }})"
+                                        class="block w-full overflow-hidden rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                                    >
+                                        <div class="relative aspect-square overflow-hidden rounded-2xl bg-white dark:bg-gray-800">
+                                            @if ($restaurant && !$restaurant->hide_menu_item_image_on_customer_site)
+                                                <img
+                                                    src="{{ $item->item_photo_url }}"
+                                                    alt="{{ $item->item_name }}"
+                                                    class="h-full w-full object-contain p-2 transition duration-300 hover:scale-105"
+                                                >
+                                            @else
+                                                <div class="flex h-full w-full items-center justify-center">
+                                                    <img
+                                                        src="{{ asset('img/' . $item->type . '.svg') }}"
+                                                        alt=""
+                                                        class="h-16 w-16 object-contain opacity-70"
+                                                    >
+                                                </div>
+                                            @endif
+
+                                            @if (!$item->in_stock)
+                                                <span class="absolute left-2 top-2 rounded-full bg-red-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+                                                    @lang('messages.outOfStock')
+                                                </span>
                                             @endif
                                         </div>
+                                    </button>
 
-                                        @if ($canCreateOrder)
-                                            @if (!$item->in_stock)
-                                                <div class="text-red-500">Out of stock</div>
-                                            @elseif ($restaurant->allow_customer_orders)
+                                    @if ($canCreateOrder)
+                                        <div class="absolute bottom-2 right-2 z-20">
+                                            @if ($item->in_stock && $restaurant->allow_customer_orders)
                                                 @if (isset($cartItemQty[$item->id]) && $cartItemQty[$item->id] > 0)
-                                                    <div class="relative flex items-center justify-start max-w-24 me-2"
-                                                        wire:key='orderItemQty-{{ $item->id }}-counter'>
-                                                        <button type="button"
-                                                            @if ($item->variations_count > 0) wire:click="subCartItems({{ $item->id }})"
-                                                    @elseif($item->modifier_groups_count > 0)
-                                                        wire:click="subModifiers({{ $item->id }})"
-                                                    @else
-                                                        wire:click="subQty('{{ $item->id }}')" @endif
-                                                            class="h-8 p-3 border border-gray-300 bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 rounded-s-md">
-                                                            <svg class="w-2 h-2 text-gray-900 dark:text-white"
-                                                                aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
-                                                                fill="none" viewBox="0 0 18 2">
-                                                                <path stroke="currentColor" stroke-linecap="round"
-                                                                    stroke-linejoin="round" stroke-width="2"
-                                                                    d="M1 1h16" />
+                                                    <div
+                                                        class="flex h-12 items-center overflow-hidden rounded-full bg-emerald-600 text-white shadow-lg"
+                                                        wire:key="orderItemQty-{{ $item->id }}-counter"
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            @if ($item->variations_count > 0)
+                                                                wire:click.stop="subCartItems({{ $item->id }})"
+                                                            @elseif ($item->modifier_groups_count > 0)
+                                                                wire:click.stop="subModifiers({{ $item->id }})"
+                                                            @else
+                                                                wire:click.stop="subQty('{{ $item->id }}')"
+                                                            @endif
+                                                            class="flex h-12 w-10 items-center justify-center transition hover:bg-black/10"
+                                                            aria-label="Decrease quantity"
+                                                        >
+                                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"/>
                                                             </svg>
                                                         </button>
 
-                                                        <input type="text"
-                                                            wire:model='cartItemQty.{{ $item->id }}'
-                                                            class="min-w-10 bg-white border-x-0 border-gray-300 h-8 text-center text-gray-900 text-sm  block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white "
-                                                            value="1" readonly />
-                                                        <button type="button"
-                                                            wire:click="
-                                                        @if ($item->variations_count > 0 || $item->modifier_groups_count > 0) addCartItems({{ $item->id }}, {{ $item->variations_count }}, {{ $item->modifier_groups_count }})
-                                                        @else
-                                                            addQty('{{ $item->id }}') @endif
-                                                    "
-                                                            class="h-8 p-3 border border-gray-300 bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 rounded-e-md">
-                                                            <svg class="w-2 h-2 text-gray-900 dark:text-white"
-                                                                aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
-                                                                fill="none" viewBox="0 0 18 18">
-                                                                <path stroke="currentColor" stroke-linecap="round"
-                                                                    stroke-linejoin="round" stroke-width="2"
-                                                                    d="M9 1v16M1 9h16" />
+                                                        <span class="min-w-8 text-center text-sm font-bold">
+                                                            {{ $cartItemQty[$item->id] }}
+                                                        </span>
+
+                                                        <button
+                                                            type="button"
+                                                            @if ($item->variations_count > 0 || $item->modifier_groups_count > 0)
+                                                                wire:click.stop="addCartItems({{ $item->id }}, {{ $item->variations_count }}, {{ $item->modifier_groups_count }})"
+                                                            @else
+                                                                wire:click.stop="addQty('{{ $item->id }}')"
+                                                            @endif
+                                                            class="flex h-12 w-10 items-center justify-center transition hover:bg-black/10"
+                                                            aria-label="Increase quantity"
+                                                        >
+                                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/>
                                                             </svg>
                                                         </button>
                                                     </div>
@@ -531,49 +556,169 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                                                     @php
                                                         $orderStats = getRestaurantOrderStats($shopBranch->id);
                                                     @endphp
-                                                    @if(($orderStats['unlimited'] || $orderStats['current_count'] < $orderStats['order_limit']))
-                                                        <x-cart-button
-                                                                wire:click='addCartItems({{ $item->id }}, {{ $item->variations_count }} , {{ $item->modifier_groups_count }})'
-                                                                wire:key='item-input-{{ $item->id . microtime() }}'>@lang('app.add')</x-cart-button>
+
+                                                    @if ($orderStats['unlimited'] || $orderStats['current_count'] < $orderStats['order_limit'])
+                                                        <button
+                                                            type="button"
+                                                            wire:click.stop="addCartItems({{ $item->id }}, {{ $item->variations_count }}, {{ $item->modifier_groups_count }})"
+                                                            wire:key="item-input-{{ $item->id . microtime() }}"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="addCartItems"
+                                                            class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+                                                            aria-label="@lang('app.add')"
+                                                        >
+                                                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
+                                                            </svg>
+                                                        </button>
                                                     @endif
                                                 @endif
-                                            @elseif ($item->variations_count > 0 && $restaurant->allow_customer_orders)
-                                                <x-secondary-button-table
-                                                    wire:click='showItemVariations({{ $item->id }})'>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16"
-                                                        height="16" fill="currentColor" class="w-4 h-4 mr-1"
-                                                        viewBox="0 0 16 16">
-                                                        <path fill-rule="evenodd"
-                                                            d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2" />
+                                            @elseif ($item->in_stock && !$restaurant->allow_customer_orders && $item->variations_count > 0)
+                                                <button
+                                                    type="button"
+                                                    wire:click.stop="showItemVariations({{ $item->id }})"
+                                                    class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-700 hover:shadow-xl"
+                                                    aria-label="@lang('modules.menu.showVariations')"
+                                                >
+                                                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
                                                     </svg>
-                                                    @lang('modules.menu.showVariations') ({{ $item->variations_count }})
-                                                </x-secondary-button-table>
+                                                </button>
                                             @endif
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="pt-3">
+                                    <button
+                                        type="button"
+                                        wire:click="showItemDetail({{ $item->id }})"
+                                        class="block w-full text-left"
+                                    >
+                                        <span class="flex min-w-0 items-start gap-1.5">
+                                            <img
+                                                src="{{ asset('img/' . $item->type . '.svg') }}"
+                                                title="@lang('modules.menu.' . $item->type)"
+                                                alt=""
+                                                class="mt-0.5 h-4 w-4 shrink-0"
+                                            >
+
+                                            <span class="min-w-0 flex-1 break-words text-base font-medium leading-5 text-gray-900 dark:text-white">
+                                                {{ $item->getTranslatedValue('item_name', session('locale')) }}
+                                            </span>
+                                        </span>
+                                    </button>
+
+                                    <div class="mt-2 min-h-6">
+                                        @if ($item->variations_count == 0)
+                                            <span class="text-lg font-bold text-gray-900 dark:text-white">
+                                                {{ currency_format($item->price, $restaurant->currency_id) }}
+                                            </span>
+                                        @else
+                                            <button
+                                                type="button"
+                                                wire:click="showItemVariations({{ $item->id }})"
+                                                class="text-sm font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+                                            >
+                                                @lang('modules.menu.showVariations')
+                                            </button>
                                         @endif
                                     </div>
 
+                                    @if ($item->description)
+                                        <button
+                                            type="button"
+                                            wire:click="showItemDetail({{ $item->id }})"
+                                            class="mt-1 block w-full text-left text-xs leading-5 text-gray-500 dark:text-gray-400"
+                                        >
+                                            {{ str($item->getTranslatedValue('description', session('locale')))->limit(45) }}
+                                        </button>
+                                    @endif
+
+                                    @if ($item->preparation_time)
+                                        <div class="mt-1 text-[11px] leading-4 text-gray-400 dark:text-gray-500">
+                                            @lang('modules.menu.preparationTime'):
+                                            {{ $item->preparation_time }}
+                                            @lang('modules.menu.minutes')
+                                        </div>
+                                    @endif
+
+                                    @if (count($menuCardAllergenKeys) > 0)
+                                        <div class="mt-2 flex min-w-0 flex-wrap gap-1" wire:click.stop>
+                                            @foreach ($menuCardAllergenKeys as $menuAllergenKey)
+                                                @php
+                                                    $menuAllergenLabel =
+                                                        __(\App\Support\EuAnnexIiAllergens::langKey($menuAllergenKey));
+                                                @endphp
+
+                                                <span class="inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 dark:border-amber-700/50 dark:bg-amber-950/35">
+                                                    <img
+                                                        src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($menuAllergenKey) }}"
+                                                        alt=""
+                                                        class="h-3 w-3 shrink-0 object-contain"
+                                                        width="12"
+                                                        height="12"
+                                                        loading="lazy"
+                                                    >
+
+                                                    <span class="max-w-20 truncate text-[9px] font-medium text-gray-800 dark:text-gray-100">
+                                                        {{ $menuAllergenLabel }}
+                                                    </span>
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    @if (count($menuCardDietaryKeys) > 0)
+                                        <div
+                                            class="mt-2 flex min-w-0 flex-wrap gap-1"
+                                            wire:click.stop
+                                            role="group"
+                                            aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}"
+                                        >
+                                            @foreach ($menuCardDietaryKeys as $menuDietaryKey)
+                                                @php
+                                                    $menuDietaryLabel =
+                                                        __(\App\Support\DietaryLabels::langKey($menuDietaryKey));
+                                                @endphp
+
+                                                <span class="inline-flex max-w-full items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 dark:border-emerald-700/50 dark:bg-emerald-950/35">
+                                                    <img
+                                                        src="{{ \App\Support\DietaryLabels::defaultIconUrl($menuDietaryKey) }}"
+                                                        alt=""
+                                                        class="h-3 w-3 shrink-0 object-contain"
+                                                        width="12"
+                                                        height="12"
+                                                        loading="lazy"
+                                                    >
+
+                                                    <span class="max-w-20 truncate text-[9px] font-medium text-emerald-900 dark:text-emerald-100">
+                                                        {{ $menuDietaryLabel }}
+                                                    </span>
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
             @empty
-                <div
-                    class="flex flex-col items-center justify-center p-6 text-center text-gray-500 dark:text-gray-400">
-                    <svg width="100" height="100" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
-                        fill="none">
+                <div class="flex flex-col items-center justify-center p-6 text-center text-gray-500 dark:text-gray-400">
+                    <svg width="100" height="100" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
                         <path d="M4 14a8 8 0 0 1 16 0z" fill="#e5e7eb" />
                         <rect x="3" y="14" width="18" height="2.5" rx=".5" fill="#d1d5db" />
                         <circle cx="12" cy="4.5" r=".8" fill="#9ca3af" />
                         <circle cx="9.5" cy="10" r=".5" fill="#4b5563" />
                         <circle cx="14.5" cy="10" r=".5" fill="#4b5563" />
                     </svg>
+
                     <span class="text-lg">
                         @lang('messages.noItemAdded')
                     </span>
                 </div>
             @endforelse
-
             {{-- Load More Indicator --}}
             <div class="flex items-center justify-center py-6 px-4">
                 @if(!$this->allItemsLoaded)
@@ -594,7 +739,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                 @endif
             </div>
 
-            <div class="fixed inset-x-0 bottom-24 z-10 flex justify-center gap-3 px-4 lg:hidden">
+            <div class="fixed flex justify-center w-full max-w-lg gap-6 -ml-4 bottom-24 lg:hidden">
                 @if ($this->shouldShowWaiterButtonMobile && $orderTypeSlug === 'dine_in')
                     @livewire('forms.callWaiterButton', ['tableNumber' => $table->id ?? null, 'shopBranch' => $shopBranch])
                 @endif
@@ -605,23 +750,46 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
 
             @if ($cartQty > 0)
                 <div
-                    class="fixed inset-x-0 bottom-1 z-10 mx-3 flex items-center justify-between gap-3 rounded-md bg-skin-base p-3 text-white shadow-lg dark:bg-gray-800 sm:mx-auto sm:max-w-lg lg:max-w-screen-xl">
-                    <div class="min-w-0 text-sm font-bold leading-5 sm:text-base">
-                        <div class="truncate">@lang('modules.order.totalItem'): {{ $cartQty }}</div>
-                        <div class="truncate">{{ currency_format($subTotal, $restaurant->currency_id) }} + @lang('modules.order.taxes')</div>
-                    </div>
+                    class="fixed z-10 flex items-center justify-between w-full max-w-lg p-4 mx-auto -ml-4 antialiased font-bold text-white rounded-md bg-skin-base lg:max-w-screen-xl dark:bg-gray-800 bottom-1">
+                    <div>@lang('modules.order.totalItem'): {{ $cartQty }} &nbsp;|&nbsp;
+                        {{ currency_format($subTotal, $restaurant->currency_id) }} + @lang('modules.order.taxes')</div>
 
-                    <x-secondary-button wire:click="showCartItems" class="flex-shrink-0 whitespace-nowrap">@lang('modules.order.viewCart')</x-secondary-button>
+                    <x-secondary-button wire:click="showCartItems">@lang('modules.order.viewCart')</x-secondary-button>
 
                 </div>
             @endif
         </div>
     @endif
 
+    @if (!$showCart && $useClientMenuCatalog)
+        <div class="fixed flex justify-center w-full max-w-lg gap-6 -ml-4 bottom-24 lg:hidden">
+            @if ($this->shouldShowWaiterButtonMobile && $orderTypeSlug === 'dine_in')
+                @livewire('forms.callWaiterButton', ['tableNumber' => $table->id ?? null, 'shopBranch' => $shopBranch])
+            @endif
+            @if (is_null(customer()) && $restaurant->customer_login_required)
+                <x-button type="button" wire:click="$dispatch('showSignup')">@lang('app.login')</x-button>
+            @endif
+        </div>
+
+        @if ($this->shopCartStripShouldDisplay())
+            <div
+                class="fixed z-10 flex items-center justify-between w-full max-w-lg p-4 mx-auto -ml-4 antialiased font-bold text-white rounded-md bg-skin-base lg:max-w-screen-xl dark:bg-gray-800 bottom-1">
+                <div>@lang('modules.order.totalItem'): {{ $this->shopCartBannerLineCount() }} &nbsp;|&nbsp;
+                    {{ currency_format($subTotal, $restaurant->currency_id) }} + @lang('modules.order.taxes')</div>
+
+                <x-secondary-button wire:click="showCartItems">@lang('modules.order.viewCart')</x-secondary-button>
+            </div>
+        @endif
+    @endif
+
     @if ($showCart)
 
         {{-- Order type selection removed - users select at the beginning via modal --}}
 
+        @php
+            $cartPageEuSelectable = $restaurant ? $restaurant->selectableEuAllergenKeys() : [];
+            $cartPageEuEnabled = count($cartPageEuSelectable) > 0;
+        @endphp
         <div class="px-4 mt-4 space-y-4">
             @foreach ($orderItemList as $key => $item)
                 <div class="flex items-center justify-between gap-6 transition bg-white border rounded-lg shadow-sm hover:shadow-md dark:border-gray-600 dark:lg:bg-gray-900 dark:shadow-sm"
@@ -640,26 +808,76 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                             <div
                                 class="flex flex-col items-start justify-between w-full gap-2 sm:flex-row sm:items-baseline">
                                 <!-- Item Name and Details -->
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <div
-                                        class="inline-flex items-center text-base font-semibold text-gray-900 dark:text-white">
-                                        <img src="{{ asset('img/' . $item->type . '.svg') }}" class="h-4 mr-2"
-                                            title="@lang('modules.menu.' . $item->type)" alt="" />
-                                        {{ $item->item_name }}
+                                <div class="flex w-full min-w-0 flex-col gap-1.5">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <div
+                                            class="inline-flex items-center text-base font-semibold text-gray-900 dark:text-white">
+                                            <img src="{{ asset('img/' . $item->type . '.svg') }}" class="h-4 mr-2"
+                                                title="@lang('modules.menu.' . $item->type)" alt="" />
+                                            {{ $item->item_name }}
+                                        </div>
+
+                                        @if (isset($orderItemVariation[$key]))
+                                            <span
+                                                class="px-2.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-sm text-xs font-sm">
+                                                {{ $orderItemVariation[$key]->variation }}
+                                            </span>
+                                        @endif
                                     </div>
 
-                                    @if (isset($orderItemVariation[$key]))
-                                        <span
-                                            class="px-2.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-sm text-xs font-sm">
-                                            {{ $orderItemVariation[$key]->variation }}
-                                        </span>
+                                    @if ($cartPageEuEnabled && !empty($item->eu_allergen_keys))
+                                        @php
+                                            $cartLineAllergenKeys = array_values(array_unique(array_intersect(
+                                                \App\Support\EuAnnexIiAllergens::keys(),
+                                                $cartPageEuSelectable,
+                                                array_filter((array) $item->eu_allergen_keys, 'is_string')
+                                            )));
+                                        @endphp
+                                        @if (count($cartLineAllergenKeys) > 0)
+                                            <div class="flex w-full min-w-0 flex-wrap gap-1.5" wire:click.stop>
+                                                @foreach ($cartLineAllergenKeys as $cartAllergenKey)
+                                                    @php
+                                                        $cartAllergenLabel = __(\App\Support\EuAnnexIiAllergens::langKey($cartAllergenKey));
+                                                    @endphp
+                                                    <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-200/85 bg-amber-50/95 px-2 py-1 dark:border-amber-700/50 dark:bg-amber-950/35">
+                                                        <img src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($cartAllergenKey) }}"
+                                                            alt=""
+                                                            class="h-4 w-4 shrink-0 object-contain"
+                                                            width="16"
+                                                            height="16"
+                                                            loading="lazy" />
+                                                        <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-gray-800 dark:text-gray-100 sm:max-w-[14rem]">{{ $cartAllergenLabel }}</span>
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     @endif
 
-                                    {{-- @if ($item->preparation_time)
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                                            @lang('modules.menu.preparationTime'): {{ $item->preparation_time }} @lang('modules.menu.minutes')
-                                        </span>
-                                    @endif --}}
+                                    @php
+                                        $cartLineDietaryKeys = \App\Support\DietaryLabels::normalize(
+                                            is_array($item->dietary_labels ?? null) ? $item->dietary_labels : []
+                                        );
+                                    @endphp
+                                    @if (count($cartLineDietaryKeys) > 0)
+                                        <div class="flex w-full min-w-0 flex-wrap gap-1.5" wire:click.stop
+                                            role="group"
+                                            aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}">
+                                            @foreach ($cartLineDietaryKeys as $cartDietaryKey)
+                                                @php
+                                                    $cartDietaryLabel = __(\App\Support\DietaryLabels::langKey($cartDietaryKey));
+                                                @endphp
+                                                <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200/85 bg-emerald-50/95 px-2 py-1 dark:border-emerald-700/50 dark:bg-emerald-950/35">
+                                                    <img src="{{ \App\Support\DietaryLabels::defaultIconUrl($cartDietaryKey) }}"
+                                                        alt=""
+                                                        class="h-4 w-4 shrink-0 object-contain"
+                                                        width="16"
+                                                        height="16"
+                                                        loading="lazy" />
+                                                    <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-emerald-900 dark:text-emerald-100 sm:max-w-[14rem]">{{ $cartDietaryLabel }}</span>
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
 
                                 <!-- Quantity Controls and Price -->
@@ -697,12 +915,14 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                                         $totalAmount = $orderItemAmount[$key];
                                     @endphp
                                     <div class="flex flex-col items-end gap-1">
-                                        @if ($taxMode === 'item' && $restaurant?->tax_inclusive)
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ currency_format($displayPrice, $restaurant->currency_id) }} ×
-                                                {{ $orderItemQty[$key] }}
-                                            </div>
-                                        @endif
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                            @if ($taxMode === 'item' && $restaurant?->tax_inclusive)
+                                                ({{ currency_format($displayPrice, $restaurant->currency_id) }}+@lang('modules.order.tax')) × {{ $orderItemQty[$key] }}
+                                            @else
+                                                {{ currency_format($displayPrice, $restaurant->currency_id) }} × {{ $orderItemQty[$key] }}
+                                            @endif
+                                        </div>
+
                                         <span
                                             class="text-base font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                                             {{ currency_format($totalAmount, $restaurant->currency_id) }}
@@ -749,7 +969,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                                         </span>
                                     </div>
                                 @else
-                                    <div x-data="{ showNoteInput: false, noteText: '' }" class="mt-2">
+                                    <div x-data="{ showNoteInput: false }" class="mt-2">
                                         <button x-show="!showNoteInput"
                                             @click="showNoteInput = true; $nextTick(() => $refs.noteInput.focus())"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-full text-gray-700 hover:bg-skin-base/10  hover:text-skin-base dark:text-gray-300 dark:hover:text-gray-200 dark:hover:bg-gray-600 transition-all duration-200 group">
@@ -770,14 +990,15 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
 
                                             <div class="flex w-full">
                                                 <div class="relative flex-1">
-                                                    <x-input x-ref="noteInput" x-model="noteText" type="text"
+                                                    <x-input x-ref="noteInput" type="text"
+                                                        wire:model.live.debounce.300ms="itemNotes.{{ $key }}"
                                                         class="w-full pr-20 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-skin-base focus:border-skin-base"
                                                         :placeholder="__('placeholders.addItemNotesPlaceholder')"
-                                                        @keydown.enter="$wire.set('itemNotes.{{ $key }}', noteText); showNoteInput = false" />
+                                                        @keydown.enter="showNoteInput = false" />
                                                     <div
                                                         class="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
                                                         <button
-                                                            @click="$wire.set('itemNotes.{{ $key }}', noteText); showNoteInput = false"
+                                                            @click="showNoteInput = false"
                                                             class="p-1.5 text-white rounded-md bg-skin-base hover:bg-skin-base/90 transition-colors duration-200"
                                                             title="@lang('app.save')">
                                                             <svg xmlns="http://www.w3.org/2000/svg"
@@ -1002,7 +1223,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                             </div>
                         @endif
 
-                        @if(function_exists('module_enabled') && module_enabled('Loyalty') && function_exists('restaurant_modules') && in_array('Loyalty', restaurant_modules()))
+                        @if(function_exists('module_enabled') && module_enabled('Loyalty') && function_exists('restaurant_modules') && in_array('Loyalty', (array) restaurant_modules(), true))
                             @include('loyalty::components.loyalty-discount-display', [
                                 'loyaltyPointsRedeemed' => $loyaltyPointsRedeemed ?? 0,
                                 'loyaltyDiscountAmount' => $loyaltyDiscountAmount ?? 0,
@@ -1186,8 +1407,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                     </h3>
 
                     <a class="inline-flex items-center justify-center px-3 py-2 mt-3 text-sm font-medium text-white border border-transparent rounded-lg gap-x-2 bg-skin-base hover:bg-skin-base focus:outline-none disabled:opacity-50 disabled:pointer-events-none"
-                        href="{{ module_enabled('Subdomain') ? url('/') : route('shop_restaurant', [$restaurant->hash]) }}"
-                        wire:navigate>
+                        href="{{ module_enabled('Subdomain') ? url('/?new_order=1') : route('shop_restaurant', ['hash' => $restaurant->hash, 'new_order' => 1]) }}">
                         @lang('modules.order.placeOrder')
                     </a>
                 </div>
@@ -1263,10 +1483,32 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                             <div>
                                 <x-label for="customerAddress" value="{{ __('modules.customer.address') }}" />
                                 <x-textarea id="customerAddress" class="block w-full mt-1"
-                                    wire:model='customerAddress' rows="4" />
-                                <x-input-error for="customerAddress" class="mt-2" />
+                                    wire:model='deliveryAddress' rows="4" />
+                                <x-input-error for="deliveryAddress" class="mt-2" />
+
+                                <div class="mt-3 space-y-2">
+                                    <div id="cart-place-autocomplete-card" class="border dark:border-gray-500 rounded-lg p-1 relative z-[1200]" wire:ignore>
+                                        <p id="cart-location-search"> </p>
+                                    </div>
+
+                                    <section id="cart-address-map" class="relative z-0 h-80 rounded-lg shadow-md border border-gray-200" wire:ignore></section>
+
+                                    <div class="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                        <span>
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">{{ __('modules.delivery.latitude') }}:</span>
+                                            {{ $addressLat ?? 'N/A' }}
+                                        </span>
+                                        <span>
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">{{ __('modules.delivery.longitude') }}:</span>
+                                            {{ $addressLng ?? 'N/A' }}
+                                        </span>
+                                    </div>
+
+                                    <x-input-error for="addressLat" custom-message="{{ __('modules.delivery.pleaseSelectLocation') }}" />
+                                    <x-input-error for="addressLng" />
+                                </div>
                             </div>
-                        @endif
+                            @endif
                     </div>
 
                     <div class="flex justify-between w-full pb-4 mt-6 space-x-4">
@@ -1279,6 +1521,21 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
         </x-slot>
 
     </x-dialog-modal>
+
+    @include('livewire.shop.partials.address-map-picker-script', [
+        'prefix' => 'cartCustomer',
+        'apiKey' => $mapApiKey,
+        'provider' => $mapProvider ?? 'google',
+        'event' => 'initCartCustomerAddressMap',
+        'mapElementId' => 'cart-address-map',
+        'searchCardId' => 'cart-place-autocomplete-card',
+        'latField' => 'addressLat',
+        'lngField' => 'addressLng',
+        'addressField' => 'deliveryAddress',
+        'defaultLat' => $shopBranch->lat ?? 26.9125,
+        'defaultLng' => $shopBranch->lng ?? 75.7875,
+        'countryCodes' => 'in',
+    ])
 
     <!-- Pickup DateTime Dialog Modal -->
     <x-dialog-modal wire:model.live="showPickupDateTimeModal" maxWidth="2xl" maxHeight="3xl">
@@ -1465,6 +1722,80 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                                 </p>
                             @endif
 
+                            @php
+                                $itemDetailEuSelectable = $restaurant ? $restaurant->selectableEuAllergenKeys() : [];
+                                $itemDetailEuEnabled = count($itemDetailEuSelectable) > 0;
+                            @endphp
+                            @if ($itemDetailEuEnabled && !empty($selectedItem->eu_allergen_keys))
+                                @php
+                                    $itemDetailAllergenKeys = array_values(array_unique(array_intersect(
+                                        \App\Support\EuAnnexIiAllergens::keys(),
+                                        $itemDetailEuSelectable,
+                                        array_filter((array) $selectedItem->eu_allergen_keys, 'is_string')
+                                    )));
+                                @endphp
+                                @if (count($itemDetailAllergenKeys) > 0)
+                                    <div class="mt-2 rounded-lg border border-amber-200/90 bg-amber-50 px-3 py-2.5 dark:border-amber-700/60 dark:bg-amber-950/35"
+                                        role="region"
+                                        aria-label="{{ __('modules.settings.euAllergensCustomerDisplayHeading') }}">
+                                        <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
+                                            {{ __('modules.settings.euAllergensCustomerDisplayHeading') }}
+                                        </div>
+                                        <ul class="m-0 flex list-none flex-col gap-2.5 p-0">
+                                            @foreach ($itemDetailAllergenKeys as $detailAllergenKey)
+                                                @php
+                                                    $detailAllergenLabel = __(\App\Support\EuAnnexIiAllergens::langKey($detailAllergenKey));
+                                                @endphp
+                                                <li class="flex items-center gap-3">
+                                                    <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center sm:h-10 sm:w-10" aria-hidden="true">
+                                                        <img src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($detailAllergenKey) }}"
+                                                            alt=""
+                                                            class="max-h-8 max-w-8 object-contain sm:max-h-9 sm:max-w-9"
+                                                            width="36"
+                                                            height="36"
+                                                            loading="lazy" />
+                                                    </span>
+                                                    <span class="flex-1 text-sm font-medium leading-normal text-gray-900 dark:text-gray-100">{{ $detailAllergenLabel }}</span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            @endif
+
+                            @php
+                                $itemDetailDietaryKeys = \App\Support\DietaryLabels::normalize(
+                                    is_array($selectedItem->dietary_labels ?? null) ? $selectedItem->dietary_labels : []
+                                );
+                            @endphp
+                            @if (count($itemDetailDietaryKeys) > 0)
+                                <div class="mt-2 rounded-lg border border-emerald-200/90 bg-emerald-50 px-3 py-2.5 dark:border-emerald-700/60 dark:bg-emerald-950/35"
+                                    role="region"
+                                    aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}">
+                                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
+                                        {{ __('modules.menu.dietaryLabelsSectionTitle') }}
+                                    </div>
+                                    <ul class="m-0 flex list-none flex-col gap-2.5 p-0">
+                                        @foreach ($itemDetailDietaryKeys as $detailDietaryKey)
+                                            @php
+                                                $detailDietaryLabel = __(\App\Support\DietaryLabels::langKey($detailDietaryKey));
+                                            @endphp
+                                            <li class="flex items-center gap-3">
+                                                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center sm:h-10 sm:w-10" aria-hidden="true">
+                                                    <img src="{{ \App\Support\DietaryLabels::defaultIconUrl($detailDietaryKey) }}"
+                                                        alt=""
+                                                        class="max-h-8 max-w-8 object-contain sm:max-h-9 sm:max-w-9"
+                                                        width="36"
+                                                        height="36"
+                                                        loading="lazy" />
+                                                </span>
+                                                <span class="flex-1 text-sm font-medium leading-normal text-gray-900 dark:text-gray-100">{{ $detailDietaryLabel }}</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+
                             <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                     stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -1484,10 +1815,12 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
 
         <x-slot name="footer">
             <div class="flex justify-end space-x-2">
-                @if ($selectedItem && ($restaurant?->allow_customer_orders ?? false))
+                @if ($selectedItem && $selectedItem->in_stock)
                     <x-cart-button
-                        wire:click="addCartItems({{ $selectedItem->id }}, {{ $selectedItem->variations_count ?? 0 }}, {{ $selectedItem->modifier_groups_count ?? 0 }})"
-                        wire:key="item-input-{{ $selectedItem->id . microtime() }}">
+                        wire:click="addCartItems({{ $selectedItem->id }}, {{ $selectedItem->variations_count ?? 0 }}, {{ $selectedItem->modifier_groups_count ?? 0 }} )"
+                        wire:loading.attr="disabled"
+                        wire:target="addCartItems"
+                    >
                         @lang('app.add')
                     </x-cart-button>
                 @endif
@@ -1507,13 +1840,6 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
             </x-slot>
 
             <x-slot name="content">
-                @php
-                    $offlinePaymentMethodMap = isset($offlinePaymentMethods)
-                        ? $offlinePaymentMethods->keyBy('name')
-                        : collect();
-                    $activeOfflinePaymentMethodName = $selectedOfflinePaymentMethod ?? 'bank_transfer';
-                    $activeOfflinePaymentMethod = $offlinePaymentMethodMap->get($activeOfflinePaymentMethodName);
-                @endphp
                 <div
                     class="flex items-center justify-between p-2 mb-6 rounded-md cursor-pointer bg-gray-50 dark:bg-gray-800">
                     <div class="flex items-center min-w-0">
@@ -1541,26 +1867,6 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                         @if ($showQrCode)
                             <img src="{{ $paymentGateway->qr_code_image_url }}" alt="QR Code Preview"
                                 class="object-cover rounded-md h-30 w-30">
-                        @elseif ($showPaymentDetail)
-                            @if ($activeOfflinePaymentMethod && !empty($activeOfflinePaymentMethod->description))
-                                <div class="w-full p-3 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ ucwords(str_replace('_', ' ', $activeOfflinePaymentMethod->name)) }}
-                                    </p>
-                                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line break-words">
-                                        {!! nl2br(e($activeOfflinePaymentMethod->description)) !!}
-                                    </p>
-                                </div>
-                            @else
-                                <div class="w-full p-3 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ ucwords(str_replace('_', ' ', $activeOfflinePaymentMethodName)) }}
-                                    </p>
-                                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                        @lang('app.noDescription')
-                                    </p>
-                                </div>
-                            @endif
                         @endif
                     </div>
                  @else
@@ -1826,10 +2132,10 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                         @if (count($offlinePaymentMethods) > 0)
                             @foreach ($offlinePaymentMethods as $offlineMethod)
                                 <x-secondary-button
-                                    wire:click="selectOfflinePaymentMethod('{{ $offlineMethod->name }}')"
+                                    wire:click="placeOrder(false, {{ $paymentOrder->id }}, '{{ $offlineMethod->name }}')"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="opacity-50 cursor-not-allowed"
-                                    wire:target="selectOfflinePaymentMethod">
+                                    wire:target="initiatePayment,initiateStripePayment,initiateFlutterwavePayment,initiatePaypalPayment,initiatePayfastPayment,initiatePaystackPayment,initiateXenditPayment,initiateEpayPayment,initiateMolliePayment,initiateTapPayment,placeOrder">
                                     <span class="inline-flex items-center">
                                         <svg class="w-4 h-4" width="24" height="24" viewBox="0 0 24 24"
                                             fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1862,11 +2168,52 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
 
                 @elseif ($showPaymentDetail)
                     <x-button class="ml-3"
-                        wire:click="placeOrder(false, {{ $paymentOrder?->id ?? 'null' }}, '{{ $activeOfflinePaymentMethodName }}')"
+                        wire:click="placeOrder(false, {{ $paymentOrder?->id ?? 'null' }}, 'bank_transfer')"
                         wire:loading.attr="disabled"
                         wire:loading.class="opacity-50 cursor-not-allowed"
                         wire:target="placeOrder">@lang('modules.billing.paymentDone')</x-button>
                 @endif
+            </x-slot>
+        </x-dialog-modal>
+    @endif
+
+    @if ($paymentGateway->stripe_status)
+        <x-dialog-modal wire:model.live="showStripeOrderPaymentModal" maxWidth="md">
+            <x-slot name="title">
+                @lang('modules.billing.stripe')
+            </x-slot>
+
+            <x-slot name="content">
+                <div class="space-y-3">
+                    <div>
+                        <x-label for="cart_stripe_cardholder" value="Cardholder name" />
+                        <x-input id="cart_stripe_cardholder" class="block mt-1 w-full" type="text" autocomplete="cc-name" />
+                    </div>
+
+                    <div>
+                        <x-label value="Card details" />
+                        <div id="cart-stripe-card-element"
+                            class="mt-1 p-3 border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600">
+                        </div>
+                        <div id="cart-stripe-card-errors" class="mt-2 text-sm text-red-600"></div>
+                    </div>
+
+                    <div id="cart-stripe-loading" class="hidden text-sm text-gray-500 dark:text-gray-400">
+                        @lang('app.loading')...
+                    </div>
+                </div>
+            </x-slot>
+
+            <x-slot name="footer">
+                <div class="flex justify-end gap-2 w-full">
+                    <x-secondary-button type="button" wire:click="closeStripeOrderPaymentModal" wire:loading.attr="disabled">
+                        @lang('app.cancel')
+                    </x-secondary-button>
+
+                    <x-button type="button" id="cart-stripe-pay-btn" wire:loading.attr="disabled">
+                        @lang('modules.billing.payNow')
+                    </x-button>
+                </div>
             </x-slot>
         </x-dialog-modal>
     @endif
@@ -1950,7 +2297,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
                                                         </div>
                                                     </td>
                                                     <td
-                                                        class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                                        class="py-2.5 px-4 text-base text-gray-900 whitespace-nowrap dark:text-white">
                                                         {{ $item->price ? currency_format($item->price, $restaurant->currency_id) : '--' }}
                                                     </td>
 
@@ -2025,6 +2372,121 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
             $wire.on('stripePaymentInitiated', (payment) => {
                 document.getElementById('order_payment').value = payment.payment.id;
                 document.getElementById('order-payment-form').submit();
+            });
+
+            let cartStripe = null;
+            let cartStripeCard = null;
+            let cartStripeClientSecret = null;
+            let cartStripePaymentId = null;
+
+            async function cartStripeEmbeddedSetup(stripePaymentId) {
+                const loadingEl = document.getElementById('cart-stripe-loading');
+                if (loadingEl) loadingEl.classList.remove('hidden');
+
+                const response = await fetch("{{ route('stripe.order_embedded_setup') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+                    },
+                    body: JSON.stringify({ stripe_payment_id: stripePaymentId }),
+                });
+
+                const json = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(json?.message || 'Stripe setup failed');
+                }
+
+                return json;
+            }
+
+            function mountCartStripeCard(publishableKey) {
+                if (!window.Stripe) {
+                    throw new Error('Stripe.js not loaded');
+                }
+
+                if (!cartStripe || cartStripe._pk !== publishableKey) {
+                    cartStripe = Stripe(publishableKey);
+                    cartStripe._pk = publishableKey;
+                }
+
+                if (cartStripeCard) {
+                    try {
+                        cartStripeCard.unmount();
+                        cartStripeCard.destroy();
+                    } catch (e) {}
+                    cartStripeCard = null;
+                }
+
+                const elements = cartStripe.elements();
+                cartStripeCard = elements.create('card', { hidePostalCode: true });
+                const el = document.getElementById('cart-stripe-card-element');
+                if (el) {
+                    cartStripeCard.mount('#cart-stripe-card-element');
+                }
+            }
+
+            async function confirmCartStripePayment() {
+                const errEl = document.getElementById('cart-stripe-card-errors');
+                const payBtn = document.getElementById('cart-stripe-pay-btn');
+                const nameEl = document.getElementById('cart_stripe_cardholder');
+                const loadingEl = document.getElementById('cart-stripe-loading');
+
+                if (errEl) errEl.textContent = '';
+                if (!cartStripeClientSecret || !cartStripe || !cartStripeCard || !cartStripePaymentId) {
+                    if (errEl) errEl.textContent = 'Payment form is not ready. Please try again.';
+                    return;
+                }
+
+                try {
+                    if (loadingEl) loadingEl.classList.remove('hidden');
+                    if (payBtn) payBtn.disabled = true;
+
+                    const result = await cartStripe.confirmCardPayment(cartStripeClientSecret, {
+                        payment_method: {
+                            card: cartStripeCard,
+                            billing_details: {
+                                name: nameEl?.value || undefined,
+                            },
+                        },
+                    });
+
+                    if (result.error) {
+                        if (errEl) errEl.textContent = result.error.message || 'Payment failed';
+                        return;
+                    }
+
+                    window.location.href =
+                        "{{ route('stripe.order_embedded_return') }}" +
+                        "?stripe_payment_id=" +
+                        encodeURIComponent(cartStripePaymentId);
+                } catch (e) {
+                    if (errEl) errEl.textContent = e?.message || 'Payment failed';
+                } finally {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    if (payBtn) payBtn.disabled = false;
+                }
+            }
+
+            document.getElementById('cart-stripe-pay-btn')?.addEventListener('click', confirmCartStripePayment);
+
+            $wire.on('stripeOrderEmbeddedInit', async (payload) => {
+                cartStripePaymentId = payload?.stripePaymentId ?? payload?.[0]?.stripePaymentId;
+
+                const errEl = document.getElementById('cart-stripe-card-errors');
+                const loadingEl = document.getElementById('cart-stripe-loading');
+                if (errEl) errEl.textContent = '';
+
+                try {
+                    if (loadingEl) loadingEl.classList.remove('hidden');
+                    const setup = await cartStripeEmbeddedSetup(cartStripePaymentId);
+                    cartStripeClientSecret = setup.client_secret;
+                    mountCartStripeCard(setup.publishable_key);
+                } catch (e) {
+                    if (errEl) errEl.textContent = e?.message || 'Stripe setup failed';
+                } finally {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                }
             });
 
             $wire.on('epayPaymentInitiated', (payment) => {
@@ -2202,7 +2664,7 @@ app()->setLocale(session('customer_locale', app()->getLocale()));
     @endscript
 
     <!-- Loyalty Points Redemption Modal -->
-    @if(function_exists('module_enabled') && module_enabled('Loyalty') && function_exists('restaurant_modules') && in_array('Loyalty', restaurant_modules()))
+    @if(function_exists('module_enabled') && module_enabled('Loyalty') && function_exists('restaurant_modules') && in_array('Loyalty', (array) restaurant_modules(), true))
     <x-dialog-modal wire:model.live="showLoyaltyRedemptionModal" maxWidth="md">
         <x-slot name="title">
             <div class="flex items-center gap-2">

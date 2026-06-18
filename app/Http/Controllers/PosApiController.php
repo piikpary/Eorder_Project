@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\Menu;
-use App\Models\ItemCategory;
 use App\Models\MenuItem;
 use App\Models\User;
 use App\Models\Branch;
@@ -17,6 +15,7 @@ use App\Models\Reservation;
 use App\Models\OrderType;
 use App\Models\DeliveryPlatform;
 use App\Models\Customer;
+use App\Models\DeliveryExecutive;
 use App\Models\OrderItem;
 use App\Models\OrderTax;
 use App\Models\OrderCharge;
@@ -31,6 +30,8 @@ use App\Models\Tax;
 
 use App\ApiResource\OrderResource;
 use App\Enums\OrderStatus;
+use App\Services\Pos\PosTaxonomyCache;
+use App\Services\Pos\PosWaitersCache;
 use App\Services\RestaurantAvailabilityService;
 
 class PosApiController extends Controller
@@ -94,17 +95,11 @@ class PosApiController extends Controller
 
     public function getMenus()
     {
-
-        $menus = cache()->remember('menus_' . $this->branch->id, 60, function () {
-            return Menu::where('branch_id', $this->branch->id)->get()->map(function ($menu) {
-                return [
-                    'id' => $menu->id,
-                    'menu_name' => $menu->getTranslation('menu_name', session('locale', app()->getLocale())),
-                    'sort_order' => $menu->sort_order,
-                ];
-            });
-        });
-
+        $branchId = (int) $this->branch->id;
+        $menus = PosTaxonomyCache::rememberMenus(
+            $branchId,
+            fn () => PosTaxonomyCache::buildMenusPayload($branchId)
+        );
 
         return response()->json($menus);
     }
@@ -112,33 +107,15 @@ class PosApiController extends Controller
     public function getCategories(Request $request)
     {
         $menuId = $request->input('menu_id');
-        $search = $request->input('search', '');
+        $search = (string) $request->input('search', '');
+        $branchId = (int) $this->branch->id;
 
-        // Build query for categories with item counts based on filters
-        $categories = ItemCategory::select('id', 'category_name', 'sort_order')
-            ->where('branch_id', $this->branch->id)
-            ->withCount(['items' => function ($query) use ($menuId, $search) {
-                $query->where('branch_id', $this->branch->id);
-
-                if ($menuId) {
-                    $query->where('menu_id', $menuId);
-                }
-
-                if ($search) {
-                    $query->where('item_name', 'like', '%' . $search . '%');
-                }
-            }])
-            ->having('items_count', '>', 0)
-            ->orderBy('sort_order')
-            ->get()
-            ->map(function ($category) {
-                return [
-                    'id' => $category->id,
-                    'count' => $category->items_count,
-                    'category_name' => $category->getTranslation('category_name', session('locale', app()->getLocale())),
-                    'sort_order' => $category->sort_order,
-                ];
-            });
+        $categories = PosTaxonomyCache::rememberCategories(
+            $branchId,
+            $menuId,
+            $search,
+            fn () => PosTaxonomyCache::buildCategoriesPayload($branchId, $menuId, $search)
+        );
 
         return response()->json($categories);
     }
@@ -191,9 +168,9 @@ class PosApiController extends Controller
 
     public function getWaiters()
     {
-        $waiters = cache()->remember('waiters_' . $this->branch->id, 60, function () {
-            return User::where('restaurant_id', $this->restaurant->id)->get();
-        });
+        $waiters = PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id);
+        $waiters = PosWaitersCache::forPosActor($waiters, auth()->user(), (int) $this->restaurant->id);
+
         return response()->json($waiters);
     }
 
@@ -214,6 +191,23 @@ class PosApiController extends Controller
         $customers = $query->orderBy('name')->limit(10)->get();
 
         return response()->json($customers);
+    }
+
+    public function getCustomer(int $id)
+    {
+        $customer = Customer::where('restaurant_id', $this->restaurant->id)->find($id);
+
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.customerNotFound'),
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'customer' => $customer,
+        ]);
     }
 
     public function getPhoneCodes(Request $request)
@@ -282,6 +276,43 @@ class PosApiController extends Controller
             'success' => true,
             'message' => $existingCustomer ? __('messages.customerUpdated') : __('messages.customerAdded'),
             'customer' => $customer,
+        ]);
+    }
+
+    public function assignCustomerToOrder(Request $request, int $orderId)
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|integer',
+            'delivery_address' => 'nullable|string|max:500',
+        ]);
+
+        $customer = Customer::where('restaurant_id', $this->restaurant->id)->find($validated['customer_id']);
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.customerNotFound'),
+            ], 404);
+        }
+
+        // Orders belong to a branch (BranchScope), not restaurant_id on orders table.
+        $order = Order::where('id', $orderId)->first();
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.orderNotFound'),
+            ], 404);
+        }
+
+        $order->customer_id = $customer->id;
+        $order->delivery_address = $validated['delivery_address'] ?? $order->delivery_address;
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => __('messages.customerAdded'),
+            'customer' => $customer,
+            'order_id' => $order->id,
         ]);
     }
 
@@ -477,7 +508,19 @@ class PosApiController extends Controller
             $orderTypeDisplay = $data['order_type'] ?? 'Dine In';
             $orderNumber = $data['order_number'] ?? '';
             $pax = $data['pax'] ?? 1;
-            $waiterId = $data['waiter_id'] ?? null;
+            $waiterRaw = $data['waiter_id'] ?? null;
+            $waiterId = is_numeric($waiterRaw) ? (int) $waiterRaw : null;
+            $posWaitersForActor = PosWaitersCache::forPosActor(
+                PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id),
+                auth()->user(),
+                (int) $this->restaurant->id
+            );
+            $waiterId = PosWaitersCache::normalizeWaiterSelection(
+                $waiterId,
+                auth()->user(),
+                (int) $this->restaurant->id,
+                $posWaitersForActor
+            );
             $tableId = $data['table_id'] ?? null;
             $discountType = $data['discount_type'] ?? null;
             $discountValue = $data['discount_value'] ?? 0;
@@ -686,6 +729,26 @@ class PosApiController extends Controller
 
 
             $normalizedDeliveryAppId = ($deliveryAppId === 'default' || $deliveryAppId === null) ? null : (int)$deliveryAppId;
+
+            if (
+                !$isCancelAction
+                && $orderTypeSlug === 'delivery'
+                && $normalizedDeliveryAppId === null
+            ) {
+                if (empty($deliveryExecutiveId)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('validation.required', ['attribute' => __('modules.delivery.deliveryExecutive')]),
+                    ], 422);
+                }
+
+                if (!DeliveryExecutive::findAssignableForBranch((int) $deliveryExecutiveId, (int) $this->branch->id)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('messages.invalidRequest'),
+                    ], 422);
+                }
+            }
 
             $posMachineId = null;
             if (module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules()) && function_exists('pos_machine_id')) {
@@ -2610,6 +2673,17 @@ class PosApiController extends Controller
 
         // Allow null to clear waiter assignment
         $waiterId = $request->waiter_id ? intval($request->waiter_id) : null;
+        $posWaitersForActor = PosWaitersCache::forPosActor(
+            PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id),
+            auth()->user(),
+            (int) $this->restaurant->id
+        );
+        $waiterId = PosWaitersCache::normalizeWaiterSelection(
+            $waiterId,
+            auth()->user(),
+            (int) $this->restaurant->id,
+            $posWaitersForActor
+        );
         $order->update(['waiter_id' => $waiterId]);
 
         return response()->json([
@@ -2646,6 +2720,8 @@ class PosApiController extends Controller
             return;
         }
 
+        $displayData = \App\Support\CustomerDisplayPayload::normalize($displayData);
+
         // Store in cache (matches Livewire Pos.php pattern)
         $cacheKey = 'customer_display_cart_user_' . $userId;
         Cache::put($cacheKey, $displayData, now()->addMinutes(30));
@@ -2680,7 +2756,7 @@ class PosApiController extends Controller
         $qrCodeImageUrl = $paymentGateway && $paymentGateway->is_qr_payment_enabled ? $paymentGateway->qr_code_image_url : null;
 
         // Prepare customer display data (matching Livewire pattern exactly)
-        $customerDisplayData = [
+        $customerDisplayData = \App\Support\CustomerDisplayPayload::normalize([
             'order_number' => $orderNumber,
             'formatted_order_number' => $formattedOrderNumber,
             'items' => $items,
@@ -2695,7 +2771,7 @@ class PosApiController extends Controller
             'status' => $status,
             'cash_due' => $status === 'billed' ? $total : null,
             'qr_code_image_url' => $qrCodeImageUrl,
-        ];
+        ]);
 
         // Update cache and broadcast (matching Livewire pattern)
         $this->updateCustomerDisplayCache($customerDisplayData);

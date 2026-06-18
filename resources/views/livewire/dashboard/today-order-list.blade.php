@@ -1,6 +1,6 @@
 <div>
      <!-- Orders list -->
-     <div class="bg-white rounded-xl border border-gray-100 p-5 cursor-pointer dark:bg-gray-800 dark:border-gray-700">
+     <div class="bg-white rounded-xl border border-gray-100 p-5 cursor-pointer dark:bg-gray-800 dark:border-gray-700 max-h-[450px] overflow-y-auto w-full h-full">
         <div class="flex items-center justify-between mb-3">
           <p class="text-sm font-medium text-gray-700 dark:text-white">@lang('modules.order.todayOrder')</p>
           <span class="text-[11px] text-gray-400 dark:text-white">{{ $orders->count() }} @lang('modules.order.total')</span>
@@ -9,16 +9,25 @@
 
             @if (!user()->hasRole('Waiter_' . user()->restaurant_id))
                 @forelse ($waiterOrders as $order)
-                    <div
+                    <a
                     @if ($order->status == 'kot')
                         href="{{ route('pos.kot', $order->id).'?show-order-detail=true' }}"
+                        wire:navigate
                     @elseif ($order->status == 'draft')
                         href="{{ route('pos.draft', $order->id) }}"
+                        wire:navigate
                     @else
-                        wire:click="$dispatch('showOrderDetail', { id: {{ $order->id }} })"
+                        href="#"
+                        onclick="event.preventDefault(); Livewire.dispatch('showOrderDetail', { id: {{ $order->id }} }); return false;"
                     @endif
-                    class="flex items-center gap-2.5 py-2.5 border-b border-gray-50 dark:border-gray-500" wire:key='order-item-{{ $order->id . microtime() }}' href="javascript:;">
-                        <div class="w-7 h-7 rounded-lg bg-skin-base/[0.2] text-skin-base flex items-center justify-center text-[11px] font-semibold shrink-0">
+                    class="flex items-start gap-2.5 py-2.5 border-b border-gray-50 dark:border-gray-500 cursor-pointer"
+                    wire:key="dashboard-order-{{ $order->id }}"
+                    >
+                        <div @class([
+                            'rounded-lg bg-skin-base/[0.2] text-skin-base flex items-center justify-center overflow-hidden shrink-0',
+                            'h-7 w-7 text-[11px] font-semibold' => in_array($order->order_type, ['pickup', 'delivery'], true),
+                            'min-h-9 min-w-[3.25rem] max-w-[42%] px-1.5 py-0.5 text-[10px] font-semibold leading-tight sm:max-w-[38%]' => ! in_array($order->order_type, ['pickup', 'delivery'], true),
+                        ])>
                             @if ($order->order_type == 'pickup')
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                                 class="bi bi-bag-fill" viewBox="0 0 16 16">
@@ -35,27 +44,17 @@
                                 </g>
                             </svg>
                         @else
-                            {{ $order->table?->table_code ?? '--' }}
+                            @include('livewire.dashboard.partials.table-area-badge', ['order' => $order])
                         @endif
                         </div>
-                        <div class="flex-1 min-w-0">
-                        <p class="text-[13px] font-medium text-gray-800 truncate">{{ $order->customer ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin')) : '--' }}</p>
-                        <p class="text-[11px] text-gray-400">
-                            @if($order->status != 'draft')
-                                {{ $order->show_formatted_order_number }}
-                            @endif
-                            @if($order->custom_order_type_name)
-                                {{ $order->custom_order_type_name }}
-                            @elseif($order->orderType)
-                                {{ $order->orderType->order_type_name }}
-                            @endif
-                            ·
-                                @if ($order->status == 'kot')
-                                {{ $order->kot->count() }} @lang('modules.order.kot')
-                            @else
-                                {{ $order->items->count() }} @lang('modules.menu.item')
-                            @endif
-                        </p>
+                        <div class="flex-1 min-w-0 overflow-hidden">
+                        @php
+                            $todayOrderCustomerLabel = $order->customer
+                                ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin'))
+                                : '--';
+                        @endphp
+                        <p class="text-[13px] font-medium text-gray-800 truncate dark:text-gray-100" title="{{ $todayOrderCustomerLabel }}">{{ $todayOrderCustomerLabel }}</p>
+                        @include('livewire.dashboard.partials.today-order-meta-line', ['order' => $order])
                         </div>
                         <div class="text-right shrink-0">
                         <p class="text-[13px] font-medium text-gray-800">{{ currency_format($order->display_total ?? $order->total ?? 0, restaurant()->currency_id) }}</p>
@@ -68,27 +67,36 @@
                             'text-blue-500 bg-blue-100' => $order->order_status->value == 'out_for_delivery',
                             'text-green-500 bg-green-100' => $order->order_status->value == 'served',
                             'text-green-500 bg-green-100' => $order->order_status->value == 'delivered',
+                            'text-emerald-700 bg-emerald-100' => $order->order_status->value == 'completed',
                             'text-red-500 bg-red-100' => $order->order_status->value == 'cancelled',])>@lang('modules.order.info_' . $order->order_status->value)</span>
-                            </span>
                         </div>
-                    </div>
+                    </a>
                 @empty
-                    <div class="group flex justify-center gap-3 items-center border h-36 font-medium bg-white shadow-sm rounded-lg hover:shadow-md transition dark:bg-gray-700 dark:border-gray-600 p-3 dark:text-gray-400">
+                    <div class="group flex justify-center gap-3 items-center border h-36 font-medium bg-white shadow-sm rounded-lg hover:shadow-md transition dark:bg-gray-700 dark:border-gray-600 p-3 dark:text-gray-400 text-sm">
                     @lang('messages.waitingTodayOrder')
                     </div>
                 @endforelse
             @else
                 @forelse ($orders as $order)
-                    <div
+                    <a
                         @if ($order->status == 'kot')
                             href="{{ route('pos.kot', $order->id).'?show-order-detail=true' }}"
+                            wire:navigate
                         @elseif ($order->status == 'draft')
                             href="{{ route('pos.draft', $order->id) }}"
+                            wire:navigate
                         @else
-                            wire:click="$dispatch('showOrderDetail', { id: {{ $order->id }} })"
+                            href="#"
+                            onclick="event.preventDefault(); Livewire.dispatch('showOrderDetail', { id: {{ $order->id }} }); return false;"
                         @endif
-                        class="flex items-center gap-2.5 py-2.5 border-b border-gray-50" wire:key='order-item-{{ $order->id . microtime() }}' href="javascript:;">
-                        <div class="w-7 h-7 rounded-lg bg-skin-base/[0.2] text-skin-base flex items-center justify-center text-[11px] font-semibold shrink-0">
+                        class="flex items-start gap-2.5 py-2.5 border-b border-gray-50 cursor-pointer"
+                        wire:key="dashboard-order-{{ $order->id }}"
+                    >
+                        <div @class([
+                            'rounded-lg bg-skin-base/[0.2] text-skin-base flex items-center justify-center overflow-hidden shrink-0',
+                            'h-7 w-7 text-[11px] font-semibold' => in_array($order->order_type, ['pickup', 'delivery'], true),
+                            'min-h-9 min-w-[3.25rem] max-w-[42%] px-1.5 py-0.5 text-[10px] font-semibold leading-tight sm:max-w-[38%]' => ! in_array($order->order_type, ['pickup', 'delivery'], true),
+                        ])>
                             @if ($order->order_type == 'pickup')
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                                 class="bi bi-bag-fill" viewBox="0 0 16 16">
@@ -105,27 +113,17 @@
                                 </g>
                             </svg>
                             @else
-                                {{ $order->table?->table_code ?? '--' }}
+                                @include('livewire.dashboard.partials.table-area-badge', ['order' => $order])
                             @endif
                         </div>
-                        <div class="flex-1 min-w-0">
-                        <p class="text-[13px] font-medium text-gray-800 truncate">{{ $order->customer ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin')) : '--' }}</p>
-                        <p class="text-[11px] text-gray-400">
-                            @if($order->status != 'draft')
-                                {{ $order->show_formatted_order_number }}
-                            @endif
-                            @if($order->custom_order_type_name)
-                                {{ $order->custom_order_type_name }}
-                            @elseif($order->orderType)
-                                {{ $order->orderType->order_type_name }}
-                            @endif
-                            ·
-                                @if ($order->status == 'kot')
-                                {{ $order->kot->count() }} @lang('modules.order.kot')
-                            @else
-                                {{ $order->items->count() }} @lang('modules.menu.item')
-                            @endif
-                        </p>
+                        <div class="flex-1 min-w-0 overflow-hidden">
+                        @php
+                            $todayOrderCustomerLabel = $order->customer
+                                ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin'))
+                                : '--';
+                        @endphp
+                        <p class="text-[13px] font-medium text-gray-800 truncate dark:text-gray-100" title="{{ $todayOrderCustomerLabel }}">{{ $todayOrderCustomerLabel }}</p>
+                        @include('livewire.dashboard.partials.today-order-meta-line', ['order' => $order])
                         </div>
                         <div class="text-right shrink-0">
                             <p class="text-[13px] font-medium text-gray-800">{{ currency_format($order->display_total ?? $order->total ?? 0, restaurant()->currency_id) }}</p>
@@ -138,10 +136,10 @@
                             'text-blue-500 bg-blue-100' => $order->order_status->value == 'out_for_delivery',
                             'text-green-500 bg-green-100' => $order->order_status->value == 'served',
                             'text-green-500 bg-green-100' => $order->order_status->value == 'delivered',
+                            'text-emerald-700 bg-emerald-100' => $order->order_status->value == 'completed',
                             'text-red-500 bg-red-100' => $order->order_status->value == 'cancelled',])>@lang('modules.order.info_' . $order->order_status->value)</span>
-                            </span>
                         </div>
-                    </div>
+                    </a>
                 @empty
                 <div class="group flex justify-center gap-3 items-center border h-36 font-medium bg-white shadow-sm rounded-lg hover:shadow-md transition dark:bg-gray-700 dark:border-gray-600 p-3 dark:text-gray-400">
                 @lang('messages.waitingTodayOrder')

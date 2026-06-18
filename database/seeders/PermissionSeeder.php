@@ -25,6 +25,7 @@ class PermissionSeeder extends Seeder
         $superAdminModule = Module::where('name', 'SuperAdmin')->where('is_superadmin', 1)->first();
         $landingSiteModule = Module::where('name', 'Landing Site')->where('is_superadmin', 1)->first();
         $superadminSettingsModule = Module::where('name', 'Superadmin Settings')->where('is_superadmin', 1)->first();
+        $appUpdateModule = Module::where('name', 'App Update')->where('is_superadmin', 1)->first();
 
         // Admin/Restaurant modules
         $menuModule = Module::where('name', 'Menu')->where('is_superadmin', 0)->first();
@@ -71,6 +72,9 @@ class PermissionSeeder extends Seeder
             ['guard_name' => 'web', 'name' => 'Show Landing Site', 'module_id' => $landingSiteModule->id],
 
             ['guard_name' => 'web', 'name' => 'Manage Superadmin Settings', 'module_id' => $superadminSettingsModule->id],
+
+            ['guard_name' => 'web', 'name' => 'App Update', 'module_id' => $appUpdateModule->id],
+            ['guard_name' => 'web', 'name' => 'Custom Modules', 'module_id' => $appUpdateModule->id],
 
             // Admin/Restaurant module permissions
             ['guard_name' => 'web', 'name' => 'Create Menu', 'module_id' => $menuModule->id],

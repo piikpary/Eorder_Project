@@ -16,6 +16,11 @@ class GlobalSettingController extends Controller
 
     public function index()
     {
+        if (!user_can('App Update')) {
+            return view('app_update.index', [
+                'permissionDenied' => true,
+            ]);
+        }
 
         try {
             $results = DB::select('select version()');
@@ -47,12 +52,18 @@ class GlobalSettingController extends Controller
 
         $reviewed = file_exists(storage_path('reviewed'));
 
-        return view('app_update.index', compact('mysql_version', 'databaseType', 'reviewed', 'serverOs'));
+        return view('app_update.index', [
+            'permissionDenied' => false,
+            'mysql_version' => $mysql_version,
+            'databaseType' => $databaseType,
+            'reviewed' => $reviewed,
+            'serverOs' => $serverOs,
+        ]);
     }
 
     public function store(Request $request)
     {
-
+        abort_if(!user_can('App Update'), 403);
 
         config(['filesystems.default' => 'storage']);
         $path = storage_path('app') . '/Modules/' . $request->file->getClientOriginalName();
@@ -66,6 +77,8 @@ class GlobalSettingController extends Controller
 
     public function deleteFile(Request $request)
     {
+        abort_if(!user_can('App Update'), 403);
+
         $filePath = $request->filePath;
         File::delete($filePath);
 

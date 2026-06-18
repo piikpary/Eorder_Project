@@ -9,6 +9,7 @@ use App\Models\FlutterwavePayment;
 use App\Events\SendNewOrderReceived;
 use App\Models\Restaurant;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 
 class FlutterwavePaymentController extends Controller
 {
@@ -152,6 +153,8 @@ class FlutterwavePaymentController extends Controller
             $order->amount_paid = $order->amount_paid + $payment->amount;
             $order->status = 'paid';
             $order->save();
+
+            ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
             SendNewOrderReceived::dispatch($order);
 

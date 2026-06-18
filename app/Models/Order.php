@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Order extends BaseModel
 {
@@ -145,6 +146,16 @@ class Order extends BaseModel
         return $this->deliveryApp();
     }
 
+    public function hotelStay(): BelongsTo
+    {
+        if (function_exists('module_enabled') && module_enabled('Hotel') && class_exists(\Modules\Hotel\Entities\Stay::class)) {
+            return $this->belongsTo(\Modules\Hotel\Entities\Stay::class, 'context_id')
+                ->withoutGlobalScopes();
+        }
+
+        return $this->belongsTo(self::class, 'context_id')->whereRaw('0 = 1');
+    }
+
     public function hasCollectedCodPayment(): bool
     {
         if ($this->order_type !== 'delivery') {
@@ -177,6 +188,48 @@ class Order extends BaseModel
         }
 
         return round(max((float) ($this->total ?? 0) - (float) ($this->amount_paid ?? 0), 0), 2);
+    }
+
+    /**
+     * Orders whose party still counts against table seating (number_of_pax).
+     * Paid dine-in stays reserved until order_status is completed or cancelled.
+     */
+    public function scopeOccupyingTableSeats(Builder $query): Builder
+    {
+        $released = [
+            OrderStatus::CANCELLED->value,
+            OrderStatus::COMPLETED->value,
+        ];
+
+        return $query
+            ->whereNotIn('status', ['draft', 'canceled'])
+            ->where(function (Builder $q) use ($released) {
+                $q->where(function (Builder $q2) {
+                    $q2->whereNull('order_status')
+                        ->where('status', '!=', 'paid');
+                })->orWhereNotIn('order_status', $released);
+            });
+    }
+
+    /**
+     * Mark table available and clear POS table lock after the visit is finished.
+     */
+    public function releaseTableSeatHoldIfAssigned(): void
+    {
+        if (! $this->table_id) {
+            return;
+        }
+
+        $table = Table::query()->find($this->table_id);
+        if (! $table) {
+            return;
+        }
+
+        $table->update(['available_status' => 'available']);
+
+        if ($table->tableSession) {
+            $table->tableSession->releaseLock();
+        }
     }
 
     public static function generateOrderNumber($branch)

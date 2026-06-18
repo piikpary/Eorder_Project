@@ -2,6 +2,7 @@
 
 namespace App\Livewire\DeliveryExecutive;
 
+use App\Enums\OrderStatus;
 use Livewire\Component;
 
 class ShowOrders extends Component
@@ -13,6 +14,7 @@ class ShowOrders extends Component
     {
         $trackingEnabled = module_enabled('RestApi');
         $mapApiKey = global_setting()->google_map_api_key ?? restaurant()?->map_api_key ?? null;
+        $mapProvider = global_setting()->map_provider ?? 'google';
 
         $orders = collect();
 
@@ -27,7 +29,7 @@ class ShowOrders extends Component
                 return [
                     'order' => $order,
                     'isOutForDelivery' => in_array((string) $progressStatus, ['out_for_delivery', 'reached_destination'], true),
-                    'isDelivered' => in_array((string) $progressStatus, ['delivered', 'served'], true),
+                    'isDelivered' => in_array((string) $progressStatus, OrderStatus::fulfilledProgressValues(), true),
                 ];
             });
         }
@@ -35,6 +37,7 @@ class ShowOrders extends Component
         return view('livewire.delivery-executive.show-orders', [
             'trackingEnabled' => $trackingEnabled,
             'mapApiKey' => $mapApiKey,
+            'mapProvider' => $mapProvider,
             'orders' => $orders,
         ]);
     }

@@ -4,6 +4,7 @@ namespace App\Livewire\Forms;
 
 use App\Models\Country;
 use App\Models\DeliveryExecutive;
+use App\Models\User;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
 
@@ -19,6 +20,7 @@ class EditExecutive extends Component
     public $status;
     public $availabilityStatus = 1;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -30,12 +32,18 @@ class EditExecutive extends Component
         $this->memberEmail = $this->member->email;
         $this->memberPhone = $this->member->phone;
         $this->phoneCode = $this->member->phone_code;
-        $this->status = $this->member->status;
+        $this->status = DeliveryExecutive::normalizeStatus($this->member->status);
         $this->availabilityStatus = (int) ($this->member->is_online ?? 0);
 
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->phoneCode) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->phoneCode = $detectedPhoneCode;
+        }
     }
 
     public function updatedPhoneCodeIsOpen($value)
@@ -67,6 +75,7 @@ class EditExecutive extends Component
             'memberName' => 'required',
             'memberEmail' => 'required|email|unique:delivery_executives,email,' . $this->member->id,
             'phoneCode' => 'required',
+            'status' => 'required|in:' . DeliveryExecutive::STATUS_ACTIVE . ',' . DeliveryExecutive::STATUS_INACTIVE,
             'availabilityStatus' => 'required|in:0,1',
         ]);
 
@@ -84,7 +93,7 @@ class EditExecutive extends Component
         $this->memberEmail = '';
         $this->memberPhone = '';
         $this->phoneCode = '';
-        $this->status = 'available';
+        $this->status = DeliveryExecutive::STATUS_ACTIVE;
         $this->availabilityStatus = 1;
 
         $this->dispatch('hideEditStaff');

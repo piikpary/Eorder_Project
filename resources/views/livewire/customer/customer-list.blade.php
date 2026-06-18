@@ -1,5 +1,5 @@
 <div>
-    <div>
+    <div x-data="{ addCustomerOpen: false }" @close-add-customer-modal.window="addCustomerOpen = false">
 
         <div class="p-4 bg-white block sm:flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
             <div class="w-full mb-1">
@@ -43,8 +43,7 @@
                         </a>
 
                         @if (user_can('Create Customer'))
-                            <x-button type='button'
-                                wire:click="$set('showAddCustomer', true)">@lang('modules.customer.addCustomer')</x-button>
+                            <x-button type="button" @click="addCustomerOpen = true">@lang('modules.customer.addCustomer')</x-button>
                         @endif
                     </div>
 
@@ -55,21 +54,44 @@
 
         <livewire:customer.customer-table :search='$search' key='customer-table-{{ microtime() }}' />
 
+        <template x-if="addCustomerOpen">
+            <div
+                x-on:keydown.escape.window="addCustomerOpen = false; window.dispatchEvent(new CustomEvent('close-add-customer-modal'))"
+                id="add-customer-drawer"
+                class="jetstream-modal fixed inset-0 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-0 z-40">
+                <div class="fixed inset-0 transform transition-all"
+                    x-on:click="addCustomerOpen = false; window.dispatchEvent(new CustomEvent('close-add-customer-modal'))"
+                    x-transition:enter="ease-out duration-300"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="ease-in duration-200"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0">
+                    <div class="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+                </div>
+
+                <div
+                    class="mb-6 bg-white dark:bg-gray-800 overflow-hidden shadow-xl transform transition-all fixed top-0 left-0 right-0 w-screen max-w-full sm:left-auto sm:right-0 sm:w-full h-screen max-h-screen sm:max-w-2xl flex flex-col"
+                    x-trap.inert.noscroll="addCustomerOpen"
+                    x-transition:enter="ease-out duration-300"
+                    x-transition:enter-start="translate-x-full"
+                    x-transition:enter-end="translate-x-0"
+                    x-transition:leave="ease-in duration-200"
+                    x-transition:leave-start="translate-x-0"
+                    x-transition:leave-end="translate-x-full">
+                    <div class="flex flex-col flex-1 min-h-0 px-4 pt-3 pb-0 sm:px-6 sm:pt-4">
+                        <div class="shrink-0 text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 min-w-0">
+                            {{ __('modules.customer.addCustomer') }}
+                        </div>
+                        <div class="mt-2 sm:mt-4 flex flex-col flex-1 min-h-0 min-w-0 text-sm text-gray-600 dark:text-gray-400">
+                            @livewire('forms.add-customer-form', key('add-customer-form'))
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
 
     </div>
-    <!-- Product Drawer -->
-    <x-right-modal wire:model.live="showAddCustomer">
-        <x-slot name="title">
-            {{ __('modules.customer.addCustomer') }}
-        </x-slot>
-
-        <x-slot name="content">
-            @if ($showAddCustomer)
-                <livewire:forms.add-customer-form />
-            @endif
-        </x-slot>
-    </x-right-modal>
-
 
     @props(['id' => null, 'maxWidth' => null])
 

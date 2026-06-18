@@ -23,7 +23,7 @@ class KotItemObserver
 
         $order = $kot->order;
         $currentOrderStatus = $order->order_status?->value ?? $order->order_status;
-        $higherStatuses = ['food_ready', 'ready_for_pickup', 'out_for_delivery', 'served', 'delivered'];
+        $higherStatuses = ['food_ready', 'ready_for_pickup', 'out_for_delivery', 'served', 'delivered', 'completed'];
         
         // Don't interfere if order is in a higher status
         if (in_array($currentOrderStatus, $higherStatuses)) {

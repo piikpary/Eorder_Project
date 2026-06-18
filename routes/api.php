@@ -2,11 +2,16 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PrintJobController;
+use App\Http\Controllers\PrintStreamController;
 use App\Http\Middleware\DesktopUniqueKeyMiddleware;
 use App\Http\Controllers\PosApiController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\OfflineController;
 
-// called by Electron every X seconds
+// SSE: same token as branch unique_hash (X-TABLETRACK-KEY). EventSource cannot send headers.
+Route::get('/print-stream/{token}', [PrintStreamController::class, 'stream']);
+
+// called by Electron / Tauri every X seconds (smart polling fallback) or for REST operations
 Route::middleware(DesktopUniqueKeyMiddleware::class)->group(function () {
     Route::get('/test-connection', [PrintJobController::class, 'testConnection']);
 
@@ -17,6 +22,8 @@ Route::middleware(DesktopUniqueKeyMiddleware::class)->group(function () {
 
     // mark a job done/failed
     Route::patch('/print-jobs/{printJob}', [PrintJobController::class, 'update']);
+
+    Route::post('/print-jobs/{printJob}/printed', [PrintStreamController::class, 'markPrinted']);
 });
 
 
@@ -25,3 +32,8 @@ Route::prefix('partner/orders')->group(function () {
 });
 
 Route::post('application-integration/partner/auth/validate-domain', [HomeController::class, 'validatePartnerDomain']);
+Route::get('/bootstrap', [OfflineController::class, 'bootstrap']);
+Route::post('/bootstrap/offline/orders', [OfflineController::class, 'createOrder']);
+
+Route::post('/telegram/loyalty/webhook', [\App\Http\Controllers\TelegramLoyaltyWebhookController::class, 'handle'])
+    ->name('telegram.loyalty.webhook');

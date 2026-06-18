@@ -1,34 +1,32 @@
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Page Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="py-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ __('modules.menu.bulkUploadMenuItems') }}</h1>
-                        <p class="mt-2 text-gray-600 dark:text-gray-400">{{ __('modules.menu.bulkUpload') }} {{ __('modules.menu.allMenuItems') }} {{ __('app.from') }} CSV {{ __('app.or') }} Excel {{ __('app.files') }}</p>
-                    </div>
-                    <div class="flex space-x-3">
-                        <x-secondary-button wire:click="downloadSampleFile" class="flex items-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span>{{ __('modules.menu.downloadSampleFile') }}</span>
-                        </x-secondary-button>
-                        <x-secondary-button wire:click="resetUploadState" class="flex items-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            <span>{{ __('modules.menu.startNewUpload') }}</span>
-                        </x-secondary-button>
-                    </div>
+<div>
+    <!-- Page Header (compact; matches menu create / toolbar scale) -->
+    <div class="mx-4 mt-4 mb-3">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">{{ __('modules.menu.bulkUploadMenuItems') }}</h1>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{{ __('modules.menu.bulkUpload') }} {{ __('modules.menu.allMenuItems') }} {{ __('app.from') }} CSV {{ __('app.or') }} Excel {{ __('app.files') }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2 shrink-0">
+                    <x-secondary-button wire:click="downloadSampleFile" class="flex items-center gap-1.5 text-sm px-3 py-1.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>{{ __('modules.menu.downloadSampleFile') }}</span>
+                    </x-secondary-button>
+                    <x-secondary-button wire:click="resetUploadState" class="flex items-center gap-1.5 text-sm px-3 py-1.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>{{ __('modules.menu.startNewUpload') }}</span>
+                    </x-secondary-button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Main Content -->
-    <div class="w-full px-4 sm:px-6 lg:px-8 py-2">
+    <div class="mx-4 pb-6">
 
     @if($uploadStage === 'idle')
     <!-- Upload Section -->

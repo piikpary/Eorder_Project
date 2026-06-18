@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 
 class TapPaymentController extends Controller
 {
@@ -92,6 +93,8 @@ class TapPaymentController extends Controller
             $order->amount_paid = ($order->amount_paid ?? 0) + $tapPayment->amount;
             $order->status = 'paid';
             $order->save();
+
+            ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
             // Create or update payment record
             Payment::updateOrCreate(

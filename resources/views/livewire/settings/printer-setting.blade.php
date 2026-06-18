@@ -136,7 +136,7 @@
                     </div>
 
                 </div>
-                <div class="flex space-x-2 mt-auto">
+                <div class="flex space-x-2 rtl:space-x-reverse mt-auto">
                     <x-button wire:click="editPrinter({{ $printer->id }})" size="sm" >@lang('app.edit')</x-button>
                     @if (!$printer->is_default)
                         <x-danger-button wire:click="showDeletePrinter({{ $printer->id }})" size="sm">@lang('app.delete')</x-danger-button>
@@ -290,7 +290,7 @@
                                             $canSelect = !$isCurrentlyAssigned || $isAssignedToThisPrinter;
                                         @endphp
                                         <div class="flex items-center justify-between p-2 rounded border {{ $isCurrentlyAssigned ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600' }}">
-                                            <label class="flex items-center space-x-2 flex-1">
+                                            <label class="flex items-center space-x-2 flex-1 rtl:space-x-reverse">
                                                 <input type="checkbox"
                                                     wire:model.defer="selectedKots"
                                                     value="{{ $kot->id }}"
@@ -300,7 +300,7 @@
                                                     {{ $kot->name }}
                                                 </span>
                                             </label>
-                                            <div class="flex items-center space-x-2">
+                                            <div class="flex items-center space-x-2 rtl:space-x-reverse">
                                                 @if ($isCurrentlyAssigned)
                                                     @if ($isAssignedToThisPrinter)
                                                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
@@ -362,7 +362,7 @@
                                             $canSelect = !$isCurrentlyAssigned || $isAssignedToThisPrinter;
                                         @endphp
                                         <div class="flex items-center justify-between p-2 rounded border {{ $isCurrentlyAssigned ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600' }}">
-                                            <label class="flex items-center space-x-2 flex-1">
+                                            <label class="flex items-center space-x-2 flex-1 rtl:space-x-reverse">
                                                 <input type="checkbox"
                                                     wire:model.defer="selectedOrders"
                                                     value="{{ $order->id }}"
@@ -372,7 +372,7 @@
                                                     {{ $order->name }}
                                                 </span>
                                             </label>
-                                            <div class="flex items-center space-x-2">
+                                            <div class="flex items-center space-x-2 rtl:space-x-reverse">
                                                 @if ($isCurrentlyAssigned)
                                                     @if ($isAssignedToThisPrinter)
                                                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
@@ -418,7 +418,7 @@
                             <div>
                                 <label class="flex items-center">
                                     <input type="checkbox" wire:model.defer="isDefault" class="form-checkbox text-blue-600 rounded-md" />
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">@lang('modules.printerSetting.isDefault')</span>
+                                    <span class="ms-2 text-sm text-gray-700 dark:text-gray-300">@lang('modules.printerSetting.isDefault')</span>
                                 </label>
                                 <x-input-error for="isDefault" class="mt-2" />
                             </div>
@@ -496,7 +496,7 @@
                             @endif
                         </div>
                     </div>
-                    <div class="flex justify-end pt-6 space-x-3">
+                    <div class="flex justify-end pt-6 space-x-3 rtl:space-x-reverse">
                         <x-button type="submit" wire:loading.attr="disabled">{{ $id ? __('app.update') : __('app.save') }}</x-button>
                         <x-button-cancel wire:click="closeModal">@lang('app.cancel')</x-button-cancel>
                     </div>

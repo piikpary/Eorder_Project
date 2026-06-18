@@ -18,7 +18,7 @@ class DeliveryExecutiveObserver
     public function created(DeliveryExecutive $deliveryExecutive)
     {
         if (!$deliveryExecutive->unique_code) {
-            $deliveryExecutive->unique_code = strtoupper(Str::random(4)) . $deliveryExecutive->id;
+            $deliveryExecutive->unique_code = strtoupper(Str::random(2)) . 'TT' . $deliveryExecutive->id;
             $deliveryExecutive->saveQuietly();
         }
     }

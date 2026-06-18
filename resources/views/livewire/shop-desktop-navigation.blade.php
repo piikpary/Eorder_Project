@@ -6,7 +6,7 @@
             <div class="flex gap-8 items-center">
                 <a href="{{ route('shop_restaurant', [$restaurant->hash]) . '?branch=' . $shopBranch->id }}"
                     class="inline-flex items-center app-logo">
-                    <img src="{{ $restaurant->logoUrl }}" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9" alt="App Logo" />
+                    <x-restaurant-logo :restaurant="$restaurant" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9" />
                     @if ($restaurant->show_logo_text)
                         <span
                             class="self-center text-xl font-semibold whitespace-nowrap dark:text-white">{{ $restaurant->name }}</span>
@@ -31,7 +31,7 @@
                         @if (in_array('Table Reservation', $modules))
                             <li>
                                 <a href="{{ route('book_a_table', [$restaurant->hash]) . '?branch=' . $shopBranch->id }}"
-                                    wire:navigate @class([
+                                    @class([
                                         'block py-2 pr-4 pl-3 rounded lg:bg-transparent lg:p-0',
                                         'text-gray-700 dark:text-white' => !request()->routeIs(['book_a_table']),
                                         'dark:text-skin-base text-skin-base' => request()->routeIs([
@@ -123,7 +123,7 @@
                         </button>
                         <!-- Dropdown menu -->
                         <div x-show="accountOpen" x-cloak x-transition
-                            class="absolute right-0 mt-1 z-10 font-normal bg-white divide-y divide-gray-100 rounded-lg shadow w-44 dark:bg-gray-700 dark:divide-gray-600">
+                            class="absolute end-0 mt-1 z-10 font-normal bg-white divide-y divide-gray-100 rounded-lg shadow w-44 max-w-[calc(100vw-2rem)] dark:bg-gray-700 dark:divide-gray-600">
                         <ul class="py-2 text-sm text-gray-700 dark:text-gray-200" aria-labelledby="dropdownLargeButton">
                             <li>
                                 <a href="{{ route('profile', [$restaurant->hash]) }}" wire:navigate
@@ -172,7 +172,7 @@
                 @endif
 
                 <button data-collapse-toggle="mobile-menu-2" type="button"
-                    class="inline-flex items-center p-2 ml-1 text-sm text-gray-500 rounded-lg lg:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+                    class="inline-flex items-center p-2 ms-1 text-sm text-gray-500 rounded-lg lg:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
                     aria-controls="mobile-menu-2" aria-expanded="false">
                     <span class="sr-only">@lang('menu.openMainMenu')</span>
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">

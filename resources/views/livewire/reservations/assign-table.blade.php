@@ -4,8 +4,15 @@
         <div class="space-y-8 col-span-2">
             @foreach ($tables as $area)
 
-                <div class="flex flex-col gap-3 sm:gap-4 space-y-3" wire:key='area-{{ $area->id }}'>
-                    <h3 class="f-15 font-medium inline-flex gap-2 items-center dark:text-neutral-200">{{ $area->area_name }}
+                <div @class([
+                    'flex flex-col gap-3 sm:gap-4 space-y-3 rounded-lg p-2 -m-2',
+                    'ring-2 ring-skin-base/40 bg-skin-base/[0.05]' => $reservation->area_id && $reservation->area_id === $area->id,
+                ]) wire:key='area-{{ $area->id }}'>
+                    <h3 class="f-15 font-medium inline-flex gap-2 items-center flex-wrap dark:text-neutral-200">
+                        {{ $area->area_name }}
+                        @if ($reservation->area_id && $reservation->area_id === $area->id)
+                            <span class="px-2 py-0.5 text-xs rounded-full bg-skin-base/15 text-skin-base border border-skin-base/30">@lang('modules.reservation.preferredArea')</span>
+                        @endif
                         <span class="px-2 py-1 text-sm rounded bg-slate-100 border-gray-300 border text-gray-800 ">{{ $area->tables->count() }} @lang('modules.table.table')</span>
                     </h3>
                     <!-- Card -->
@@ -72,15 +79,27 @@
             </div>
             @endif
 
-            @if ($reservation->table_id)
+            @if ($reservation->area)
+            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                <h5 class="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">@lang('modules.reservation.preferredArea')</h5>
+                <p class="text-sm text-amber-900 dark:text-amber-100">{{ $reservation->area->area_name }}</p>
+            </div>
+            @endif
+
+            @if ($reservation->table_id && $reservation->table)
             <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                 <h5 class="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-2">@lang('modules.reservation.currentTable')</h5>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
                         <span class="font-semibold text-sm">{{ $reservation->table->table_code }}</span>
                     </div>
                     <span class="text-xs text-blue-600 dark:text-blue-300">{{ $reservation->table->seating_capacity }} @lang('modules.table.seats')</span>
                 </div>
+                @if ($reservation->table->area)
+                <p class="mt-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-300">
+                    {{ $reservation->table->area->area_name }}
+                </p>
+                @endif
             </div>
             @endif
 

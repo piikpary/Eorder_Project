@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Country;
 use App\Models\Customer;
+use App\Models\User;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
 
@@ -15,6 +16,7 @@ class UpdateProfile extends Component
     public $email;
     public $phone;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $address;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
@@ -37,6 +39,12 @@ class UpdateProfile extends Component
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->phoneCode) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->phoneCode = $detectedPhoneCode;
+        }
     }
 
     public function updatedPhoneCodeIsOpen($value)

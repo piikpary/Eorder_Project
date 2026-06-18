@@ -22,6 +22,7 @@ class LocationSelector extends Component
     public ?bool $inRange = null;
     public ?Branch $branch = null;
     public ?string $mapApiKey = null;
+    public ?string $mapProvider = null;
     public ?Customer $customer = null;
     public ?Branch $shopBranch = null;
     public $maxPreparationTime = null;
@@ -84,6 +85,7 @@ class LocationSelector extends Component
 
         $branchDeliverySetting = $this->branch->deliverySetting;
         $this->mapApiKey = global_setting()->google_map_api_key ?? null;
+        $this->mapProvider = global_setting()->map_provider ?? 'google';
         $this->restaurantTimezone = $this->branch->restaurant?->timezone ?? config('app.timezone');
         $this->restaurantLogo = $this->branch->restaurant?->logo_url;
         $this->customer?->load('addresses');
@@ -344,6 +346,10 @@ class LocationSelector extends Component
 
     private function getTravelTimeWithTraffic(float $originLat, float $originLng, float $destLat, float $destLng): ?int
     {
+        if (($this->mapProvider ?? 'google') !== 'google') {
+            return null;
+        }
+
         info('Fetching travel time with traffic from Google Distance Matrix API');
         $apiKey = $this->mapApiKey;
         $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins={$originLat},{$originLng}&destinations={$destLat},{$destLng}&departure_time=now&key={$apiKey}";

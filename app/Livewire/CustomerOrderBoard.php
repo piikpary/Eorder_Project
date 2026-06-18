@@ -2,10 +2,10 @@
 
 namespace App\Livewire;
 
-use App\Models\Kot;
-use Livewire\Component;
-use Carbon\Carbon;
 use App\Enums\OrderStatus;
+use App\Models\Kot;
+use Carbon\Carbon;
+use Livewire\Component;
 
 class CustomerOrderBoard extends Component
 {
@@ -61,13 +61,13 @@ class CustomerOrderBoard extends Component
 
         $preparing = (clone $baseQuery)
             ->whereIn('kots.status', ['in_kitchen', 'pending_confirmation'])
-            ->whereNotIn('orders.order_status', ['out_for_delivery', 'delivered', 'served'])
+            ->whereNotIn('orders.order_status', array_merge(['out_for_delivery'], OrderStatus::fulfilledProgressValues()))
             ->limit(15)
             ->get();
 
         $ready = (clone $baseQuery)
             ->where('kots.status', 'food_ready')
-            ->whereNotIn('orders.order_status', ['out_for_delivery', 'delivered', 'served'])
+            ->whereNotIn('orders.order_status', array_merge(['out_for_delivery'], OrderStatus::fulfilledProgressValues()))
             ->limit(15)
             ->get();
 

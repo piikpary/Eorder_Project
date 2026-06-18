@@ -2,10 +2,7 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": [
-        "laravel",
-        "framework"
-    ],
+    "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
         "php": "^8.2",
@@ -15,6 +12,7 @@
         "blade-ui-kit/blade-heroicons": "^2.6",
         "endroid/qr-code": "^5.0",
         "fakerphp/faker": "^1.23",
+        "fidele007/bakong-khqr-php": "^1.2",
         "flutterwavedev/flutterwave-v3": "^1.0",
         "froiden/envato": "^5.0",
         "froiden/laravel-installer": "^11.0",
@@ -23,7 +21,9 @@
         "http-interop/http-factory-guzzle": "^1.2",
         "intervention/image": "^2.5",
         "jantinnerezo/livewire-alert": "^3.0",
+        "khaled.alshamaa/ar-php": "^7.0",
         "ladumor/laravel-pwa": "^0.0.4",
+        "laravel-notification-channels/twilio": "^4.2",
         "laravel/cashier": "^15.4",
         "laravel/cashier-paddle": "^2.6",
         "laravel/framework": "^12.0",
@@ -38,7 +38,7 @@
         "mhmiton/laravel-modules-livewire": "^5.0",
         "minishlink/web-push": "^9.0",
         "mollie/laravel-mollie": "^3.1",
-        "nwidart/laravel-modules": "^11.1",
+        "nwidart/laravel-modules": "*",
         "opcodesio/log-viewer": "^3.15",
         "paypal/rest-api-sdk-php": "dev-laravel10",
         "phiki/phiki": "^2.0",
@@ -49,6 +49,7 @@
         "spatie/laravel-translatable": "^6.11",
         "stichoza/google-translate-php": "^5.3",
         "tanmuhittin/laravel-google-translate": "^2.4",
+        "twilio/sdk": "^8.11",
         "unicodeveloper/laravel-paystack": "dev-l12-compatibility",
         "xendit/xendit-php": "^7.0"
     },
@@ -117,9 +118,6 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
-        "platform": {
-            "php": "8.2.12"
-        },
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true,

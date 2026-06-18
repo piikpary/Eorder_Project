@@ -36,11 +36,26 @@
                                 </td>
 
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                    @php
+                                        $roleLabel = $item->roles->first()->translated_name ?? $item->roles->pluck('display_name')[0] ?? '--';
+                                        $isDefaultSuperAdminRole = ($item->roles->first()->name ?? null) === 'Super Admin';
+                                    @endphp
                                     @if ($item->id == auth()->id())
-                                        <span class="text-xs">@lang('messages.cannotEditOwnRole')</span>
+                                        <div class="inline-flex flex-col gap-1.5">
+                                            <span class="text-[11px] text-amber-700 dark:text-amber-400 leading-4">
+                                                @lang('messages.cannotEditOwnRole')
+                                            </span>
+                                            <span class="inline-flex items-center w-fit px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600">
+                                                {{ $roleLabel }}
+                                            </span>
+                                        </div>
+                                    @elseif($isDefaultSuperAdminRole)
+                                        <span class="inline-flex items-center w-fit px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600">
+                                            {{ $roleLabel }}
+                                        </span>
                                     @elseif(user_can('Update SuperAdmin'))
                                         <button wire:key='user-role-{{ $item->id . microtime() }}' id="dropdownHoverButton{{ $item->id }}" data-dropdown-toggle="dropdownHover{{ $item->id }}" data-dropdown-trigger="click" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg font-semibold text-sm text-gray-700 dark:text-gray-300  shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150" type="button">
-                                            {{ $item->roles && isset($item->roles->pluck('display_name')[0]) ? $item->roles->pluck('display_name')[0] : '' }}
+                                            {{ $roleLabel }}
                                             <svg class="w-2.5 h-2.5 ms-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
                                             <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
                                             </svg>
@@ -57,7 +72,7 @@
                                             </ul>
                                         </div>
                                     @else
-                                        {{ $item->roles->first()->translated_name ?? $item->roles->pluck('display_name')[0] }}
+                                        {{ $roleLabel }}
                                     @endif
                                 </td>
 
@@ -105,9 +120,11 @@
         </div>
     </div>
 
-    <!-- Pagination -->
-    <div class="mt-4">
-        {{ $users->links() }}
+    <div wire:key='user-table-paginate-{{ microtime() }}'
+        class="sticky bottom-0 right-0 items-center w-full p-4 bg-white border-t border-gray-200 sm:flex sm:justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div class="flex items-center mb-4 sm:mb-0 w-full">
+            {{ $users->links() }}
+        </div>
     </div>
 
     <!-- Delete Confirmation Modal -->

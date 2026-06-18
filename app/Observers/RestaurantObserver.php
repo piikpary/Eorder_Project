@@ -13,6 +13,7 @@ use App\Models\PaymentGatewayCredential;
 use App\Models\GlobalCurrency;
 use App\Models\PredefinedAmount;
 use App\Models\OfflinePaymentMethod;
+use App\Models\RestaurantEuAllergenSetting;
 use App\Events\NewRestaurantCreatedEvent;
 
 class RestaurantObserver
@@ -80,6 +81,11 @@ class RestaurantObserver
 
         // Add Payment Gateway Settings
         PaymentGatewayCredential::create(['restaurant_id' => $restaurant->id]);
+
+        RestaurantEuAllergenSetting::firstOrCreate(
+            ['restaurant_id' => $restaurant->id],
+            ['enabled' => false, 'allergen_keys' => null]
+        );
 
         // Add default offline payment methods (cash and bank_transfer) with inactive status
         $this->addDefaultOfflinePaymentMethods($restaurant);

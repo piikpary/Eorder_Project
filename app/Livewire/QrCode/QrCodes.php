@@ -46,6 +46,61 @@ class QrCodes extends Component
         $this->redirect(route('qrcodes.index'));
     }
 
+    /**
+     * Flat list of QR entries for Alpine (selection, modal, bulk print).
+     *
+     * @param  \Illuminate\Support\Collection<int, Area>  $areasWithTables
+     * @return list<array<string, mixed>>
+     */
+    private function buildPrintableQrItems($areasWithTables): array
+    {
+        $items = [];
+        $restaurant = restaurant();
+        $branch = branch();
+
+        if (is_null($this->areaID) && $branch->qRCodeUrl) {
+            $items[] = [
+                'id' => 'branch-' . $branch->id,
+                'kind' => 'branch',
+                'label' => $branch->name ?: __('menu.qrCodes'),
+                'subtitle' => __('modules.table.branchMenuQr'),
+                'image_url' => $branch->qRCodeUrl,
+                'visit_url' => route('table_order', [$restaurant->id])
+                    . '?branch=' . $branch->unique_hash
+                    . '&hash=' . $restaurant->hash
+                    . '&from_qr=1',
+                'table_id' => null,
+                'table_code' => null,
+                'branch_id' => $branch->id,
+            ];
+        }
+
+        foreach ($areasWithTables as $area) {
+            foreach ($area->tables as $table) {
+                if (empty($table->qRCodeUrl)) {
+                    continue;
+                }
+
+                $items[] = [
+                    'id' => 'table-' . $table->id,
+                    'kind' => 'table',
+                    'label' => $table->table_code,
+                    'subtitle' => $area->area_name,
+                    'image_url' => $table->qRCodeUrl,
+                    'visit_url' => route('table_order', [$table->hash]) . '?hash=' . $restaurant->hash,
+                    'table_id' => $table->id,
+                    'table_code' => $table->table_code,
+                    'branch_id' => $table->branch_id,
+                    'available_status' => $table->available_status,
+                    'status' => $table->status,
+                    'seating_capacity' => $table->seating_capacity,
+                ];
+            }
+        }
+
+        return $items;
+    }
+
     public function render()
     {
         $query = Area::with('tables');
@@ -54,11 +109,13 @@ class QrCodes extends Component
             $query = $query->where('id', $this->areaID);
         }
 
-        $query = $query->get();
+        $areasWithTables = $query->get();
 
         return view('livewire.qr-code.qr-codes', [
-            'tables' => $query,
-            'areas' => Area::get()
+            'tables' => $areasWithTables,
+            'areas' => Area::get(),
+            'printableQrItems' => $this->buildPrintableQrItems($areasWithTables),
+            'restaurantName' => restaurant()->name,
         ]);
     }
 }

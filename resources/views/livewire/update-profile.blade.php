@@ -20,6 +20,7 @@
                 </div>
                 <div class="sm:col-span-2">
                     <label for="telephone" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">@lang('modules.customer.phone')</label>
+                    
                     <div class="flex flex-col gap-2 sm:flex-row">
                         <!-- Phone Code Dropdown -->
                         <div x-data="{ isOpen: @entangle('phoneCodeIsOpen').live }" @click.away="isOpen = false" class="relative w-full sm:w-32">

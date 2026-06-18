@@ -1,5 +1,5 @@
 <div>
-    <x-dialog-modal wire:model.live="showAddPaymentModal" maxWidth="4xl" class="w-full max-w-full">
+    <x-dialog-modal wire:model.live="showAddPaymentModal" maxWidth="3xl" class="w-full">
         <x-slot name="title">
             @if($order)
 
@@ -32,9 +32,9 @@
                 customSplits: [1, 2],
                 splits: [{ id: 1, items: [] }],
                 activeSplitId: 1
-               }" class="relative min-h-[500px]">
+               }" class="relative min-h-[380px] sm:min-h-[420px]">
                 <!-- Regular Payment View -->
-                <div x-show="!showSplitOptions" class="flex flex-col md:flex-row gap-4 flex-wrap w-full">
+                <div x-show="!showSplitOptions" class="flex flex-col md:flex-row gap-3 sm:gap-4 flex-wrap w-full">
                     <!-- Left Side - Payment Options -->
                     <div class="w-full md:flex-1">
                         <!-- Payment Type Selector -->
@@ -49,47 +49,52 @@
 
                         <!-- Payment Methods -->
                         <div @class([
-                            'grid gap-3',
-                            'grid-cols-2 sm:grid-cols-4' => !$canAddTip,
-                            'grid-cols-2 sm:grid-cols-5' => $canAddTip
+                            'grid gap-2 sm:gap-3',
+                            'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5' => !$canAddTip,
+                            'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5' => $canAddTip
                         ])>
                             <button wire:click="setPaymentMethod('cash')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'cash' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                                class="min-h-[92px] p-3 text-center border rounded-lg flex flex-col items-center justify-center {{ $paymentMethod === 'cash' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
                                 <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2m2 4h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2m7-5a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/></svg>
-                                <span class="text-sm">@lang('modules.order.cash')</span>
+                                <span class="text-sm leading-tight">@lang('modules.order.cash')</span>
                             </button>
 
                             <button wire:click="setPaymentMethod('card')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'card' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                                class="min-h-[92px] p-3 text-center border rounded-lg flex flex-col items-center justify-center {{ $paymentMethod === 'card' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
                                 <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3"/></svg>
-                                <span class="text-sm">@lang('modules.order.card')</span>
+                                <span class="text-sm leading-tight">@lang('modules.order.card')</span>
                             </button>
 
-                            <button wire:click="setPaymentMethod('upi')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'upi' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                            <button wire:click="setPaymentMethod('khqr')" class="min-h-[92px] p-3 text-center border rounded-lg flex flex-col items-center justify-center {{ $paymentMethod === 'khqr' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-qr-code-scan w-6 h-6 mx-auto mb-1" viewBox="0 0 16 16">
+                                    <path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/>
+                                    <path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/>
+                                    <path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z"/>
+                                    <path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z"/>
+                                    <path d="M12 9h2V8h-2z"/>
+                                </svg>
 
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-qr-code-scan w-6 h-6 mx-auto mb-1" viewBox="0 0 16 16"><path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/><path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/><path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z"/><path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z"/><path d="M12 9h2V8h-2z"/></svg>
-                                <span class="text-sm">@lang('modules.order.upi')</span>
+                                <span class="text-sm">KHQR</span>
                             </button>
 
                             <button wire:click="setPaymentMethod('bank_transfer')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'bank_transfer' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                                class="min-h-[92px] p-3 text-center border rounded-lg flex flex-col items-center justify-center {{ $paymentMethod === 'bank_transfer' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
                                 <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                                 </svg>
-                                <span class="text-sm">@lang('modules.order.bank_transfer')</span>
+                                <span class="text-sm leading-tight">@lang('modules.order.bank_transfer')</span>
                             </button>
 
                             <button wire:click="setPaymentMethod('due')"
-                                class="p-3 text-center border rounded-lg {{ $paymentMethod === 'due' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
+                                class="min-h-[92px] p-3 text-center border rounded-lg flex flex-col items-center justify-center {{ $paymentMethod === 'due' ? 'bg-skin-base/5 border-skin-base' : 'hover:bg-gray-50' }}">
                                 <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span class="text-sm">@lang('modules.order.due')</span>
+                                <span class="text-sm leading-tight">@lang('modules.order.due')</span>
                             </button>
                             @if($canAddTip)
                             <button wire:click="addTipModal"
-                                class="p-3 text-center border rounded-lg transition-all duration-200 {{ $order && $order->tip_amount > 0
+                                class="min-h-[92px] p-3 text-center border rounded-lg transition-all duration-200 flex flex-col items-center justify-center {{ $order && $order->tip_amount > 0
                                     ? 'bg-green-50 dark:bg-green-900/50 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/70'
                                     : 'border-2 border-dashed border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-skin-base dark:hover:border-skin-base'
                                 }}">
@@ -206,7 +211,7 @@
                     </div>
 
                     <!-- Right Side - Numpad -->
-                    <div class="w-full md:w-72">
+                    <div class="w-full md:w-64 lg:w-72">
                         <!-- Quick Amount Buttons -->
                         <div class="grid grid-cols-2 gap-2 mb-3">
                             @foreach($predefinedAmounts as $amount)
@@ -219,17 +224,17 @@
                         <!-- Numpad -->
                         <div class="grid grid-cols-3 gap-2">
                             @foreach(range(1, 9) as $number)
-                            <button wire:click="appendNumber('{{ $number }}')" class="p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
+                            <button wire:click="appendNumber('{{ $number }}')" class="p-3 sm:p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
                                 <span class="text-xl">{{ $number }}</span>
                             </button>
                             @endforeach
-                            <button wire:click="appendNumber('.')" class="p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
+                            <button wire:click="appendNumber('.')" class="p-3 sm:p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
                                 <span class="text-xl">.</span>
                             </button>
-                            <button wire:click="appendNumber('0')" class="p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
+                            <button wire:click="appendNumber('0')" class="p-3 sm:p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
                                 <span class="text-xl">0</span>
                             </button>
-                            <button wire:click="clearAmount" class="p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
+                            <button wire:click="clearAmount" class="p-3 sm:p-4 text-center border rounded-lg hover:bg-gray-50 w-full text-lg sm:text-xl">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
                                 </svg>
@@ -720,10 +725,13 @@
         <x-slot name="footer">
             @if($order)
             <div class="flex flex-row w-full gap-3">
-                <x-button-cancel class="flex-1 px-6 py-3 text-base font-medium text-gray-700 hover:bg-gray-100 rounded-lg" wire:click="$toggle('showAddPaymentModal')" wire:loading.attr="disabled" wire:target="submitForm">
+                <x-button-cancel class="flex-1 px-6 py-3 text-base font-medium text-gray-700 hover:bg-gray-100 rounded-lg" wire:click="closePaymentModal" wire:loading.attr="disabled" wire:target="submitForm,submitFormAndPrint,closePaymentModal">
                     {{ __('app.cancel') }}
                 </x-button-cancel>
-                <x-button wire:click="submitForm" wire:loading.attr="disabled" wire:target="submitForm" class="flex-1 px-6 py-3 text-base font-medium bg-skin-base text-white rounded-lg hover:bg-skin-base-600">
+                <x-button wire:click="submitFormAndPrint" wire:loading.attr="disabled" wire:target="submitForm,submitFormAndPrint" class="flex-1 px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    {{ __('modules.order.completePayment') }} &amp; {{ __('app.print') }}
+                </x-button>
+                <x-button wire:click="submitForm" wire:loading.attr="disabled" wire:target="submitForm,submitFormAndPrint" class="flex-1 px-6 py-3 text-base font-medium bg-skin-base text-white rounded-lg hover:bg-skin-base-600">
                     {{ __('modules.order.completePayment') }}
                 </x-button>
                 </div>

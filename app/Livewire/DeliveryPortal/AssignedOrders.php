@@ -23,11 +23,7 @@ class AssignedOrders extends Component
                 ->with(['orderCashCollection'])
                 ->where('delivery_executive_id', $executive->id)
                 ->where('order_type', 'delivery')
-                ->whereNotIn('order_status', [
-                    OrderStatus::DELIVERED->value,
-                    OrderStatus::CANCELLED->value,
-                    OrderStatus::SERVED->value,
-                ])
+                ->whereNotIn('order_status', OrderStatus::terminalProgressValues())
                 ->orderByDesc('id')
                 ->get();
 

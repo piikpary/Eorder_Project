@@ -10,6 +10,7 @@ use App\Models\PaypalPayment;
 use Illuminate\Support\Facades\Log;
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 use Illuminate\Support\Facades\Http;
 use App\Models\PaymentGatewayCredential;
 
@@ -164,6 +165,8 @@ class PaypalPaymentController extends Controller
                 $order->amount_paid = $order->amount_paid + $paypalPayment->amount;
                 $order->status = 'paid';
                 $order->save();
+
+                ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
                 SendNewOrderReceived::dispatch($order);
 

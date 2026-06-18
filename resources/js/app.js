@@ -1,4 +1,5 @@
 import "./bootstrap";
+import "./shop-client-menu";
 import "flowbite";
 // import './sidebar';
 // import './sidebar';

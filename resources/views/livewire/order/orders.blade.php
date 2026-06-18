@@ -238,7 +238,7 @@
                         @php
                             $progressStatus = is_object($item->order_status) ? $item->order_status->value : $item->order_status;
                             $isOutForDelivery = in_array((string) $progressStatus, ['out_for_delivery', 'reached_destination'], true);
-                            $isDelivered = in_array((string) $progressStatus, ['delivered', 'served'], true);
+                            $isDelivered = in_array((string) $progressStatus, \App\Enums\OrderStatus::fulfilledProgressValues(), true);
                         @endphp
                         <x-order.order-card
                             :order='$item'

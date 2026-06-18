@@ -1,5 +1,5 @@
 <div>
-    <div class="mx-4 p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 sm:p-6 dark:bg-gray-800">
+    <div class="mx-4 p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 sm:p-6 dark:bg-gray-800 w-full">
         <div class="col-12">
             <div class="card">
                 <div class="card-header pb-3 pt-4 px-5 border-b">
@@ -12,9 +12,13 @@
                            @class(['inline-block py-2 px-4 border-b-2 text-sm font-medium rounded-t-lg', ($subtab ?? 'desktop') === 'desktop' ? 'border-skin-base text-skin-base dark:border-skin-base dark:text-skin-base' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'])>
                             @lang('superadmin.desktopApp')
                         </a>
-                        <a href="{{ route('superadmin.superadmin-settings.index').'?tab=desktop-app&subtab=mobile' }}" wire:navigate
-                           @class(['inline-block py-2 px-4 border-b-2 text-sm font-medium rounded-t-lg', ($subtab ?? 'desktop') === 'mobile' ? 'border-skin-base text-skin-base dark:border-skin-base dark:text-skin-base' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'])>
-                            @lang('superadmin.mobileApp')
+                        <a href="{{ route('superadmin.superadmin-settings.index').'?tab=desktop-app&subtab=delivery-partner' }}" wire:navigate
+                           @class(['inline-block py-2 px-4 border-b-2 text-sm font-medium rounded-t-lg', in_array($subtab ?? 'desktop', ['mobile', 'delivery-partner'], true) ? 'border-skin-base text-skin-base dark:border-skin-base dark:text-skin-base' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'])>
+                            @lang('superadmin.deliveryPartnerMobileApp')
+                        </a>
+                        <a href="{{ route('superadmin.superadmin-settings.index').'?tab=desktop-app&subtab=waiter-pos' }}" wire:navigate
+                           @class(['inline-block py-2 px-4 border-b-2 text-sm font-medium rounded-t-lg', ($subtab ?? 'desktop') === 'waiter-pos' ? 'border-skin-base text-skin-base dark:border-skin-base dark:text-skin-base' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'])>
+                            @lang('superadmin.waiterPosMobileApp')
                         </a>
                     </div>
                 </div>
@@ -152,69 +156,24 @@
                     </div>
                     @endif
 
-                    @if(($subtab ?? 'desktop') === 'mobile')
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 mb-6">@lang('superadmin.mobileAppSettingsDescription')</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <!-- iOS (Partner App) URL -->
-                        <div class="p-4 border rounded bg-gray-50 dark:bg-gray-800">
-                            <div class="flex items-center mb-3">
-                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                                <h5 class="ml-1 text-base font-semibold text-gray-900 dark:text-white">@lang('superadmin.iosApplication')</h5>
-                            </div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">@lang('superadmin.downloadUrl')</label>
-                            <div class="relative">
-                                <input type="url" wire:model.defer="partner_app_ios"
-                                       class="block w-full px-3 py-2 pr-10 border border-gray-300 rounded text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                       placeholder="https://apps.apple.com/...">
-                                @if(!empty($partner_app_ios))
-                                    <button type="button" wire:click="$set('partner_app_ios', '')"
-                                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    </button>
-                                @endif
-                            </div>
-                            @error('partner_app_ios')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                            @if(!empty($partner_app_ios))
-                                <a href="{{ $partner_app_ios }}" target="_blank" class="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
-                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                    @lang('superadmin.downloadNow')
-                                </a>
-                            @endif
-                        </div>
-                        <!-- Android (Partner App) URL -->
-                        <div class="p-4 border rounded bg-gray-50 dark:bg-gray-800">
-                            <div class="flex items-center mb-3">
-                                {{-- Google Play / Android store icon --}}
-                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 010 1.73l-2.808 1.626L12.001 12l5.697-5.695zM5.864 2.658L16.802 8.99l-2.302 2.302-8.636-8.634z"/>
-                                </svg>
-                                <h5 class="ml-1 text-base font-semibold text-gray-900 dark:text-white">@lang('superadmin.androidApplication')</h5>
-                            </div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">@lang('superadmin.downloadUrl')</label>
-                            <div class="relative">
-                                <input type="url" wire:model.defer="partner_app_android"
-                                       class="block w-full px-3 py-2 pr-10 border border-gray-300 rounded text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                       placeholder="https://play.google.com/store/...">
-                                @if(!empty($partner_app_android))
-                                    <button type="button" wire:click="$set('partner_app_android', '')"
-                                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    </button>
-                                @endif
-                            </div>
-                            @error('partner_app_android')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                            @if(!empty($partner_app_android))
-                                <a href="{{ $partner_app_android }}" target="_blank" class="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
-                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                    @lang('superadmin.downloadNow')
-                                </a>
-                            @endif
-                        </div>
-                    </div>
+                    @if(in_array($subtab ?? 'desktop', ['mobile', 'delivery-partner'], true))
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 mb-6">@lang('superadmin.deliveryPartnerMobileAppSettingsDescription')</p>
+                    @include('livewire.settings.partials.mobile-app-download-fields', [
+                        'iosModel' => 'partner_app_ios',
+                        'androidModel' => 'partner_app_android',
+                        'iosLabel' => __('superadmin.deliveryPartnerIosApplication'),
+                        'androidLabel' => __('superadmin.deliveryPartnerAndroidApplication'),
+                    ])
+                    @endif
+
+                    @if(($subtab ?? 'desktop') === 'waiter-pos')
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 mb-6">@lang('superadmin.waiterPosMobileAppSettingsDescription')</p>
+                    @include('livewire.settings.partials.mobile-app-download-fields', [
+                        'iosModel' => 'waiter_pos_app_ios',
+                        'androidModel' => 'waiter_pos_app_android',
+                        'iosLabel' => __('superadmin.waiterPosIosApplication'),
+                        'androidLabel' => __('superadmin.waiterPosAndroidApplication'),
+                    ])
                     @endif
 
    <!-- Single Save Button -->
@@ -292,64 +251,39 @@
                     </div>
                     @endif
 
-                    @if(($subtab ?? 'desktop') === 'mobile')
-                    <!-- White Label Partner Mobile App Section -->
-                    <div class="py-10 mb-6 p-6 border rounded-lg bg-gradient-to-r from-indigo-50 to-sky-50 dark:from-indigo-900/20 dark:to-sky-900/20 border-indigo-200 dark:border-indigo-800">
-                        <div class="flex items-center mb-4">
-                            <div class="flex-shrink-0">
-                                <svg class="w-8 h-8 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4h10a2 2 0 012 2v11a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 2h6" />
-                                </svg>
-                            </div>
-                            <div class="ml-3">
-                                <h5 class="text-lg font-semibold text-indigo-900 dark:text-indigo-100">@lang('superadmin.whiteLabelMobileApp')</h5>
-                                <p class="text-sm text-indigo-700 dark:text-indigo-300">@lang('superadmin.whiteLabelMobileAppDescription')</p>
-                            </div>
-                        </div>
+                    @if(in_array($subtab ?? 'desktop', ['mobile', 'delivery-partner'], true))
+                    @include('livewire.settings.partials.mobile-app-white-label', [
+                        'title' => __('superadmin.whiteLabelDeliveryPartnerMobileApp'),
+                        'description' => __('superadmin.whiteLabelDeliveryPartnerMobileAppDescription'),
+                        'orderUrl' => 'https://envato.froid.works/my-account?tab=partner-mobile-app',
+                        'orderButtonText' => __('superadmin.orderWhiteLabelDeliveryPartnerMobileApp'),
+                    ])
+                    @endif
 
-                        <div class="mb-4">
-                            <h6 class="font-medium text-indigo-800 dark:text-indigo-200 mb-3">@lang('superadmin.whiteLabelFeatures')</h6>
-                            <ul class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-indigo-700 dark:text-indigo-300">
-                                <li class="flex items-start">
-                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    @lang('superadmin.whiteLabelFeature1')
-                                </li>
-                                <li class="flex items-start">
-                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    @lang('superadmin.whiteLabelFeature2')
-                                </li>
-                                <li class="flex items-start">
-                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    @lang('superadmin.whiteLabelFeature3')
-                                </li>
-                                <li class="flex items-start">
-                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    @lang('superadmin.whiteLabelFeature4')
-                                </li>
-                            </ul>
-                        </div>
-
-                        <!-- Order Button -->
-                        <div class="flex justify-center">
-                            <a href="https://envato.froid.works/my-account?tab=partner-mobile-app"
-                                target="_blank"
-                                class="inline-flex items-center justify-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                                </svg>
-                                @lang('superadmin.orderWhiteLabelApp')
-                            </a>
-                        </div>
-                    </div>
+                    @if(($subtab ?? 'desktop') === 'waiter-pos')
+                    @include('livewire.settings.partials.mobile-app-white-label', [
+                        'title' => __('superadmin.whiteLabelWaiterPosMobileApp'),
+                        'description' => __('superadmin.whiteLabelWaiterPosMobileAppDescription'),
+                        'orderUrl' => 'https://envato.froid.works/my-account?tab=partner-mobile-app&pm_product=tabletrack_waiter_pos',
+                        'orderButtonText' => __('superadmin.orderWhiteLabelWaiterPosMobileApp'),
+                        'gradientFrom' => 'from-teal-50',
+                        'gradientTo' => 'to-cyan-50',
+                        'darkGradientFrom' => 'dark:from-teal-900/20',
+                        'darkGradientTo' => 'dark:to-cyan-900/20',
+                        'borderColor' => 'border-teal-200',
+                        'darkBorderColor' => 'dark:border-teal-800',
+                        'iconColor' => 'text-teal-600',
+                        'darkIconColor' => 'dark:text-teal-400',
+                        'titleColor' => 'text-teal-900',
+                        'darkTitleColor' => 'dark:text-teal-100',
+                        'textColor' => 'text-teal-700',
+                        'darkTextColor' => 'dark:text-teal-300',
+                        'headingColor' => 'text-teal-800',
+                        'darkHeadingColor' => 'dark:text-teal-200',
+                        'buttonColor' => 'bg-teal-600',
+                        'buttonHover' => 'hover:bg-teal-700',
+                        'buttonRing' => 'focus:ring-teal-500',
+                    ])
                     @endif
 
                 </div>

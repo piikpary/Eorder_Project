@@ -1,9 +1,9 @@
 <div
-    class="items-center justify-between p-4 bg-white border border-gray-200 rounded-lg shadow-sm sm:flex dark:border-gray-700 sm:p-6 dark:bg-gray-800">
-    <div class="w-full">
-        <h3 class="text-base font-normal text-gray-500 dark:text-gray-400">@lang('modules.dashboard.totalFreeRestaurantCount')
-        </h3>
-        <span class="text-2xl font-bold leading-none text-gray-900 sm:text-3xl dark:text-white">{{ $orderCount }}</span>
-        
+    class="flex h-full w-full flex-col rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-3">
+    <h3 class="text-[10px] font-medium uppercase leading-snug tracking-wide text-gray-500 dark:text-gray-400 sm:text-xs">
+        @lang('modules.dashboard.totalFreeRestaurantCount')
+    </h3>
+    <div class="mt-2 flex min-w-0 flex-1 items-end">
+        <span class="text-lg font-bold tabular-nums leading-none text-gray-900 dark:text-white sm:text-xl">{{ $orderCount }}</span>
     </div>
 </div>

@@ -19,15 +19,18 @@
                                 $isLockedByOtherUser = $isLocked && $item->tableSession?->locked_by_user_id !== auth()->id();
                                 $isActive = $item->status == 'active';
                                 $isInactive = $item->status == 'inactive';
+                                $isSeatBlocked = (bool) ($item->is_seat_blocked ?? false);
+                                $seatsLeft = $item->seats_left;
                             @endphp
 
-                            <a href="javascript:;" wire:click="setOrderTable({{ $item }})" wire:key="table-{{ $item->id }}"
+                            <a href="javascript:;" @if (! $isSeatBlocked) wire:click="setOrderTable({{ $item }})" @endif wire:key="table-{{ $item->id }}"
                                 @class(['relative w-full group flex items-center justify-center border shadow-sm rounded-lg hover:shadow-md transition-all duration-200',
                                     'dark:bg-gray-700 dark:border-gray-600',
                                     'bg-red-50' => $isInactive,
                                     'bg-white hover:bg-gray-50' => $isActive && !$isLocked,
                                     'bg-orange-50 border-orange-200' => $isLockedByOtherUser,
-                                    'bg-blue-50 border-blue-200' => $isLockedByCurrentUser
+                                    'bg-blue-50 border-blue-200' => $isLockedByCurrentUser,
+                                    'bg-red-50 border-red-200 opacity-60 cursor-not-allowed pointer-events-none' => $isSeatBlocked,
                                 ])>
                                 <!-- Lock indicator for locked tables -->
                                 @if($isLocked)
@@ -98,7 +101,14 @@
                                             </h3>
                                         </div>
                                         <p class="text-xs font-medium dark:text-neutral-200 text-gray-500">
-                                        {{ $item->seating_capacity }} @lang('modules.table.seats')
+                                            {{ $item->seating_capacity }} @lang('modules.table.seats')
+                                        </p>
+                                        <p class="text-xs font-medium dark:text-neutral-300 text-gray-500">
+                                            @if($seatsLeft !== null)
+                                                @lang('modules.order.remaining'): {{ $seatsLeft }} @lang('modules.table.seats')
+                                            @else
+                                                @lang('modules.order.remaining'): --
+                                            @endif
                                         </p>
 
                                     <div wire:loading.flex wire:target="setOrderTable({{ $item }})"

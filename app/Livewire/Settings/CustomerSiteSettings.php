@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Livewire\Settings;
 
 use Livewire\Component;
@@ -6,7 +7,10 @@ use Livewire\WithFileUploads;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use App\Models\CartHeaderSetting;
 use App\Models\CartHeaderImage;
+use App\Models\OfflinePaymentMethod;
+use App\Models\PaymentGatewayCredential;
 use App\Helper\Files;
+use Illuminate\Support\Facades\Validator;
 
 class CustomerSiteSettings extends Component
 {
@@ -53,10 +57,20 @@ class CustomerSiteSettings extends Component
     public $headerText;
     public $headerImages = [];
     public $newImages = [];
+    public bool $newImagesValidated = false;
     public $cartHeaderSetting;
     public bool $isHeaderDisabled = false;
 
+    public $paymentGateway;
+    public bool $enableForDineIn = false;
+    public bool $enableForDelivery = false;
+    public bool $enableForPickup = false;
+    public bool $hasAnyPaymentMethodEnabled = false;
+
     protected $listeners = ['refreshComponent' => '$refresh'];
+
+    private const CART_HEADER_IMAGE_WIDTH = 1248;
+    private const CART_HEADER_IMAGE_HEIGHT = 192;
 
     public function mount()
     {
@@ -123,6 +137,39 @@ class CustomerSiteSettings extends Component
 
         // Initialize newImages as empty array
         $this->newImages = [];
+        $this->newImagesValidated = false;
+
+        // Online payment required (service-specific) settings
+        $this->paymentGateway = PaymentGatewayCredential::first();
+        if ($this->paymentGateway) {
+            $this->enableForDineIn = (bool) $this->paymentGateway->is_dine_in_payment_enabled;
+            $this->enableForDelivery = (bool) $this->paymentGateway->is_delivery_payment_enabled;
+            $this->enableForPickup = (bool) $this->paymentGateway->is_pickup_payment_enabled;
+        }
+
+        $restaurantId = restaurant() ? restaurant()->id : null;
+        $hasAnyOfflinePaymentEnabled = OfflinePaymentMethod::where('restaurant_id', $restaurantId)
+            ->where('status', 'active')
+            ->exists();
+
+        $hasAnyGatewayEnabled = $this->paymentGateway
+            ? (
+                (bool) $this->paymentGateway->razorpay_status
+                || (bool) $this->paymentGateway->stripe_status
+                || (bool) $this->paymentGateway->flutterwave_status
+                || (bool) $this->paymentGateway->paypal_status
+                || (bool) $this->paymentGateway->payfast_status
+                || (bool) $this->paymentGateway->paystack_status
+                || (bool) $this->paymentGateway->xendit_status
+                || (bool) $this->paymentGateway->epay_status
+                || (bool) $this->paymentGateway->mollie_status
+                || (bool) ($this->paymentGateway->tap_status ?? false)
+            )
+            : false;
+
+        $hasQrPaymentEnabled = $this->paymentGateway ? (bool) $this->paymentGateway->is_qr_payment_enabled : false;
+
+        $this->hasAnyPaymentMethodEnabled = $hasAnyGatewayEnabled || $hasAnyOfflinePaymentEnabled || $hasQrPaymentEnabled;
     }
 
     public function updatedHeaderType($value)
@@ -158,18 +205,25 @@ class CustomerSiteSettings extends Component
 
     public function updatedNewImages()
     {
+        // When selecting new images, clear old validation/errors for them
+        $this->clearNewImagesErrors();
+        $this->newImagesValidated = false;
+
+        if (!is_array($this->newImages) || count($this->newImages) === 0) {
+            return;
+        }
+
         $this->validate([
             'newImages.*' => 'nullable|image|max:2048',
         ]);
 
-        // Validate image dimensions
         $this->validateHeaderImages();
+        $this->newImagesValidated = true;
     }
 
     public function validateHeaderImages()
     {
-        // Clear any existing errors for this field
-        $this->resetErrorBag('newImages');
+        $this->clearNewImagesErrors();
 
         if (is_array($this->newImages) && count($this->newImages) > 0) {
             foreach ($this->newImages as $index => $image) {
@@ -180,14 +234,12 @@ class CustomerSiteSettings extends Component
                         $width = $imageInfo[0];
                         $height = $imageInfo[1];
 
-                        // Only show error if dimensions are smaller than recommended (1024 × 1014)
-                        // Images larger than recommended size are acceptable and will not show an error
-                        if ($width < 1024 || $height < 1014) {
-                            $this->addError('newImages.' . $index, __('modules.settings.imageDimensionsTooSmall', [
-                                'width' => 1024,
-                                'height' => 1014,
+                        if ($width !== self::CART_HEADER_IMAGE_WIDTH || $height !== self::CART_HEADER_IMAGE_HEIGHT) {
+                            $this->addError('newImages.' . $index, __('modules.settings.imageDimensionsMustBeExact', [
+                                'width' => self::CART_HEADER_IMAGE_WIDTH,
+                                'height' => self::CART_HEADER_IMAGE_HEIGHT,
                                 'currentWidth' => $width,
-                                'currentHeight' => $height
+                                'currentHeight' => $height,
                             ]));
                         }
                     }
@@ -196,9 +248,23 @@ class CustomerSiteSettings extends Component
         }
     }
 
+    private function clearNewImagesErrors(): void
+    {
+        $this->newImagesValidated = false;
+
+        // Livewire's resetErrorBag('newImages') doesn't remove 'newImages.0', 'newImages.1', etc.
+        $bag = $this->getErrorBag();
+        foreach (array_keys($bag->toArray()) as $key) {
+            if ($key === 'newImages' || str_starts_with($key, 'newImages.')) {
+                $bag->forget($key);
+            }
+        }
+        $this->setErrorBag($bag);
+    }
+
     public function submitForm()
     {
-       
+
 
         $rules = [
             'defaultReservationStatus' => 'required|in:Confirmed,Checked_In,Cancelled,No_Show,Pending',
@@ -220,20 +286,48 @@ class CustomerSiteSettings extends Component
             ],
         ];
 
-        // Only validate images if header type is image and images are provided
-        if ($this->headerType === 'image' && is_array($this->newImages) && count($this->newImages) > 0) {
-            $rules['newImages.*'] = 'nullable|image|max:2048';
-        }
-
         $this->validate($rules);
 
-        // Validate header image dimensions if images are provided
+        // Validate header images (per-image). We will save ONLY valid images.
+        $validNewImages = [];
         if ($this->headerType === 'image' && is_array($this->newImages) && count($this->newImages) > 0) {
-            $this->validateHeaderImages();
+            $this->clearNewImagesErrors();
+            $this->newImagesValidated = true;
 
-            // Check if there are validation errors
-            if ($this->getErrorBag()->has('newImages')) {
-                return;
+            foreach ($this->newImages as $index => $image) {
+                if (!$image) {
+                    continue;
+                }
+
+                $validator = Validator::make(
+                    ['file' => $image],
+                    ['file' => 'image|max:2048']
+                );
+
+                if ($validator->fails()) {
+                    $this->addError('newImages.' . $index, $validator->errors()->first('file'));
+                    continue;
+                }
+
+                $imageInfo = @getimagesize($image->getRealPath());
+                if (!$imageInfo) {
+                    $this->addError('newImages.' . $index, __('validation.image', ['attribute' => 'image']));
+                    continue;
+                }
+
+                $width = $imageInfo[0];
+                $height = $imageInfo[1];
+                if ($width !== self::CART_HEADER_IMAGE_WIDTH || $height !== self::CART_HEADER_IMAGE_HEIGHT) {
+                    $this->addError('newImages.' . $index, __('modules.settings.imageDimensionsMustBeExact', [
+                        'width' => self::CART_HEADER_IMAGE_WIDTH,
+                        'height' => self::CART_HEADER_IMAGE_HEIGHT,
+                        'currentWidth' => $width,
+                        'currentHeight' => $height,
+                    ]));
+                    continue;
+                }
+
+                $validNewImages[] = $image;
             }
         }
 
@@ -294,7 +388,7 @@ class CustomerSiteSettings extends Component
         $this->settings->save();
 
         // Save header settings
-        $this->saveHeaderSettings();
+        $this->saveHeaderSettings($validNewImages);
 
         $this->dispatch('settingsUpdated');
 
@@ -306,7 +400,41 @@ class CustomerSiteSettings extends Component
         ]);
     }
 
-    public function saveHeaderSettings()
+    public function submitFormServiceSpecific()
+    {
+        if (!$this->paymentGateway) {
+            $this->paymentGateway = PaymentGatewayCredential::first();
+        }
+
+        if (!$this->paymentGateway) {
+            $this->alert('error', __('messages.somethingWentWrong'), [
+                'toast' => true,
+                'position' => 'top-end',
+                'showCancelButton' => false,
+                'cancelButtonText' => __('app.close')
+            ]);
+
+            return;
+        }
+
+        $this->paymentGateway->update([
+            'is_dine_in_payment_enabled' => $this->enableForDineIn,
+            'is_delivery_payment_enabled' => $this->enableForDelivery,
+            'is_pickup_payment_enabled' => $this->enableForPickup,
+        ]);
+
+        $this->dispatch('settingsUpdated');
+        session()->forget('paymentGateway');
+
+        $this->alert('success', __('messages.settingsUpdated'), [
+            'toast' => true,
+            'position' => 'top-end',
+            'showCancelButton' => false,
+            'cancelButtonText' => __('app.close')
+        ]);
+    }
+
+    public function saveHeaderSettings(array $validNewImages = [])
     {
         if (!$this->cartHeaderSetting) {
             $this->cartHeaderSetting = CartHeaderSetting::create([
@@ -324,27 +452,33 @@ class CustomerSiteSettings extends Component
         }
 
         // Handle image uploads using Files::uploadLocalOrS3
-        if ($this->headerType === 'image' && is_array($this->newImages) && count($this->newImages) > 0) {
-            foreach ($this->newImages as $image) {
-                if ($image) {
-                    try {
-                        $imagePath = Files::uploadLocalOrS3($image, 'cart_header_images', width: 1280, height: 224);
-                        CartHeaderImage::create([
-                            'cart_header_setting_id' => $this->cartHeaderSetting->id,
-                            'image_path' => $imagePath,
-                            'sort_order' => $this->cartHeaderSetting->images()->count(),
-                        ]);
-                    } catch (\Exception $e) {
-                        $this->alert('error', __('messages.imageUploadFailed') . ': ' . $e->getMessage(), [
-                            'toast' => true,
-                            'position' => 'top-end',
-                        ]);
-                    }
+        if ($this->headerType === 'image' && count($validNewImages) > 0) {
+            foreach ($validNewImages as $image) {
+                try {
+                    $imagePath = Files::uploadLocalOrS3(
+                        $image,
+                        'cart_header_images',
+                        width: self::CART_HEADER_IMAGE_WIDTH,
+                        height: self::CART_HEADER_IMAGE_HEIGHT
+                    );
+                    CartHeaderImage::create([
+                        'cart_header_setting_id' => $this->cartHeaderSetting->id,
+                        'image_path' => $imagePath,
+                        'sort_order' => $this->cartHeaderSetting->images()->count(),
+                    ]);
+                } catch (\Exception $e) {
+                    $this->alert('error', __('messages.imageUploadFailed') . ': ' . $e->getMessage(), [
+                        'toast' => true,
+                        'position' => 'top-end',
+                    ]);
                 }
             }
-            // Clear the newImages after upload
-            $this->newImages = [];
         }
+
+        // Clear the newImages after attempting upload (valid ones already saved; invalid ones stay visible via errors until next selection)
+        $this->newImages = [];
+        $this->newImagesValidated = false;
+        $this->clearNewImagesErrors();
 
         // Refresh the header images
         $this->headerImages = $this->cartHeaderSetting->fresh()->images;
@@ -367,5 +501,4 @@ class CustomerSiteSettings extends Component
     {
         return view('livewire.settings.customer-site-settings');
     }
-
 }

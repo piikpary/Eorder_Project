@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\KotItem;
 use App\Models\Payment;
 use App\Models\RestaurantTax;
 use App\Models\SplitOrder;
+use App\Models\Printer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 class OrderController extends Controller
 {
 
@@ -23,14 +27,100 @@ class OrderController extends Controller
         return view('order.show', compact('id'));
     }
 
+    public function recent(): JsonResponse
+    {
+        abort_if(!in_array('Order', restaurant_modules()), 403);
+        abort_if(!user_can('Show Order') && !user_can('Create Order'), 403);
+
+        $timezone = timezone();
+
+        $orders = Order::query()
+            ->with([
+                'customer:id,name',
+                'table:id,table_code',
+                'waiter:id,name',
+                'orderType:id,order_type_name',
+            ])
+            ->withCount('items')
+            ->where('status', '!=', 'draft')
+            ->latest('created_at')
+            ->limit(10)
+            ->get()
+            ->map(function (Order $order) use ($timezone) {
+                $createdAt = $order->created_at?->timezone($timezone);
+                $isToday = $createdAt?->isToday() ?? false;
+                $orderTypeLabel = $order->orderType?->order_type_name
+                    ?? ucfirst(str_replace('_', ' ', (string) $order->order_type));
+                $statusValue = strtolower((string) ($order->status ?? ''));
+                $statusLabel = strtoupper(str_replace('_', ' ', $statusValue ?: '--'));
+                $statusBadgeClass = match ($statusValue) {
+                    'draft' => 'bg-gray-100 text-gray-800 border-gray-400 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600',
+                    'kot' => 'bg-yellow-100 text-yellow-800 border-yellow-400 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-600',
+                    'billed' => 'bg-blue-100 text-blue-800 border-blue-400 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600',
+                    'paid' => 'bg-green-100 text-green-800 border-green-400 dark:bg-green-900/30 dark:text-green-300 dark:border-green-600',
+                    'payment_due' => 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-600',
+                    'canceled', 'cancelled' => 'bg-red-100 text-red-800 border-red-400 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600',
+                    default => 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600',
+                };
+                $orderItemsCount = (int) ($order->items_count ?? 0);
+                $kotItemsCount = (int) KotItem::query()
+                    ->where('status', '!=', 'cancelled')
+                    ->whereHas('kot', function ($query) use ($order) {
+                        $query->where('order_id', $order->id)
+                            ->where('status', '!=', 'cancelled');
+                    })
+                    ->count();
+                // Non-billed / active KOT flows can keep item rows in kot_items before order_items.
+                $itemsCount = max($orderItemsCount, $kotItemsCount);
+
+                return [
+                    'id' => $order->id,
+                    'uuid' => $order->uuid,
+                    'order_number' => $order->show_formatted_order_number,
+                    'customer_name' => $order->customer?->name ?? '--',
+                    'status_label' => $statusLabel,
+                    'status_badge_class' => $statusBadgeClass,
+                    'order_progress_label' => $order->order_status?->translatedLabel() ?? '--',
+                    'total' => currency_format($order->total),
+                    'date_label' => $isToday ? $createdAt?->format('h:i A') : $createdAt?->format('d M Y h:i A'),
+                    'created_at_label' => $createdAt?->format('d M Y h:i A') ?? '--',
+                    'order_type_label' => $orderTypeLabel ?: '--',
+                    'payment_status_label' => $statusLabel,
+                    'table_label' => $order->table?->table_code ?? '--',
+                    'waiter_name' => $order->waiter?->name ?? '--',
+                    'items_count' => $itemsCount,
+                    'view_url' => route('orders.show', $order->uuid),
+                    'pos_detail_url' => route('pos.kot', ['id' => $order->id]) . '?show-order-detail=true',
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'orders' => $orders,
+        ]);
+    }
+
     public function printOrder($id, $width = 80, $thermal = false, $generateImage = false)
     {
-        $id = Order::where('id', $id)->orWhere('uuid', $id)->value('id') ?: $id;
+        // IMPORTANT:
+        // Only treat input as UUID when it's actually a UUID string.
+        // Some legacy datasets may have numeric-looking UUIDs, which can cause
+        // a wrong order to be fetched (e.g. id=60 matching uuid="60" of another order).
+        if (is_string($id) && Str::isUuid($id)) {
+            $id = Order::where('uuid', $id)->value('id') ?: $id;
+        }
+        $id = (int) $id;
 
         $payment = Payment::where('order_id', $id)->first();
         $restaurant = restaurant();
+        $receiptLanguage = $this->applyReceiptLanguage($restaurant);
         $taxDetails = RestaurantTax::where('restaurant_id', $restaurant->id)->get();
-        $order = Order::with(['items.menuItem', 'items.menuItemVariation', 'items.modifierOptions'])->find($id);
+        $orderRelations = ['items.menuItem.translations', 'items.menuItemVariation', 'items.modifierOptions'];
+        if (function_exists('module_enabled') && module_enabled('Hotel') && in_array('Hotel', restaurant_modules())) {
+            $orderRelations[] = 'hotelStay.room';
+            $orderRelations[] = 'hotelStay.stayGuests.guest';
+        }
+        $order = Order::with($orderRelations)->find($id);
         $orderBranch = $order->branch ?? branch();
         $receiptSettings = $orderBranch->receiptSetting;
         $taxMode = $order?->tax_mode ?? ($restaurant->tax_mode ?? 'order');
@@ -40,8 +130,13 @@ class OrderController extends Controller
             $totalTaxAmount = $order->total_tax_amount ?? 0;
         }
 
+        $receiptLanguages = [$receiptLanguage];
+
+        $printerSetting = Printer::where('is_default', true)->first();
+        $printingChoice = $printerSetting?->printing_choice ?? 'browserPopupPrint';
+
         // Keep one line with all variables from both views (union of both compact calls)
-        $content = view('order.print', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'width', 'thermal', 'generateImage'));
+        $content = view('order.print', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'width', 'thermal', 'generateImage', 'receiptLanguages', 'printingChoice'));
 
         return $content;
     }
@@ -53,8 +148,9 @@ class OrderController extends Controller
     {
         $payment = Payment::where('order_id', $id)->first();
         $restaurant = restaurant();
+        $receiptLanguage = $this->applyReceiptLanguage($restaurant);
         $taxDetails = RestaurantTax::where('restaurant_id', $restaurant->id)->get();
-        $order = Order::with(['items.menuItem', 'items.menuItemVariation', 'items.modifierOptions'])->find($id);
+        $order = Order::with(['items.menuItem.translations', 'items.menuItemVariation', 'items.modifierOptions'])->find($id);
         $orderBranch = $order->branch ?? branch();
         $receiptSettings = $orderBranch->receiptSetting;
         $taxMode = $restaurant->tax_mode ?? 'order';
@@ -78,8 +174,10 @@ class OrderController extends Controller
             $taxBase = $includeChargesInTaxBase ? ($net + $serviceTotal) : $net;
         }
 
+        $receiptLanguages = [$receiptLanguage];
+
         // Generate PDF
-        $pdf = Pdf::loadView('order.print-pdf', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'taxBase'));
+        $pdf = Pdf::loadView('order.print-pdf', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'taxBase', 'receiptLanguages'));
 
         // Set paper size to A4
         $pdf->setPaper('A4', 'portrait');
@@ -94,8 +192,9 @@ class OrderController extends Controller
     {
         $payment = Payment::where('order_id', $id)->first();
         $restaurant = restaurant();
+        $receiptLanguage = $this->applyReceiptLanguage($restaurant);
         $taxDetails = RestaurantTax::where('restaurant_id', $restaurant->id)->get();
-        $order = Order::with(['items.menuItem', 'items.menuItemVariation', 'items.modifierOptions'])->find($id);
+        $order = Order::with(['items.menuItem.translations', 'items.menuItemVariation', 'items.modifierOptions'])->find($id);
         $orderBranch = $order->branch ?? branch();
         $receiptSettings = $orderBranch->receiptSetting;
         $taxMode = $restaurant->tax_mode ?? 'order';
@@ -119,8 +218,10 @@ class OrderController extends Controller
             $taxBase = $includeChargesInTaxBase ? ($net + $serviceTotal) : $net;
         }
 
+        $receiptLanguages = [$receiptLanguage];
+
         // Generate PDF
-        $pdf = Pdf::loadView('order.print-pdf', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'taxBase'));
+        $pdf = Pdf::loadView('order.print-pdf', compact('order', 'orderBranch', 'receiptSettings', 'taxDetails', 'payment', 'taxMode', 'totalTaxAmount', 'taxBase', 'receiptLanguages'));
 
         // Set paper size to A4
         $pdf->setPaper('A4', 'portrait');
@@ -168,10 +269,10 @@ class OrderController extends Controller
     {
         // Try to find as SplitOrder first
         $splitOrder = SplitOrder::with([
-            'order.items.menuItem',
+            'order.items.menuItem.translations',
             'order.items.menuItemVariation',
             'order.items.modifierOptions',
-            'items.orderItem.menuItem',
+            'items.orderItem.menuItem.translations',
             'items.orderItem.menuItemVariation',
             'items.orderItem.modifierOptions'
         ])->find($orderId);
@@ -185,7 +286,7 @@ class OrderController extends Controller
         // Otherwise, treat as Order ID and print all paid splits
         else {
             $order = Order::with([
-                'items.menuItem',
+                'items.menuItem.translations',
                 'items.menuItemVariation',
                 'items.modifierOptions'
             ])->findOrFail($orderId);
@@ -193,7 +294,7 @@ class OrderController extends Controller
             $paidSplitOrders = $order->splitOrders()
                 ->where('status', 'paid')
                 ->with([
-                    'items.orderItem.menuItem',
+                    'items.orderItem.menuItem.translations',
                     'items.orderItem.menuItemVariation',
                     'items.orderItem.modifierOptions'
                 ])
@@ -208,8 +309,10 @@ class OrderController extends Controller
 
         $payment = Payment::where('order_id', $order->id)->first();
         $restaurant = restaurant();
+        $receiptLanguage = $this->applyReceiptLanguage($restaurant);
         $taxDetails = RestaurantTax::where('restaurant_id', $restaurant->id)->get();
         $receiptSettings = $restaurant->receiptSetting;
+        $receiptLanguages = [$receiptLanguage];
         $taxMode = $order?->tax_mode ?? ($restaurant->tax_mode ?? 'order');
         $totalTaxAmount = 0;
 
@@ -226,7 +329,8 @@ class OrderController extends Controller
             'totalTaxAmount',
             'width',
             'thermal',
-            'totalSplits'
+            'totalSplits',
+            'receiptLanguages'
         );
 
         // Add single split specific data if applicable
@@ -242,4 +346,24 @@ class OrderController extends Controller
 
         return view('order.print', $viewData);
     }
+    /**
+     * Apply the language selected for printed receipts only.
+     */
+    private function applyReceiptLanguage($restaurant): string
+    {
+        $receiptLanguage = strtolower(trim((string) ($restaurant?->receipt_language ?? 'en')));
+
+        if (in_array($receiptLanguage, ['kh', 'khmer'], true)) {
+            $receiptLanguage = 'km';
+        }
+
+        if (!in_array($receiptLanguage, ['en', 'km'], true)) {
+            $receiptLanguage = 'en';
+        }
+
+        app()->setLocale($receiptLanguage);
+
+        return $receiptLanguage;
+    }
+
 }

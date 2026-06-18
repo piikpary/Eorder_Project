@@ -5,7 +5,7 @@
                 <h6>Please set the following cron command on your server (Ignore if already done)</h6>
             </div>
             <div class="mb-3 flex justify-between items-center">
-                <a href="https://www.youtube.com/watch?v=W-3pKLf3Hq4&t=18s&pp=ygURY3JvbmpvYiB3b3Jrc3VpdGU%3D"
+                <a href="https://www.youtube.com/watch?v=W-3pKLf3Hq4&pp=ygURY3JvbmpvYiB3b3Jrc3VpdGU%3D"
                    target="_blank"
                    class="inline-flex items-center text-sm text-red-600 hover:text-red-700">
                     <svg class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">

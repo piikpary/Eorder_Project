@@ -9,16 +9,29 @@
         </div>
     </div>
 
-    <div class="flex w-full flex-col p-4">
-        @include($view)
-    </div>
+    @if (!empty($permissionDenied))
+        <div class="p-4 max-w-3xl">
+            <x-alert type="danger">
+                <div class="space-y-3 text-left">
+                    <p class="font-semibold text-red-800 dark:text-red-300">
+                        @lang('messages.customModulesPermissionDeniedTitle')
+                    </p>
+                    <p>
+                        @lang('messages.customModulesPermissionDeniedMessage')
+                    </p>
+                </div>
+            </x-alert>
+        </div>
+    @else
+        <div class="flex w-full flex-col p-4">
+            @include($view)
+        </div>
+    @endif
 </div>
 
 @endsection
 
-
-
-
+@unless (!empty($permissionDenied))
 @push('scripts')
     <script>
         /* manage menu active class */
@@ -90,3 +103,4 @@
 
     </script>
 @endpush
+@endunless

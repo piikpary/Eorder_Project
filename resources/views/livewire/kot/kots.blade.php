@@ -1,4 +1,4 @@
-<div @if(!pusherSettings()->is_enabled_pusher_broadcast) wire:poll.10s @endif>
+<div @if(!pusherSettings()->is_enabled_pusher_broadcast) wire:poll.20s @endif>
     <div class="block p-4  dark:bg-gray-800 dark:border-gray-700">
         <div class="w-full mb-4">
             <h1 class="text-lg font-semibold text-gray-900  dark:text-white flex justify-between items-center">

@@ -2,6 +2,9 @@
 
 namespace App\Livewire\Order;
 
+use App\Concerns\PrintsShopKot;
+use App\Services\ShopCartKotPrintUrls;
+use App\Enums\OrderStatus;
 use App\Events\OrderTableAssigned;
 use App\Events\OrderWaiterAssigned;
 use Carbon\Carbon;
@@ -20,14 +23,12 @@ use App\Models\KotCancelReason;
 use App\Models\DeliveryExecutive;
 use App\Models\Kot;
 use App\Models\KotItem;
-use App\Models\User;
-use App\Scopes\BranchScope;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 
 class OrderDetail extends Component
 {
 
-    use LivewireAlert, PrinterSetting;
+    use LivewireAlert, PrinterSetting, PrintsShopKot;
 
     public $order;
     public $taxes;
@@ -60,6 +61,8 @@ class OrderDetail extends Component
     public $confirmDeleteItemModal = false;
     public $itemToDelete;
     public $showKotAlert = false;
+    public $usingKotItemsFallback = false;
+    public $orderItemsCount = 0;
     public $showPrintOptionsModal = false;
     public $printMode = null; // 'all', 'summary', 'individual', 'single'
     public $selectedSplitId = null;
@@ -74,7 +77,7 @@ class OrderDetail extends Component
         $this->total = 0;
         $this->subTotal = 0;
         $this->taxes = Tax::all();
-        $this->deliveryExecutives = DeliveryExecutive::where('status', 'available')
+        $this->deliveryExecutives = DeliveryExecutive::assignable()
             ->where('is_online', true)
             ->get();
         if ($this->order) {
@@ -82,16 +85,7 @@ class OrderDetail extends Component
         }
         $this->cancelReasons = KotCancelReason::where('cancel_order', true)->get();
 
-        $this->users = cache()->remember('waiters_' . restaurant()->id, 60 * 60 * 24, function () {
-            return User::withoutGlobalScope(BranchScope::class)
-            ->where(function ($q) {
-                return $q->where('branch_id', branch()->id)
-                    ->orWhereNull('branch_id');
-            })
-            ->role('waiter_' . restaurant()->id)
-            ->where('restaurant_id', restaurant()->id)
-            ->get();
-        });
+        $this->users = \App\Services\Pos\PosWaitersCache::remember((int) restaurant()->id, (int) branch()->id);
     }
 
     public function printOrder($orderId)
@@ -250,19 +244,40 @@ class OrderDetail extends Component
         $this->selectedSplitId = null;
     }
 
-    #[On('showOrderDetail')]
-    public function showOrder($id, $fromPos = null)
+    /**
+     * Eager loads used when opening or refreshing the order detail drawer.
+     *
+     * @return array<int, string>
+     */
+    protected function orderDetailRelations(): array
     {
-        $this->order = Order::with(
+        $relations = [
             'items',
             'items.menuItem',
             'items.menuItemVariation',
             'items.modifierOptions',
+            'kot.items.menuItem',
+            'kot.items.menuItemVariation',
+            'kot.items.modifierOptions',
             'payments',
             'cancelReason',
             'orderCashCollection',
-            'deliveryExecutive'
-        )
+            'deliveryExecutive',
+            'waiter',
+            'orderType',
+        ];
+        if (function_exists('module_enabled') && module_enabled('Hotel') && in_array('Hotel', restaurant_modules())) {
+            $relations[] = 'hotelStay.room';
+            $relations[] = 'hotelStay.stayGuests.guest';
+        }
+
+        return $relations;
+    }
+
+    #[On('showOrderDetail')]
+    public function showOrder($id, $fromPos = null)
+    {
+        $this->order = Order::with($this->orderDetailRelations())
             ->when(is_numeric($id), fn ($q) => $q->where('id', $id), fn ($q) => $q->where('uuid', $id))
             ->first();
 
@@ -283,6 +298,26 @@ class OrderDetail extends Component
         }
 
         $this->selectWaiter = $this->order->waiter_id;
+        $this->usingKotItemsFallback = false;
+        $this->orderItemsCount = $this->order->items->count();
+
+        // Some POS/KOT flows persist rows in kot_items while order_items may still be empty.
+        // Use KOT items for display/count fallback so recent-order detail stays accurate.
+        if ($this->orderItemsCount === 0) {
+            $kotItems = $this->order->kot
+                ->where('status', '!=', 'cancelled')
+                ->flatMap(function ($kot) {
+                    return $kot->items->where('status', '!=', 'cancelled');
+                })
+                ->values();
+
+            if ($kotItems->isNotEmpty()) {
+                $this->order->setRelation('items', $kotItems);
+                $this->usingKotItemsFallback = true;
+                $this->orderItemsCount = $kotItems->count();
+            }
+        }
+
         $this->showOrderDetail = true;
 
         $this->showKotAlert = $this->order->kot->isEmpty() && !in_array($this->order->status, ['draft', 'canceled']);
@@ -469,6 +504,10 @@ class OrderDetail extends Component
     public function updatedOrderProgressStatus($value)
     {
         if (empty($this->order) || is_null($value)) {
+            return;
+        }
+
+        if (OrderStatus::tryFrom((string) $value) === null) {
             return;
         }
 
@@ -731,7 +770,25 @@ class OrderDetail extends Component
         ]);
 
         if ($status == 'billed') {
-            $this->dispatch('showOrderDetail', id: $this->order->id);
+            $this->order = Order::with($this->orderDetailRelations())->find($this->order->id);
+            $this->orderStatus = $this->order->status;
+
+            // Close the slide-over from the client (Alpine leave transition) instead of flipping
+            // showOrderDetail in this response (avoids fighting entangle / a rough close). Sync
+            // Livewire state after the animation; do not dispatch showOrderDetail — that reopens the drawer.
+            $this->js(<<<'JS'
+                requestAnimationFrame(() => {
+                    const el = document.getElementById('order-detail-drawer');
+                    if (el && window.Alpine) {
+                        const d = Alpine.$data(el);
+                        if (d && Object.prototype.hasOwnProperty.call(d, 'show')) {
+                            d.show = false;
+                        }
+                    }
+                    setTimeout(() => $wire.set('showOrderDetail', false), 280);
+                });
+            JS);
+
             $this->dispatch('posOrderSuccess');
             $this->dispatch('refreshOrders');
             $this->dispatch('resetPos');
@@ -957,6 +1014,17 @@ class OrderDetail extends Component
                 'amount_paid' => $amountPaid
             ]);
 
+            if (!$wasPaid && $order->placed_via === 'shop') {
+                $order->loadMissing('branch.restaurant');
+                if (ShopCartKotPrintUrls::shouldPrintKotOnShopPaymentVerified($order, $order->branch?->restaurant)) {
+                    $this->printKot($order->fresh([
+                        'kot.items.menuItem',
+                        'kot.items.menuItemVariation',
+                        'kot.items.modifierOptions',
+                    ]));
+                }
+            }
+
             // Earn loyalty points/stamps after payment confirmation (customer site + kiosk)
             if (!$wasPaid && module_enabled('Loyalty')) {
                 $hasPointsEarned = class_exists(\Modules\Loyalty\Entities\LoyaltyLedger::class)
@@ -1044,7 +1112,7 @@ class OrderDetail extends Component
     {
         $selectedExecutive = DeliveryExecutive::find($this->deliveryExecutive);
 
-        if (!$selectedExecutive || $selectedExecutive->status !== 'available' || !(bool) $selectedExecutive->is_online) {
+        if (!$selectedExecutive || !$selectedExecutive->isAssignable()) {
             $this->alert('error', __('messages.invalidRequest'), [
                 'toast' => true,
                 'position' => 'top-end',

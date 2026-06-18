@@ -106,11 +106,17 @@
                                 </svg>
                             </span>
                             <h3 @class(["mb-1.5 text-base font-semibold leading-none text-gray-900 dark:text-white flex
-                                justify-between"])>@lang('modules.onboarding.addMenuHeading')
+                                justify-between items-center gap-2 flex-wrap"])>@lang('modules.onboarding.addMenuHeading')
+                                <span class="flex gap-1.5 shrink-0">
+                                @if ($otherBranches->isNotEmpty())
+                                <a href="javascript:;" wire:click="showCopyMenuFromBranchForm"
+                                    class="text-skin-base bg-skin-base/10 hover:bg-skin-base hover:text-white focus:ring-4 focus:ring-skin-base/30 font-medium rounded-md text-xs px-2.5 py-1 dark:bg-skin-base/20 dark:hover:bg-skin-base dark:focus:ring-skin-base/40">@lang('modules.onboarding.copyFromBranch')</a>
+                                @endif
                                 @if ($onboardingSteps->add_menu_completed)
                                 <a href="javascript:;" wire:click="showAddMenuForm"
                                     class="text-gray-900 bg-gray-300 hover:bg-gray-800 hover:text-white focus:ring-4 focus:ring-gray-300 font-medium rounded-md text-xs px-2.5 py-1 dark:bg-gray-600 dark:hover:bg-gray-700 focus:outline-none dark:focus:ring-gray-800 dark:text-gray-100">@lang('app.addMore')</a>
                                 @endif
+                                </span>
                             </h3>
                             <p class="text-sm font-normal text-gray-500 dark:text-gray-400 tracking-wide">
                                 @lang('modules.onboarding.addMenuInfo')</p>
@@ -131,11 +137,17 @@
                                 </svg>
                             </span>
                             <h3 @class(["mb-1.5 text-base font-semibold leading-none text-gray-900 dark:text-white flex
-                                justify-between"])>@lang('modules.onboarding.addMenuItemHeading')
+                                justify-between items-center gap-2 flex-wrap"])>@lang('modules.onboarding.addMenuItemHeading')
+                                <span class="flex gap-1.5 shrink-0">
+                                @if ($otherBranches->isNotEmpty())
+                                <a href="javascript:;" wire:click="showCopyMenuFromBranchForm"
+                                    class="text-skin-base bg-skin-base/10 hover:bg-skin-base hover:text-white focus:ring-4 focus:ring-skin-base/30 font-medium rounded-md text-xs px-2.5 py-1 dark:bg-skin-base/20 dark:hover:bg-skin-base dark:focus:ring-skin-base/40">@lang('modules.onboarding.copyFromBranch')</a>
+                                @endif
                                 @if ($onboardingSteps->add_menu_items_completed)
                                 <a href="javascript:;" wire:click="showAddMenuItemForm"
                                     class="text-gray-900 bg-gray-300 hover:bg-gray-800 hover:text-white focus:ring-4 focus:ring-gray-300 font-medium rounded-md text-xs px-2.5 py-1 dark:bg-gray-600 dark:hover:bg-gray-700 focus:outline-none dark:focus:ring-gray-800 dark:text-gray-100">@lang('app.addMore')</a>
                                 @endif
+                                </span>
                             </h3>
                             <p class="text-sm font-normal text-gray-500 dark:text-gray-400 tracking-wide">
                                 @lang('modules.onboarding.addMenuItemInfo')</p>
@@ -152,7 +164,85 @@
 
     <div class="col-span-2 px-8 lg:px-16 flex items-center w-full onboarding-steps">
 
-        @if (!$onboardingSteps->add_area_completed || $showAddArea)
+        @if ($showCopyMenuPanel)
+        <div class="space-y-4 w-full max-w-2xl">
+            <div>
+                <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    @lang('modules.onboarding.copyFromBranchHeading')
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    @lang('modules.onboarding.copyFromBranchInfo')
+                </p>
+            </div>
+
+            @if ($otherBranches->isEmpty())
+            <p class="text-sm text-amber-600 dark:text-amber-400">@lang('modules.onboarding.noOtherBranches')</p>
+            @else
+            <form wire:submit="copyMenuFromBranch" class="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+                <div>
+                    <x-label for="onboarding_source_branch" value="{{ __('modules.settings.getDatafrom') }}" />
+                    <x-select id="onboarding_source_branch" class="block mt-1 w-full" wire:model="sourceBranchId">
+                        @foreach ($otherBranches as $branch)
+                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                        @endforeach
+                    </x-select>
+                    <x-input-error for="sourceBranchId" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-label value="{{ __('modules.settings.cloneOptions') }}" class="mb-2" />
+                    <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">@lang('modules.settings.cloneOptionsHint')</p>
+
+                    @if ($showCloneDependencyNote)
+                    <div class="mb-3 flex gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200" role="status">
+                        <svg class="mt-0.5 h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                        </svg>
+                        <div class="min-w-0 flex-1">
+                            <p>@lang('modules.settings.cloneDependenciesAutoSelected')</p>
+                            <button type="button" wire:click="dismissCloneDependencyNote" class="mt-1 text-xs font-medium underline hover:no-underline">@lang('app.close')</button>
+                        </div>
+                    </div>
+                    @endif
+
+                    <div class="space-y-3">
+                        <div>
+                            <x-checkbox id="onboarding_clone_menu" wire:model="cloneMenu" />
+                            <label for="onboarding_clone_menu" class="ml-2 text-sm text-gray-700 dark:text-gray-200">@lang('modules.settings.menu')</label>
+                        </div>
+                        <div>
+                            <x-checkbox id="onboarding_clone_categories" wire:model="cloneCategories" />
+                            <label for="onboarding_clone_categories" class="ml-2 text-sm text-gray-700 dark:text-gray-200">@lang('modules.settings.ItemCategories')</label>
+                        </div>
+                        <div>
+                            <x-checkbox id="onboarding_clone_menu_items" wire:model="cloneMenuItems" wire:change="handleCloneMenuItemsChange" />
+                            <label for="onboarding_clone_menu_items" class="ml-2 text-sm text-gray-700 dark:text-gray-200">@lang('modules.settings.menuItems')</label>
+                            <p class="ml-6 mt-0.5 text-xs text-gray-500 dark:text-gray-400">@lang('modules.settings.cloneMenuItemsRequires')</p>
+                        </div>
+                        <div>
+                            <x-checkbox id="onboarding_clone_modifier_groups" wire:model="cloneModifierGroups" />
+                            <label for="onboarding_clone_modifier_groups" class="ml-2 text-sm text-gray-700 dark:text-gray-200">@lang('modules.modifier.modifierGroup')</label>
+                        </div>
+                        <div>
+                            <x-checkbox id="onboarding_clone_item_modifiers" wire:model="cloneItemModifiers" wire:change="handleCloneItemModifiersChange" />
+                            <label for="onboarding_clone_item_modifiers" class="ml-2 text-sm text-gray-700 dark:text-gray-200">@lang('modules.modifier.itemModifiers')</label>
+                            <p class="ml-6 mt-0.5 text-xs text-gray-500 dark:text-gray-400">@lang('modules.settings.cloneItemModifiersRequires')</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <x-button type="submit">
+                        @lang('modules.onboarding.copyFromBranch')
+                    </x-button>
+                    <x-secondary-button type="button" wire:click="$set('showCopyMenuPanel', false)">
+                        @lang('app.cancel')
+                    </x-secondary-button>
+                </div>
+            </form>
+            @endif
+        </div>
+        @elseif (!$onboardingSteps->add_area_completed || $showAddArea)
         <div class="space-y-4 w-full">
             <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
                 {{ __("modules.table.addArea") }}

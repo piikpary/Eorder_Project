@@ -21,6 +21,7 @@
 </head>
 
 <body class="font-sans antialiased dark:bg-gray-900">
+    @include('sections.offline-banner')
     <div class="mx-auto max-w-lg lg:max-w-screen-xl min-h-svh shadow-md lg:shadow-none">
         @livewire('deliveryNavigation', ['restaurant' => $restaurant, 'shopBranch' => $shopBranch])
         @livewire('deliveryDesktopNavigation', ['restaurant' => $restaurant, 'shopBranch' => $shopBranch])

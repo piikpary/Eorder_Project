@@ -3,6 +3,7 @@
 namespace App\Livewire\Pos;
 
 use App\Models\Area;
+use App\Models\Order;
 use Livewire\Component;
 use App\Models\Reservation;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
@@ -79,9 +80,8 @@ class SetTable extends Component
             ? $this->getTableIdsAssignedToAnyWaiter()
             : [];
 
-        return Area::with(['tables' => function ($query) use ($assignedTableIds, $assignedToAnyWaiterTableIds) {
-            $query->where('available_status', '<>', 'running')
-                ->where('status', 'active');
+        $areas = Area::with(['tables' => function ($query) use ($assignedTableIds, $assignedToAnyWaiterTableIds) {
+            $query->where('status', 'active');
 
             // Not a waiter: show all tables
             if ($assignedTableIds === null) {
@@ -97,6 +97,30 @@ class SetTable extends Component
                 $query->whereNotIn('id', $assignedToAnyWaiterTableIds);
             }
         }, 'tables.tableSession.lockedByUser'])->get();
+
+        $occupiedPaxByTable = Order::query()
+            ->where('branch_id', (int) branch()->id)
+            ->whereNotNull('table_id')
+            ->occupyingTableSeats()
+            ->selectRaw('table_id, SUM(number_of_pax) as occupied_pax')
+            ->groupBy('table_id')
+            ->pluck('occupied_pax', 'table_id');
+
+        return $areas->map(function ($area) use ($occupiedPaxByTable) {
+            $area->tables->transform(function ($table) use ($occupiedPaxByTable) {
+                $seatCap = (int) ($table->seating_capacity ?? 0);
+                $occupiedPax = (int) ($occupiedPaxByTable[$table->id] ?? 0);
+                $seatsLeft = $seatCap > 0 ? max($seatCap - $occupiedPax, 0) : null;
+
+                $table->occupied_pax = $occupiedPax;
+                $table->seats_left = $seatsLeft;
+                $table->is_seat_blocked = $seatCap > 0 && $seatsLeft <= 0;
+
+                return $table;
+            });
+
+            return $area;
+        });
     }
 
     private function loadReservations()
@@ -208,7 +232,10 @@ class SetTable extends Component
 
     public function render()
     {
-        return view('livewire.pos.set-table');
+        return view('livewire.pos.set-table', [
+            'tables' => $this->loadTables(),
+            'reservations' => $this->loadReservations(),
+        ]);
     }
 
 }

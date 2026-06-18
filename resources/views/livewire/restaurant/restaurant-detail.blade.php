@@ -178,11 +178,25 @@
                         <p class="text-sm text-gray-700 dark:text-gray-300 mt-1"><span class="font-semibold">@lang('modules.package.packageType'):</span> {{ ucfirst($restaurant?->package_type) }}({{ ucfirst($restaurant->package?->package_type->value) }})</p>
                         @if ($restaurant->package?->package_type->value == 'trial')
                         <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                            <span class="font-semibold">@lang('modules.package.trialExpireOn'):</span>  {{ $restaurant?->trial_ends_at ? \Carbon\Carbon::parse($restaurant->trial_ends_at)->format('D, d M Y') : '--' }}
+                            <span class="font-semibold">@lang('modules.package.trialExpireOn'):</span>
+                            @if ($restaurant?->trial_ends_at)
+                                {{ \Carbon\Carbon::parse($restaurant->trial_ends_at)->format('D, d M Y') }}
+                                <span class="text-xs text-gray-500 ml-2">
+                                    ({{ \Carbon\Carbon::parse($restaurant->trial_ends_at)->diffForHumans() }})
+                                </span>
+                            @else
+                                --
+                            @endif
                         </p>
+                   
                         @elseif ($restaurant->package?->package_type->value != 'lifetime')
                         <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                            <span class="font-semibold">@lang('modules.package.licenceExpiresOn'):</span> {{ optional($restaurant->license_expire_on)->format('D, d M Y') ?? '--' }}
+                            <span class="font-semibold">@lang('modules.package.licenceExpiresOn'):</span>
+                            {{ optional($restaurant->license_expire_on)->format('D, d M Y') ?? '--' }}
+                            @if($restaurant->license_expire_on)
+                                <span class="text-xs text-gray-500 ml-2">({{ optional($restaurant->license_expire_on)->diffForHumans() }})</span>
+                            @endif
+                       
                         </p>
                         @endif
 

@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Traits\HasBranch;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\BaseModel;
 
@@ -13,7 +13,47 @@ class DeliveryExecutive extends BaseModel
     use HasBranch;
     use Notifiable;
 
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_INACTIVE = 'inactive';
+
+    public const STATUS_ON_DELIVERY = 'on_delivery';
+
+    /** @deprecated Renamed to {@see STATUS_ACTIVE}; kept for legacy rows before migration. */
+    public const STATUS_AVAILABLE_LEGACY = 'available';
+
     protected $guarded = ['id'];
+
+    public static function normalizeStatus(?string $status): string
+    {
+        return $status === self::STATUS_AVAILABLE_LEGACY ? self::STATUS_ACTIVE : (string) $status;
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereIn('status', [self::STATUS_ACTIVE, self::STATUS_AVAILABLE_LEGACY]);
+    }
+
+    /** Active executives who are online and can be assigned to delivery orders. */
+    public function scopeAssignable(Builder $query): Builder
+    {
+        return $query->active()->where('is_online', true);
+    }
+
+    public function isAssignable(): bool
+    {
+        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_AVAILABLE_LEGACY], true)
+            && (bool) $this->is_online;
+    }
+
+    public static function findAssignableForBranch(int $id, int $branchId): ?self
+    {
+        return static::query()
+            ->where('id', $id)
+            ->where('branch_id', $branchId)
+            ->assignable()
+            ->first();
+    }
 
     public function orders(): HasMany
     {

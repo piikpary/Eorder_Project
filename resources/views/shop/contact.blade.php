@@ -1,6 +1,16 @@
 @extends('layouts.guest')
 
 @section('content')
+@php
+    $mapProvider = global_setting()->map_provider ?? 'google';
+    $hasMapLocation = isset($shopBranch) && !empty($shopBranch->lat) && !empty($shopBranch->lng);
+    $mapId = 'shop_map_' . uniqid();
+    $openMapUrl = $hasMapLocation
+        ? ($mapProvider === 'osm'
+            ? "https://www.openstreetmap.org/?mlat={$shopBranch->lat}&mlon={$shopBranch->lng}#map=15/{$shopBranch->lat}/{$shopBranch->lng}"
+            : "https://www.google.com/maps/search/?api=1&query={$shopBranch->lat},{$shopBranch->lng}")
+        : null;
+@endphp
 
 
 <!-- Contact -->
@@ -74,8 +84,7 @@
                 </div>
 
                 <!-- Map / Location (End) -->
-                @if(isset($shopBranch) && $shopBranch->lat && $shopBranch->lng)
-                    @php $mapId = 'shop_map_'.uniqid(); @endphp
+                @if($hasMapLocation)
                     <div>
                         <div class="rounded-lg overflow-hidden border border-gray-100 dark:border-neutral-700">
                             <div class="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800">
@@ -87,7 +96,7 @@
                                     <h4 class="text-lg font-semibold text-black dark:text-white">{{ __('landing.mapTitle') }}</h4>
                                 </div>
                                 <div class="text-sm">
-                                    <a href="https://www.google.com/maps/search/?api=1&query={{ $shopBranch->lat }},{{ $shopBranch->lng }}" target="_blank" class="text-skin-base hover:underline">{{ __('landing.openInGoogleMaps') }}</a>
+                                    <a href="{{ $openMapUrl }}" target="_blank" class="text-skin-base hover:underline">{{ __('landing.openInGoogleMaps') }}</a>
                                 </div>
                             </div>
 
@@ -118,7 +127,9 @@
                             iframe.height = '360';
                             iframe.frameBorder = '0';
                             iframe.style.border = '0';
-                            iframe.src = 'https://maps.google.com/maps?q=' + lat + ',' + lng + '&z=' + zoom + '&output=embed';
+                            iframe.src = @json($mapProvider === 'osm')
+                                ? ('https://www.openstreetmap.org/export/embed.html?bbox=' + (lng - 0.01) + '%2C' + (lat - 0.01) + '%2C' + (lng + 0.01) + '%2C' + (lat + 0.01) + '&layer=mapnik&marker=' + lat + '%2C' + lng)
+                                : ('https://maps.google.com/maps?q=' + lat + ',' + lng + '&z=' + zoom + '&output=embed');
                             var container = document.getElementById(mapId);
                             if (container) { container.innerHTML = ''; container.appendChild(iframe); }
                         })();

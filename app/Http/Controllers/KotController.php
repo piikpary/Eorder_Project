@@ -33,6 +33,13 @@ class KotController extends Controller
         
         $printingChoice = $printerSetting?->printing_choice ?? 'browserPopupPrint';
 
-        return view('pos.printKot', compact('kot', 'kotPlaceid', 'width', 'thermal', 'kotPlace', 'printingChoice', 'forPdf'));
+        // RTL labels: match invoice (order/print) — use default printer choice for flipText.
+        // KOT place printer may be directPrint, but HTML is browser-rendered (popup or html-to-image).
+        $defaultPrinter = Printer::where('is_default', true)->first();
+        $rtlPrintingChoice = $defaultPrinter?->printing_choice ?? 'browserPopupPrint';
+
+        $receiptLanguages = $kot->order->branch->receiptSetting->receipt_languages ?? ['en'];
+
+        return view('pos.printKot', compact('kot', 'kotPlaceid', 'width', 'thermal', 'kotPlace', 'printingChoice', 'rtlPrintingChoice', 'forPdf', 'receiptLanguages'));
     }
 }

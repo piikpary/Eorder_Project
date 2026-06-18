@@ -133,7 +133,7 @@
     @endif
 
     @if ($showBranchForm)
-        <form wire:submit.prevent="submitForm2">
+        <form wire:submit.prevent="submitForm2" wire:loading.attr="disabled" wire:target="submitForm2">
             @csrf
 
             <h2 class="text-xl font-medium mb-6 mt-3 dark:text-white">@lang('modules.restaurant.restaurantBranchDetails')</h2>
@@ -163,14 +163,10 @@
             <div class="flex items-center justify-between mt-4">
                 <x-button
                     type="submit"
-                    wire:target="submitForm2"
-                    wire:loading.attr="disabled"
+                    target="submitForm2"
                     :disabled="$isSubmitting">
                     <span wire:loading.remove wire:target="submitForm2">@lang('app.save')</span>
-                    <span wire:loading wire:target="submitForm2">
-                        <svg class="inline animate-spin -ml-1 mr-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12zm2 5.291A7.96 7.96 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938z"/></svg>
-                        @lang('app.saving')
-                    </span>
+                    <span wire:loading wire:target="submitForm2">@lang('app.saving')</span>
                 </x-button>
             </div>
         </form>

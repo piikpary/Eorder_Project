@@ -213,6 +213,50 @@
                     </div>
                     @endif
                 </div>
+
+                @if($hasAnyPaymentMethodEnabled)
+                    <!-- Online Payment Required Settings Section -->
+                    <div class="md:col-span-2 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            @lang('modules.settings.onlinePaymentRequiredByService')
+                        </h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            @lang('modules.settings.onlinePaymentRequiredByServiceDescription')
+                        </p>
+
+                        <div class="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                            <div class="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                                <div class="flex-1">
+                                    <x-label for="enableForDineIn" :value="__('modules.settings.dineInOnlinePaymentRequired')" class="!mb-1" />
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">@lang('modules.settings.dineInOnlinePaymentRequiredDescription')</p>
+                                </div>
+                                <x-checkbox name="enableForDineIn" id="enableForDineIn" wire:model='enableForDineIn' class="ml-4" />
+                            </div>
+
+                            <div class="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                                <div class="flex-1">
+                                    <x-label for="enableForDelivery" :value="__('modules.settings.deliveryOnlinePaymentRequired')" class="!mb-1" />
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">@lang('modules.settings.deliveryOnlinePaymentRequiredDescription')</p>
+                                </div>
+                                <x-checkbox name="enableForDelivery" id="enableForDelivery" wire:model='enableForDelivery' class="ml-4" />
+                            </div>
+
+                            <div class="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                                <div class="flex-1">
+                                    <x-label for="enableForPickup" :value="__('modules.settings.pickupOnlinePaymentRequired')" class="!mb-1" />
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">@lang('modules.settings.pickupOnlinePaymentRequiredDescription')</p>
+                                </div>
+                                <x-checkbox name="enableForPickup" id="enableForPickup" wire:model='enableForPickup' class="ml-4" />
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-6">
+                            <x-button type="button" wire:click="submitFormServiceSpecific">
+                                @lang('app.save')
+                            </x-button>
+                        </div>
+                    </div>
+                @endif
                 <!-- Dine-in Settings Section -->
                 <div class="md:col-span-2 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg">
                     <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -448,17 +492,7 @@
                                            accept="image/*"
                                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-skin-base file:text-white hover:file:bg-skin-base/80 border border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 </div>
-                                <x-input-error for="newImages" class="mt-2" />
 
-                                @if($errors->has('newImages.*'))
-                                    <div class="mt-2">
-                                        @foreach($errors->get('newImages.*') as $errorArray)
-                                            @foreach($errorArray as $error)
-                                                <p class="text-sm text-red-500">{{ $error }}</p>
-                                            @endforeach
-                                        @endforeach
-                                    </div>
-                                @endif
 
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     @lang('modules.settings.headerImagesUploadHelp')
@@ -471,11 +505,23 @@
                                         <div class="flex flex-wrap gap-4">
                                             @foreach($newImages as $index => $image)
                                                 <div class="relative">
-                                                    <div class="relative w-32 h-32">
-                                                        <img src="{{ $image->temporaryUrl() }}" alt="Preview" class="w-full h-full object-cover rounded-lg shadow-md">
+                                                    @php
+                                                        $hasError = $errors->has('newImages.' . $index);
+                                                        $borderClass = 'border-gray-200 dark:border-gray-700';
+                                                        if($newImagesValidated){
+                                                            $borderClass = $hasError ? 'border-red-500' : 'border-green-500';
+                                                        }
+                                                    @endphp
+                                                    <div class="relative w-full max-w-md aspect-[1248/192] border-2 {{ $borderClass }} rounded-lg overflow-hidden">
+                                                        <img src="{{ $image->temporaryUrl() }}" alt="Preview" class="h-full w-full object-cover shadow-md">
                                                     </div>
+                                                    @if($newImagesValidated)
+                                                        <p class="mt-1 text-xs {{ $hasError ? 'text-red-600' : 'text-green-600' }}">
+                                                            {{ $hasError ? __('app.willNotBeSaved') : __('app.willBeSaved') }}
+                                                        </p>
+                                                    @endif
                                                     @error('newImages.' . $index)
-                                                        <p class="mt-1 text-xs text-red-500 max-w-[128px]">{{ $message }}</p>
+                                                        <p class="mt-1 max-w-md text-xs text-red-500">{{ $message }}</p>
                                                     @enderror
                                                 </div>
                                             @endforeach
@@ -489,8 +535,8 @@
                                         <h5 class="text-sm font-medium text-gray-900 dark:text-white mb-2">@lang('modules.settings.existingImages')</h5>
                                         <div class="flex flex-wrap gap-4">
                                             @foreach($headerImages as $image)
-                                                <div class="relative group w-32 h-32">
-                                                    <img src="{{ $image->image_url }}" alt="{{ $image->alt_text }}" class="w-full h-full object-cover rounded-lg shadow-md">
+                                                <div class="relative group w-full max-w-md aspect-[1248/192]">
+                                                    <img src="{{ $image->image_url }}" alt="{{ $image->alt_text }}" class="h-full w-full rounded-lg object-cover shadow-md">
                                                     <button type="button" wire:click="removeImage({{ $image->id }})" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-red-600 shadow-lg hover:scale-110 z-10 pointer-events-auto">
                                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>

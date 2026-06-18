@@ -1,7 +1,11 @@
-@props(['id' => null, 'maxWidth' => null, 'waiters' => []])
+@props(['id' => null, 'maxWidth' => null, 'waiters' => [], 'contentScroll' => true])
 
 @php
 $id = $id ?? md5($attributes->wire('model'));
+
+$contentRegionOverflow = $contentScroll
+    ? 'overflow-y-auto overflow-x-hidden'
+    : 'overflow-x-hidden overflow-hidden';
 
 $maxWidth = [
     'sm' => 'sm:max-w-sm',
@@ -32,8 +36,8 @@ $maxWidth = [
         <div class="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
     </div>
 
-    <!-- Sliding Modal -->
-    <div x-show="show" class="mb-6 bg-white dark:bg-gray-800 overflow-y-auto overflow-x-hidden shadow-xl transform transition-all fixed top-0 left-0 right-0 w-screen max-w-full sm:left-auto sm:right-0 sm:w-full h-screen {{ $maxWidth }} flex flex-col"
+    <!-- Sliding Modal: header fixed, body scrolls inside (flex + min-h-0 chain) -->
+    <div x-show="show" class="mb-6 bg-white dark:bg-gray-800 overflow-hidden shadow-xl transform transition-all fixed top-0 left-0 right-0 w-screen max-w-full sm:left-auto sm:right-0 sm:w-full h-screen max-h-screen {{ $maxWidth }} flex flex-col"
         x-trap.inert.noscroll="show"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="translate-x-full"
@@ -41,20 +45,20 @@ $maxWidth = [
         x-transition:leave="ease-in duration-200"
         x-transition:leave-start="translate-x-0"
         x-transition:leave-end="translate-x-full">
-        <div class="px-6 py-4 flex-1">
-            <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="flex flex-col flex-1 min-h-0 px-4 pt-3 pb-2 sm:px-6 sm:pt-4">
+            <div class="shrink-0 text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 min-w-0">
                 {{ $title }}
             </div>
 
             @if(isset($content))
-                <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <div class="mt-2 sm:mt-4 flex flex-col flex-1 min-h-0 min-w-0 {{ $contentRegionOverflow }} text-sm text-gray-600 dark:text-gray-400">
                     {{ $content }}
                 </div>
             @endif
         </div>
 
         @if (isset($footer))
-        <div class="flex flex-row justify-end px-6 py-4 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div class="shrink-0 flex flex-row justify-end px-6 py-4 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
             {{ $footer }}
         </div>
         @endif

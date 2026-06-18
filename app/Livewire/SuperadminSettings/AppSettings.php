@@ -23,6 +23,7 @@ class AppSettings extends Component
     public $globalCurrencies;
     public $defaultCurrency;
     public $mapApiKey;
+    public $mapProvider;
     public $privacyPolicyLink;
     public bool $showPrivacyConsentCheckbox;
     public bool $requiresApproval;
@@ -30,6 +31,7 @@ class AppSettings extends Component
     public $sessionDriver;
     public $phoneNumber;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -49,6 +51,7 @@ class AppSettings extends Component
         $this->globalCurrencies = GlobalCurrency::where('status', 'enable')->get();
         $this->defaultCurrency = $this->settings->default_currency_id;
         $this->mapApiKey = $this->settings->google_map_api_key;
+        $this->mapProvider = $this->settings->map_provider ?? 'google';
         $this->privacyPolicyLink = $this->settings->privacy_policy_link;
         $this->showPrivacyConsentCheckbox = $this->settings->show_privacy_consent_checkbox ?? false;
         $this->showSupportTicket = $this->settings->show_support_ticket ?? true;
@@ -58,6 +61,11 @@ class AppSettings extends Component
         $this->phoneCode = user()->phone_code ?? '';
         $this->allPhoneCodes = collect(\App\Models\Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->phoneCode) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->phoneCode = $detectedPhoneCode;
+        }
 
         // Timezone
         $this->timezone = $this->settings->timezone ?? 'UTC';
@@ -110,6 +118,7 @@ class AppSettings extends Component
             ],
             'phoneCode' => 'required',
             'timezone' => 'required',
+            'mapProvider' => 'required|in:google,osm',
         ];
 
         // Add privacy policy link validation if consent checkbox is enabled
@@ -123,6 +132,7 @@ class AppSettings extends Component
         $this->settings->requires_approval_after_signup = $this->requiresApproval;
         $this->settings->locale = $this->defaultLanguage;
         $this->settings->default_currency_id = $this->defaultCurrency;
+        $this->settings->map_provider = $this->mapProvider ?? 'google';
         $this->settings->google_map_api_key = $this->mapApiKey ?? null;
         $this->settings->privacy_policy_link = $this->privacyPolicyLink ?? null;
         $this->settings->show_privacy_consent_checkbox = $this->showPrivacyConsentCheckbox;
@@ -147,6 +157,7 @@ class AppSettings extends Component
         cache()->forget('global_setting');
         session()->forget('restaurantOrGlobalSetting');
         session()->forget('timezone');
+        session()->forget(['date_format', 'time_format']);
 
         $this->redirect(route('superadmin.superadmin-settings.index'), navigate: true);
 

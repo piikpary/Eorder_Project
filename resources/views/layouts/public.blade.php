@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}" class="h-full">
 
 <head>
    @php
@@ -65,7 +65,8 @@
 </head>
 
 
-<body class="font-sans antialiased dark:bg-gray-900" id="main-body">
+<body class="font-sans antialiased dark:bg-gray-900 h-full min-h-0" id="main-body">
+    @include('sections.offline-banner')
 
 
     <div class="flex rtl:flex-row-reverse  overflow-hidden bg-gray-50 dark:bg-gray-900 h-screen">
@@ -96,27 +97,26 @@
 
 
     <script>
-        var elem = document.getElementById("main-body");
+        function fullscreenTarget() {
+            return document.documentElement;
+        }
 
         function openFullscreen() {
-            if (!document.fullscreenElement) {
+            var elem = fullscreenTarget();
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
                 if (elem.requestFullscreen) {
                     elem.requestFullscreen();
                 } else if (elem.webkitRequestFullscreen) {
-                    /* Safari */
                     elem.webkitRequestFullscreen();
                 } else if (elem.msRequestFullscreen) {
-                    /* IE11 */
                     elem.msRequestFullscreen();
                 }
             } else {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
                 } else if (document.webkitExitFullscreen) {
-                    /* Safari */
                     document.webkitExitFullscreen();
                 } else if (document.msExitFullscreen) {
-                    /* IE11 */
                     document.msExitFullscreen();
                 }
             }

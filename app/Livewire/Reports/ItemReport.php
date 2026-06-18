@@ -212,28 +212,32 @@ class ItemReport extends Component
     {
         $dateTimeData = $this->prepareDateTimeData();
 
+        $ordersFilter = function ($q) use ($dateTimeData) {
+            return $q->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->whereBetween('orders.date_time', [$dateTimeData['startDateTime'], $dateTimeData['endDateTime']])
+                ->where('orders.status', 'paid')
+                ->where(function ($q) use ($dateTimeData) {
+                    if ($dateTimeData['startTime'] < $dateTimeData['endTime']) {
+                        $q->whereRaw("TIME(orders.date_time) BETWEEN ? AND ?", [$dateTimeData['startTime'], $dateTimeData['endTime']]);
+                    } else {
+                        $q->where(function ($sub) use ($dateTimeData) {
+                            $sub->whereRaw("TIME(orders.date_time) >= ?", [$dateTimeData['startTime']])
+                                ->orWhereRaw("TIME(orders.date_time) <= ?", [$dateTimeData['endTime']]);
+                        });
+                    }
+                })
+                ->when($this->filterByHandler, function ($q) {
+                    $q->where('orders.added_by', $this->filterByHandler);
+                })
+                ->when($this->filterByWaiter, function ($q) {
+                    $q->where('orders.waiter_id', $this->filterByWaiter);
+                });
+        };
+
         $query = MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)
-            ->with(['orders' => function ($q) use ($dateTimeData) {
-                return $q->join('orders', 'orders.id', '=', 'order_items.order_id')
-                    ->whereBetween('orders.date_time', [$dateTimeData['startDateTime'], $dateTimeData['endDateTime']])
-                    ->where('orders.status', 'paid')
-                    ->where(function ($q) use ($dateTimeData) {
-                        if ($dateTimeData['startTime'] < $dateTimeData['endTime']) {
-                            $q->whereRaw("TIME(orders.date_time) BETWEEN ? AND ?", [$dateTimeData['startTime'], $dateTimeData['endTime']]);
-                        } else {
-                            $q->where(function ($sub) use ($dateTimeData) {
-                                $sub->whereRaw("TIME(orders.date_time) >= ?", [$dateTimeData['startTime']])
-                                    ->orWhereRaw("TIME(orders.date_time) <= ?", [$dateTimeData['endTime']]);
-                            });
-                        }
-                    })
-                    ->when($this->filterByHandler, function ($q) {
-                        $q->where('orders.added_by', $this->filterByHandler);
-                    })
-                    ->when($this->filterByWaiter, function ($q) {
-                        $q->where('orders.waiter_id', $this->filterByWaiter);
-                    });
-            }, 'category', 'variations'])->withCount('variations');
+            ->whereHas('orders', $ordersFilter)
+            ->with(['orders' => $ordersFilter, 'category', 'variations'])
+            ->withCount('variations');
 
         if ($this->searchTerm) {
             $query->where(function ($q) {
@@ -245,28 +249,41 @@ class ItemReport extends Component
         }
 
         // Get all items and calculate aggregates once
-        $menuItems = $query->get()->map(function ($item) {
-            if ($item->variations_count > 0) {
-                // For items with variations, calculate for each variation
-                $item->variations->each(function ($variation) use ($item) {
-                    $variation->quantity_sold = $item->orders->where('menu_item_variation_id', $variation->id)->sum('quantity') ?? 0;
-                    $variation->total_revenue = $variation->price * $variation->quantity_sold;
-                });
+        // Then hide items with 0 sales in the selected range.
+        $menuItems = $query->get()
+            ->map(function ($item) {
+                if ($item->variations_count > 0) {
+                    // For items with variations, calculate for each variation
+                    $item->variations->each(function ($variation) use ($item) {
+                        $variation->quantity_sold = $item->orders
+                            ->where('menu_item_variation_id', $variation->id)
+                            ->sum('quantity') ?? 0;
+                        $variation->total_revenue = $variation->price * $variation->quantity_sold;
+                    });
 
-                // Calculate item totals from variations
-                $item->quantity_sold = $item->variations->sum('quantity_sold');
-                $item->total_revenue = $item->variations->sum('total_revenue');
-            } else {
-                // For items without variations
-                $quantitySold = $item->orders->sum('quantity');
-                $totalRevenue = $item->price * $quantitySold;
+                    // Keep only sold variations (optional but matches "only sold items" intent)
+                    $item->setRelation('variations', $item->variations->filter(function ($v) {
+                        return (int) ($v->quantity_sold ?? 0) > 0;
+                    })->values());
 
-                $item->quantity_sold = $quantitySold;
-                $item->total_revenue = $totalRevenue;
-            }
+                    // Calculate item totals from remaining variations
+                    $item->quantity_sold = $item->variations->sum('quantity_sold');
+                    $item->total_revenue = $item->variations->sum('total_revenue');
+                } else {
+                    // For items without variations
+                    $quantitySold = (int) ($item->orders->sum('quantity') ?? 0);
+                    $totalRevenue = $item->price * $quantitySold;
 
-            return $item;
-        });
+                    $item->quantity_sold = $quantitySold;
+                    $item->total_revenue = $totalRevenue;
+                }
+
+                return $item;
+            })
+            ->filter(function ($item) {
+                return (int) ($item->quantity_sold ?? 0) > 0;
+            })
+            ->values();
 
         // Sort by the selected field
         switch ($this->sortBy) {

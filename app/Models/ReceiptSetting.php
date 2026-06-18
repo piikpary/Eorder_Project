@@ -12,6 +12,9 @@ class ReceiptSetting extends BaseModel
     use HasBranch;
     use HasFactory;
     protected $guarded = ['id'];
+    protected $casts = [
+        'receipt_languages' => 'array',
+    ];
 
     protected $appends = [
         'payment_qr_code_url',

@@ -17,6 +17,9 @@ Schedule::command('app:reset-branch-order-limits')->daily();
 Schedule::command('app:hide-cron-job-message')->everyMinute();
 Schedule::command('inventory:check-batch-expiry')->daily();
 
+// Generate branch expenses from active recurring templates when next_expense_date is due
+Schedule::command('app:process-recurring-expenses')->daily()->withoutOverlapping();
+
 Schedule::command('queue:flush')->weekly();
 
 // Schedule the queue:work command to run without overlapping and with 3 tries

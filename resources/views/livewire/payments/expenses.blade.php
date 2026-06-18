@@ -58,6 +58,11 @@
                                             <a href="javascript:;" wire:click="showExpenseDetails({{ $expense->id }})" class="underline underline-offset-2 decoration-dotted">
                                                 {{ Str::title($expense->expense_title)}}
                                             </a>
+                                            @if (!empty($expense->expenses_recurring_id))
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                                                    @lang('modules.expenses.recurring.badge')
+                                                </span>
+                                            @endif
                                         </td>
                                         <td class="py-2.5 px-4 text-gray-900 dark:text-white text-sm">
                                             {{ optional($expense->category)->name ?? '--' }}</td>

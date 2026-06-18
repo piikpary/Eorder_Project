@@ -1,12 +1,36 @@
-<div class="flex flex-col h-full max-h-screen overflow-y-auto p-4 bg-white w-full lg:border-l lg:border-gray-200 dark:lg:border-gray-700 dark:bg-gray-800">
-    <div>
+@php
+    $isStandaloneKotDetailPage = request()->routeIs('pos.kot');
+    $isKotSidebarDetailView = $isStandaloneKotDetailPage && request()->boolean('show-order-detail');
+    $compactOrderDetailUi = $isKotSidebarDetailView || $isStandaloneKotDetailPage;
+    $shouldStickyAddPayment = $isStandaloneKotDetailPage
+        && isset($orderDetail)
+        && in_array($orderDetail->status, ['billed', 'payment_due'])
+        && user_can('Update Order');
+@endphp
+
+<div @class([
+    'flex flex-col flex-1 min-h-0 h-full w-full bg-white dark:bg-gray-800 overflow-hidden',
+    'max-h-screen p-4 lg:border-l lg:border-gray-200 dark:lg:border-gray-700' => !$isStandaloneKotDetailPage,
+    'px-2 pt-3 pr-2 rounded-md' => $isKotSidebarDetailView,
+    'p-2 sm:p-3 mx-auto max-w-5xl' => $isStandaloneKotDetailPage && !$isKotSidebarDetailView,
+])>
+    <div class="flex flex-col flex-1 min-h-0">
+
+        <div @class([
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden',
+        ])>
 
         <div class="flex justify-between items-center dark:text-neutral-200">
-            <h2 class="text-lg dark:text-neutral-200">
+            <h2 class="{{ $compactOrderDetailUi ? 'text-sm font-semibold' : 'text-lg' }} dark:text-neutral-200">
                 {{ $orderDetail->show_formatted_order_number }}
 
             </h2>
-            <div class="flex items-center gap-2">
+            @php
+                $orderDetailOrderTypeLabel = Str::title($orderDetail->orderType?->order_type_name ?? $orderDetail->custom_order_type_name ?? $orderDetail->order_type);
+            @endphp
+            <div class="flex items-center gap-2 cursor-default"
+                title="{{ $orderDetailOrderTypeLabel }}"
+                data-tooltip-target="tooltip-order-detail-order-type">
                 @if ($orderDetail->order_type == 'pickup')
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                         class="bi bi-bag-fill" viewBox="0 0 16 16">
@@ -14,7 +38,7 @@
                             d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1m3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4z" />
                     </svg>
                 @elseif($orderDetail->order_type == 'delivery')
-                    <svg class="w-6 h-6 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white"
+                    <svg class="w-4 h-4 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white"
                         fill="currentColor" version="1.0" viewBox="0 0 512 512"
                         xmlns="http://www.w3.org/2000/svg">
                         <g transform="translate(0 512) scale(.1 -.1)">
@@ -22,7 +46,7 @@
                         </g>
                     </svg>
                 @else
-                    <svg class="w-6 h-6 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white"
+                    <svg class="w-4 h-4 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white"
                         fill="currentColor" version="1.0" viewBox="0 0 512 512"
                         xmlns="http://www.w3.org/2000/svg">
                         <g transform="translate(0 512) scale(.1 -.1)">
@@ -31,32 +55,57 @@
                         </g>
                     </svg>
                 @endif
-                <span>{{ Str::title($orderDetail->orderType?->order_type_name ?? $orderDetail->custom_order_type_name ?? $orderDetail->order_type) }}</span>
+                <span class="{{ $compactOrderDetailUi ? 'text-xs font-medium' : '' }}">{{ $orderDetailOrderTypeLabel }}</span>
+            </div>
+            <div id="tooltip-order-detail-order-type" role="tooltip"
+                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                {{ __('modules.settings.orderType') }}: {{ $orderDetailOrderTypeLabel }}
+                <div class="tooltip-arrow" data-popper-arrow></div>
             </div>
         </div>
 
-        <div class="flex justify-between gap-3 my-4 space-y-1">
+        <div class="flex justify-between gap-2 {{ $compactOrderDetailUi ? 'my-1.5 space-y-0.5 px-0.5' : 'my-4 space-y-1' }} {{ $isStandaloneKotDetailPage && !$isKotSidebarDetailView ? 'sm:px-2' : '' }}">
             <div class="inline-flex gap-4 table-display-container">
                 @if ($orderDetail->order_type == 'dine_in')
                     <div id="table-info-section" style="display: {{ $orderDetail->table ? 'flex' : 'none' }};" class="inline-flex items-center gap-2">
-                        <div @class(['p-3 rounded-lg tracking-wide bg-skin-base/[0.2] text-skin-base'])>
+                    <div @class([$compactOrderDetailUi ? 'p-2 rounded-md' : 'p-3 rounded-lg', 'tracking-wide bg-skin-base/[0.2] text-skin-base'])>
                             <h3 @class(['font-semibold']) id="table-code">
                                 {{ $orderDetail->table->table_code ?? '--' }}
                             </h3>
                         </div>
                         @if(user_can('Update Order'))
-                            <x-secondary-button onclick="showTableChangeConfirmationModal()">
-                                <svg width="20" height="20"  viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.74 14H22v-4h-2.26v-.14a8.2 8.2 0 0 0-.82-1.92l1.6-1.6-2.86-2.83-1.6 1.6A8 8 0 0 0 14 4.25V2h-4v2.25a8 8 0 0 0-2.06.86l-1.6-1.6-2.83 2.83 1.6 1.6a8.2 8.2 0 0 0-.82 1.92V10H2v4h2.26v.14a8.2 8.2 0 0 0 .82 1.92l-1.6 1.6 2.83 2.83 1.6-1.6a8 8 0 0 0 2.06.86V22h4v-2.25a8 8 0 0 0 2.06-.86l1.6 1.6 2.83-2.83-1.6-1.6a8.2 8.2 0 0 0 .82-1.92Z"/></svg>
+                            <x-secondary-button
+                                onclick="showTableChangeConfirmationModal()"
+                                title="{{ __('modules.order.changeTable') }}"
+                                aria-label="{{ __('modules.order.changeTable') }}"
+                                data-tooltip-target="tooltip-order-detail-change-table"
+                            >
+                                <svg width="20" height="20"  viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.74 14H22v-4h-2.26v-.14a8.2 8.2 0 0 0-.82-1.92l1.6-1.6-2.86-2.83-1.6 1.6A8 8 0 0 0 14 4.25V2h-4v2.25a8 8 0 0 0-2.06.86l-1.6-1.6-2.83 2.83 1.6 1.6a8.2 8.2 0 0 0-.82 1.92V10H2v4h2.26v.14a8.2 8.2 0 0 0 .82 1.92l-1.6 1.6 2.83 2.83 1.6-1.6a8 8 0 0 0 2.06.86V22h4v-2.25a8 8 0 0 0 2.06-.86l1.6 1.6 2.83-2.83-1.6-1.6a8.2 8.2 0 0 0 .82-1.92Z"/></svg>
                             </x-secondary-button>
+                            <div id="tooltip-order-detail-change-table" role="tooltip"
+                                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                {{ __('modules.order.changeTable') }}
+                                <div class="tooltip-arrow" data-popper-arrow></div>
+                            </div>
                         @endif
                     </div>
                     <div id="set-table-section" style="display: {{ $orderDetail->table ? 'none' : 'block' }};">
                         @if(user_can('Update Order'))
-                            <x-secondary-button onclick="showTableChangeConfirmationModal()">@lang('modules.order.setTable')</x-secondary-button>
+                            <button type="button" onclick="showTableChangeConfirmationModal()"
+                                class="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                title="{{ __('modules.order.setTable') }}" aria-label="{{ __('modules.order.setTable') }}"
+                                data-tooltip-target="tooltip-order-detail-set-table">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-table" viewBox="0 0 16 16" aria-hidden="true"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/></svg>
+                            </button>
+                            <div id="tooltip-order-detail-set-table" role="tooltip"
+                                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                {{ __('modules.order.setTable') }}
+                                <div class="tooltip-arrow" data-popper-arrow></div>
+                            </div>
                         @endif
                     </div>
                 @else
-                    <div @class(['p-3 rounded-lg tracking-wide bg-skin-base/[0.2] text-skin-base'])>
+                    <div @class([$compactOrderDetailUi ? 'p-2 rounded-md' : 'p-3 rounded-lg', 'tracking-wide bg-skin-base/[0.2] text-skin-base'])>
                         <h3 @class(['font-semibold'])>
                             {{ $orderDetail->table->table_code ?? '--' }}
                         </h3>
@@ -67,26 +116,47 @@
                     <div id="customer-info-section" class="flex items-center gap-2" style="display: {{ $orderDetail->customer ? 'flex' : 'none' }};">
                         <div id="customer-name" class="font-semibold text-gray-700 dark:text-gray-300">{{ $orderDetail->customer->name ?? '' }}</div>
                         @if(user_can('Update Order'))
-                            <button id="edit-customer-btn" onclick="showAddCustomerModal({{ $orderDetail->customer_id ?? 'null' }})" title="{{__('modules.order.updateCustomerDetails')}}" class="p-1 text-gray-500 transition-colors bg-gray-100 rounded-md hover:text-gray-700 hover:bg-gray-200 rtl:ml-2 ltr:mr-2 dark:text-gray-300 dark:bg-gray-600 dark:hover:text-gray-200 dark:hover:bg-gray-700">
+                            <button type="button" id="edit-customer-btn" onclick="window.showAddCustomerModal({{ json_encode($orderDetail->customer_id ?? null) }}, {{ (int) $orderDetail->id }}, true)" title="{{__('modules.order.updateCustomerDetails')}}" aria-label="{{ __('modules.order.updateCustomerDetails') }}" data-tooltip-target="tooltip-order-detail-edit-customer" class="p-1 text-gray-500 transition-colors bg-gray-100 rounded-md hover:text-gray-700 hover:bg-gray-200 rtl:ml-2 ltr:mr-2 dark:text-gray-300 dark:bg-gray-600 dark:hover:text-gray-200 dark:hover:bg-gray-700">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16">
                                     <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
                                     <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
                                 </svg>
                             </button>
+                            <div id="tooltip-order-detail-edit-customer" role="tooltip"
+                                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                {{ __('modules.order.updateCustomerDetails') }}
+                                <div class="tooltip-arrow" data-popper-arrow></div>
+                            </div>
                         @endif
                     </div>
 
                     <div id="add-customer-section" style="display: {{ $orderDetail->customer ? 'none' : 'block' }};">
-                        <a href="javascript:;"
-                            onclick="showAddCustomerModal(null)"
-                            class="text-sm underline underline-offset-2 dark:text-gray-300">&plus; @lang('modules.order.addCustomerDetails')</a>
+                        <button type="button"
+                            onclick="window.showAddCustomerModal(null, {{ (int) $orderDetail->id }}, true)"
+                            class="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            title="{{ __('modules.order.addCustomerDetails') }}" aria-label="{{ __('modules.order.addCustomerDetails') }}"
+                            data-tooltip-target="tooltip-order-detail-add-customer">
+                            <svg width="16" height="16" viewBox="-2.5 0 32 32" fill="currentColor" class="text-gray-700 dark:text-gray-300" aria-hidden="true">
+                                <path d="M18.723 21.788c-1.15-0.48-3.884-1.423-5.565-1.919-0.143-0.045-0.166-0.052-0.166-0.649 0-0.493 0.203-0.989 0.401-1.409 0.214-0.456 0.468-1.224 0.559-1.912 0.255-0.296 0.602-0.88 0.826-1.993 0.196-0.981 0.104-1.338-0.026-1.673-0.013-0.035-0.028-0.070-0.038-0.105-0.049-0.23 0.018-1.425 0.186-2.352 0.116-0.636-0.030-1.989-0.906-3.108-0.553-0.707-1.611-1.576-3.544-1.696l-1.060 0.001c-1.9 0.12-2.96 0.988-3.513 1.695-0.876 1.119-1.021 2.472-0.906 3.108 0.169 0.928 0.236 2.123 0.187 2.348-0.010 0.039-0.025 0.074-0.039 0.11-0.129 0.335-0.221 0.692-0.025 1.673 0.222 1.113 0.57 1.697 0.826 1.993 0.090 0.688 0.344 1.456 0.559 1.912 0.157 0.334 0.23 0.788 0.23 1.431 0 0.597-0.023 0.604-0.157 0.646-1.738 0.513-4.505 1.513-5.537 1.965-0.818 0.351-1.017 0.98-1.017 1.548s0 2.251 0 2.623c0 0.371 0.22 1.006 1.017 1.006 0.613 0 5.518 0 7.746 0 0.668 0 1.098 0 1.098 0h0.192c0 0 0.437 0 1.115 0 2.237 0 7.135 0 7.747 0 0.796 0 1.017-0.634 1.017-1.006s0-2.055 0-2.623-0.392-1.262-1.209-1.613zM18.876 25.98h-17.827v-2.579c0-0.318 0.092-0.46 0.388-0.587 0.994-0.435 3.741-1.426 5.434-1.926 0.889-0.282 0.889-1.070 0.889-1.646 0-0.801-0.106-1.397-0.331-1.878-0.172-0.366-0.392-1.022-0.468-1.601l-0.041-0.312-0.206-0.238c-0.113-0.13-0.396-0.538-0.59-1.513-0.153-0.759-0.085-0.935-0.031-1.076 0.031-0.076 0.058-0.152 0.081-0.237l0.005-0.022 0.005-0.022c0.105-0.495-0.037-1.962-0.181-2.755-0.067-0.365 0.017-1.401 0.7-2.273 0.418-0.534 1.229-1.19 2.722-1.293l0.992-0.001c1.219 0.083 2.145 0.518 2.752 1.294 0.682 0.872 0.766 1.909 0.7 2.275-0.148 0.814-0.287 2.257-0.18 2.758l0.008 0.039 0.011 0.038c0.016 0.054 0.036 0.108 0.056 0.161l0.009 0.026 0.001 0.002c0.059 0.153 0.127 0.326-0.024 1.087-0.196 0.974-0.479 1.384-0.592 1.515l-0.204 0.237-0.042 0.31c-0.076 0.578-0.296 1.237-0.468 1.603-0.247 0.525-0.5 1.157-0.5 1.856 0 0.577 0 1.367 0.918 1.655 1.641 0.485 4.345 1.416 5.448 1.877 0.418 0.179 0.574 0.493 0.574 0.649l-0.006 2.579z"/>
+                                <path d="M23.078 14.441v-4.185h-1.049v4.185h-4.186v1.049h4.186v4.185h1.049v-4.185h4.185v-1.049z"/>
+                            </svg>
+                        </button>
+                        <div id="tooltip-order-detail-add-customer" role="tooltip"
+                            class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                            {{ __('modules.order.addCustomerDetails') }}
+                            <div class="tooltip-arrow" data-popper-arrow></div>
+                        </div>
                     </div>
-                    <div class="text-xs font-medium text-gray-600 dark:text-gray-400">{{ $orderDetail->date_time->timezone(timezone())->format(dateFormat() . ' ' . timeFormat()) }}</div>
+                    <div class="{{ $compactOrderDetailUi ? 'text-[11px]' : 'text-xs' }} font-medium text-gray-600 dark:text-gray-400">{{ $orderDetail->date_time->timezone(timezone())->format(dateFormat() . ' ' . timeFormat()) }}</div>
                 </div>
 
             </div>
             <div>
-                <span @class(['text-sm font-medium px-2 py-1 rounded uppercase tracking-wide whitespace-nowrap ',
+                <span title="{{ __('modules.order.' . $orderDetail->status) }}"
+                    data-tooltip-target="tooltip-order-detail-lifecycle-status"
+                    @class(['font-medium px-2 py-0.5 rounded uppercase tracking-wide whitespace-nowrap cursor-default ',
+                'text-xs' => $compactOrderDetailUi,
+                'text-sm' => !$compactOrderDetailUi,
                 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400 border border-gray-400' => ($orderDetail->status == 'draft'),
                 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-400 border border-yellow-400' => ($orderDetail->status == 'kot'),
                 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-400 border border-blue-400' => ($orderDetail->status == 'billed'),
@@ -96,6 +166,11 @@
                 ])>
                     @lang('modules.order.' . $orderDetail->status)
                 </span>
+                <div id="tooltip-order-detail-lifecycle-status" role="tooltip"
+                    class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700 max-w-xs text-left normal-case tracking-normal font-normal">
+                    @lang('modules.order.' . $orderDetail->status)
+                    <div class="tooltip-arrow" data-popper-arrow></div>
+                </div>
             </div>
 
         </div>
@@ -105,12 +180,12 @@
                 @lang('modules.order.info_cancelled')
                             </span>
                                 @else
-        <div class="p-4 mb-4 bg-white rounded-lg shadow-sm dark:bg-gray-800">
+        <div class="mb-0 rounded-lg border border-gray-200 bg-white pb-1.5 pt-1 px-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             @php
                 $statuses = match($orderDetail->order_type) {
-                    'delivery' => ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered'],
-                    'pickup' => ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered'],
-                    default => ['placed', 'confirmed', 'preparing', 'food_ready', 'served'],
+                    'delivery' => ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered', 'completed'],
+                    'pickup' => ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered', 'completed'],
+                    default => ['placed', 'confirmed', 'preparing', 'food_ready', 'served', 'completed'],
                 };
 
                 $currentIndex = array_search($orderDetail->order_status->value, $statuses);
@@ -126,35 +201,54 @@
 
                 </div>
             @else
-                <div class="flex flex-col space-y-4">
+                <div class="flex flex-col gap-2 sm:gap-2.5">
                     <div class="flex items-center justify-between text-gray-900 dark:text-white">
-                        <h3 class="text-lg font-semibold">
+                        <h3 class="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
                             {{ __('modules.order.orderStatus') }}
                         </h3>
-                        <span id="order-status-badge" data-status="{{ $orderDetail->order_status->value }}" class="px-3 py-1 text-sm font-medium rounded-full"
+                    </div>
+
+                    <div class="flex justify-center">
+                        <span id="order-status-badge" data-status="{{ $orderDetail->order_status->value }}" class="px-2 py-0.5 text-[11px] font-medium rounded-full"
                             @class([
-                                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' => $orderDetail->order_status->value === 'delivered' || $orderDetail->order_status->value === 'served' || $orderDetail->order_status->value === 'food_ready',
+                                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' => $orderDetail->order_status->value === 'delivered' || $orderDetail->order_status->value === 'served' || $orderDetail->order_status->value === 'completed' || $orderDetail->order_status->value === 'food_ready',
                                 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' => $orderDetail->order_status->value === 'placed',
-                                'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' => $orderDetail->order_status->value !== 'delivered' && $orderDetail->order_status->value !== 'served' && $orderDetail->order_status->value !== 'placed',
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' => $orderDetail->order_status->value !== 'delivered' && $orderDetail->order_status->value !== 'served' && $orderDetail->order_status->value !== 'completed' && $orderDetail->order_status->value !== 'placed',
                             ])>
                             {{ App\Enums\OrderStatus::from($orderDetail->order_status->value)->translatedLabel() }}
                         </span>
-
-
                     </div>
 
-                    <div class="relative">
+                    @if(user_can('Update Order'))
+                        <div class="flex justify-end items-center space-x-1.5 rtl:!space-x-reverse">
+                            @if($orderDetail->order_status->value === 'placed')
+                                <button id="order-status-cancel-btn" type="button" onclick="showCancelOrderModal()" class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-red-600 border border-transparent rounded-md text-white uppercase tracking-widest hover:bg-red-500 active:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 dark:text-gray-200">
+                                    <span>{{ __('modules.order.cancelOrder') }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
+                                </button>
+                            @endif
+
+                            @if($currentIndex < count($statuses) - 1)
+                                <x-secondary-button id="order-status-next-btn" class="inline-flex items-center !px-2.5 !py-1 !text-[11px] !font-medium gap-1 border-gray-300 shadow-sm dark:border-gray-600" onclick="updateOrderStatus('{{ $statuses[$nextIndex] }}')">
+                                    <span id="order-status-next-label">{{ __('modules.order.moveTo') }} {{ App\Enums\OrderStatus::from($statuses[$nextIndex])->translatedLabel() }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m13 7 5 5m0 0-5 5m5-5H6"/></svg>
+                                </x-secondary-button>
+                            @endif
+                        </div>
+                    @endif
+
+                    <div class="relative pt-0.5 pb-0">
                         <!-- Progress line between steps -->
-                        <div class="absolute top-5 left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-700" style="margin: 0 5%;">
+                        <div class="absolute top-[0.875rem] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-600" style="margin: 0 5%;">
                             <div class="h-full bg-skin-base transition-all duration-500" style="width: {{ $currentIndex > 0 ? ($currentIndex / (count($statuses) - 1)) * 100 : 0 }}%;"></div>
                         </div>
 
-                        <div id="order-status-steps" class="relative flex justify-between px-1 sm:px-2">
+                        <div id="order-status-steps" class="relative flex justify-between px-0.5 sm:px-1">
                             @foreach($statuses as $index => $status)
                                 <div class="order-status-step flex flex-col items-center group relative" x-data="{ tooltip: false }" @mouseenter="tooltip = true" @mouseleave="tooltip = false" @click="tooltip = !tooltip">
                                     <!-- Icon container with improved styling -->
                                     <div
-                                        class="order-status-icon w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all duration-300 transform group-hover:scale-110 relative z-10 shadow-sm
+                                        class="order-status-icon w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all duration-300 transform group-hover:scale-105 relative z-10 shadow-sm [&_svg]:w-3 [&_svg]:h-3 sm:[&_svg]:w-3.5 sm:[&_svg]:h-3.5
                                         @if($index <= $currentIndex)
                                             bg-skin-base text-white ring-2 ring-skin-base ring-offset-1 sm:ring-offset-2 dark:ring-offset-gray-800
                                         @elseif($index === $currentIndex + 1)
@@ -166,7 +260,7 @@
                                     </div>
 
                                     <!-- Tooltip -->
-                                    <div x-show="tooltip" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" class="absolute top-10 sm:top-12 z-20 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-lg shadow-lg whitespace-nowrap pointer-events-none" style="display: none;" :style="{ display: tooltip ? 'block' : 'none' }">
+                                    <div x-show="tooltip" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" class="absolute top-8 sm:top-10 z-20 px-1.5 py-0.5 text-[10px] font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none" style="display: none;" :style="{ display: tooltip ? 'block' : 'none' }">
                                         {{ App\Enums\OrderStatus::from($status)->translatedLabel() }}
                                         <div class="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45"></div>
                                     </div>
@@ -180,23 +274,6 @@
                         </div>
                     </div>
 
-                    @if(user_can('Update Order'))
-                        <div class="flex justify-end items-center mt-4 space-x-2 rtl:!space-x-reverse">
-                            @if($orderDetail->order_status->value === 'placed')
-                                <button id="order-status-cancel-btn" type="button" onclick="showCancelOrderModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-500 active:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 dark:text-gray-200">
-                                    <span>{{ __('modules.order.cancelOrder') }}</span>
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
-                                </button>
-                            @endif
-
-                            @if($currentIndex < count($statuses) - 1)
-                                <x-secondary-button id="order-status-next-btn" class="inline-flex items-center gap-2" onclick="updateOrderStatus('{{ $statuses[$nextIndex] }}')">
-                                    <span id="order-status-next-label">{{ __('modules.order.moveTo') }} {{ App\Enums\OrderStatus::from($statuses[$nextIndex])->translatedLabel() }}</span>
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m13 7 5 5m0 0-5 5m5-5H6"/></svg>
-                                </x-secondary-button>
-                            @endif
-                        </div>
-                    @endif
                 </div>
             @endif
         </div>
@@ -231,7 +308,7 @@
                         @endif
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700" wire:key='menu-item-list-{{ microtime() }}'>
+                <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
 
                     @forelse ($orderDetail->items->load('modifierOptions') as $key => $item)
                     @php
@@ -258,7 +335,7 @@
                         $stampDiscountAmount = !$isFreeItemFromStamp ? max(0, $expectedAmount - $actualAmount) : 0;
                         $hasStampDiscount = $stampDiscountAmount > 0.01;
                     @endphp
-                    <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" wire:key='menu-item-{{ $key . microtime() }}' wire:loading.class.delay='opacity-10' data-order-item-id="{{ $item->id }}">
+                    <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" data-order-item-id="{{ $item->id }}">
                         <td class="flex flex-col p-2 mr-12 lg:min-w-28">
                             <div class="inline-flex items-center gap-2 text-xs text-gray-900 dark:text-white">
                                 {{ $item->menuItem->item_name }}
@@ -318,8 +395,8 @@
                             @endif
                         </td>
                         @if (user_can('Delete Order') && $orderDetail->status !== 'paid')
-                        <td class="p-2 text-right whitespace-nowrap">
-                            <button type="button" onclick="deleteOrderItem('{{ $item->id }}')" class="p-2 text-gray-800 border rounded dark:text-gray-400 dark:border-gray-500 hover:bg-gray-200 dark:hover:bg-gray-900/20">
+                        <td class="text-right whitespace-nowrap">
+                            <button type="button" onclick="deleteOrderItem('{{ $item->id }}')" class="p-1 text-gray-800 border rounded dark:text-gray-400 dark:border-gray-500 hover:bg-gray-200 dark:hover:bg-gray-900/20">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1" clip-rule="evenodd"/></svg>
                             </button>
                         </td>
@@ -336,20 +413,38 @@
                 </tbody>
             </table>
         </div>
+        @endif
 
-        <div>
-            <div class="w-full h-auto p-4 mt-3 space-y-4 text-center rounded select-none bg-gray-50 dark:bg-gray-700">
+        </div>
+
+        @if ($orderDetail)
+        <div @class([
+            'shrink-0 bg-white dark:bg-gray-800',
+            $compactOrderDetailUi ? 'pt-1.5 mt-1' : 'pt-3 mt-2',
+            $isStandaloneKotDetailPage ? '' : '-mx-4 px-4',
+            'border-t border-gray-200 dark:border-gray-700 pb-1' => !$shouldStickyAddPayment,
+            'z-20 border-t border-gray-100 pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]' => $shouldStickyAddPayment,
+        ])>
+            <div @class([
+                'w-full h-auto text-center select-none rounded',
+                $compactOrderDetailUi ? 'p-2 space-y-1.5 rounded-lg' : 'p-4 space-y-4 rounded-lg',
+                'bg-gray-50 dark:bg-gray-700',
+                'p-1 space-y-1 rounded' => $shouldStickyAddPayment,
+            ])>
                 @if (count($orderDetail->items) > 0 && $orderDetail->status !== 'paid' && user_can('Update Order'))
                 <div class="flex text-left">
                     @if (user_can('Add Discount on POS'))
-                        <x-secondary-button onclick="showAddDiscountModal()">
-                            <svg class="w-5 h-5 text-current me-1" width="24" height="24" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="m7.25 14.25-5.5-5.5 7-7h5.5v5.5z"/><circle cx="11" cy="5" r=".5" fill="#000"/></svg>
+                        <button type="button" onclick="showAddDiscountModal()" class="inline-flex items-center px-1 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg font-semibold text-xs text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150 gap-1 leading-none">
+                            <svg class="h-4 w-4 text-current me-1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                                <path d="m7.25 14.25-5.5-5.5 7-7h5.5v5.5z"/>
+                                <circle cx="11" cy="5" r=".5" fill="#000"/>
+                            </svg>
                             @lang('modules.order.addDiscount')
-                        </x-secondary-button>
+                        </button>
                     @endif
                 </div>
             @endif
-                <div class="flex justify-between text-sm text-gray-500 dark:text-neutral-400">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'text-xs' : 'text-sm' }} text-gray-500 dark:text-neutral-400">
                     <div>
                         @lang('modules.order.totalItem')
                     </div>
@@ -357,7 +452,7 @@
                         {{ count($orderDetail->items) }}
                     </div>
                 </div>
-                <div class="flex justify-between text-sm text-gray-500 dark:text-neutral-400">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'text-xs' : 'text-sm' }} text-gray-500 dark:text-neutral-400">
                     <div class="flex items-center gap-2">
                         <span>@lang('modules.order.subTotal')</span>
                         @php
@@ -381,7 +476,7 @@
                 </div>
 
                 @if ($orderDetail->loyalty_points_redeemed > 0 && $orderDetail->loyalty_discount_amount > 0)
-                    <div wire:key="loyaltyDiscount" class="flex justify-between {{ $textSize ?? 'text-sm' }} text-blue-600 dark:text-blue-400">
+                    <div class="flex justify-between {{ $textSize ?? 'text-sm' }} text-blue-600 dark:text-blue-400">
                         <div>
                             @lang('loyalty::app.loyaltyDiscount') ({{ number_format($orderDetail->loyalty_points_redeemed) }} @lang('loyalty::app.points'))
                         </div>
@@ -391,7 +486,12 @@
                     </div>
                 @endif
 
-                <div id="discount-row" class="flex justify-between text-sm text-green-500 dark:text-green-400" style="display: {{ ($orderDetail->discount_amount ?? 0) > 0 && $orderDetail->loyalty_points_redeemed == 0 ? 'flex' : 'none' }};">
+                @php
+                    $_pdDiscDecimals = (int) (optional(currency_format_setting())->no_of_decimal ?? 2);
+                    $_pdShowDiscountRow = round((float) ($orderDetail->discount_amount ?? 0), $_pdDiscDecimals) > 0
+                        && (int) ($orderDetail->loyalty_points_redeemed ?? 0) === 0;
+                @endphp
+                <div id="discount-row" class="flex justify-between text-sm text-green-500 dark:text-green-400" style="display: {{ $_pdShowDiscountRow ? 'flex' : 'none' }};">
                     <div class="inline-flex items-center gap-x-1">
                         @lang('modules.order.discount')
                         <span id="discount-type-display">
@@ -408,7 +508,7 @@
                         @endif
                     </div>
                     <div id="discount-display">
-                        @if(($orderDetail->discount_amount ?? 0) > 0)-{{ currency_format($orderDetail->discount_amount, restaurant()->currency_id) }}@endif
+                        @if($_pdShowDiscountRow)-{{ currency_format($orderDetail->discount_amount, restaurant()->currency_id) }}@endif
                     </div>
                 </div>
 
@@ -443,7 +543,7 @@
                 @endforeach
 
                 @if ($orderDetail->tip_amount > 0)
-                <div class="flex justify-between text-sm text-gray-500 dark:text-neutral-400">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'text-xs' : 'text-sm' }} text-gray-500 dark:text-neutral-400">
                     <div>
                         @lang('modules.order.tip')
                     </div>
@@ -454,7 +554,7 @@
                 @endif
 
                 @if ($orderType === 'delivery' && !is_null($deliveryFee))
-                    <div class="flex justify-between text-sm text-gray-500 dark:text-neutral-400">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'text-xs' : 'text-sm' }} text-gray-500 dark:text-neutral-400">
                         <div>
                             @lang('modules.delivery.deliveryFee')
                         </div>
@@ -479,7 +579,7 @@
                         @if (!$item->tax)
                             @continue
                         @endif
-                        <div class="flex justify-between text-sm text-gray-500 dark:text-neutral-400">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'text-xs' : 'text-sm' }} text-gray-500 dark:text-neutral-400">
                             <div>
                                 {{ $item->tax->tax_name }} ({{ $item->tax->tax_percent }}%)
                             </div>
@@ -540,7 +640,7 @@
                 </div>
                 @endif
 
-                <div class="flex justify-between font-medium dark:text-neutral-300">
+                <div class="flex justify-between {{ $compactOrderDetailUi ? 'font-semibold text-base' : 'font-medium' }} dark:text-neutral-300">
                     <div>
                         @lang('modules.order.total')
                     </div>
@@ -550,8 +650,12 @@
                 </div>
             </div>
 
-            <div class="w-full h-auto pt-3 pb-4 text-center select-none">
-                <div class="flex gap-2">
+            <div @class([
+                'w-full h-auto text-center select-none',
+                'pt-3 pb-4' => !$shouldStickyAddPayment,
+                'mt-2 pt-2 pb-2' => $shouldStickyAddPayment,
+            ])>
+                <div class="flex flex-col gap-2">
 
                     @if (in_array($orderDetail->status, ['billed', 'payment_due']) && user_can('Update Order'))
                     <button type="button" onclick="showPaymentModalForOrder({{ $orderDetail->id }}, this)" class="pos-order-action-btn w-full p-2 text-white bg-green-600 rounded">
@@ -567,31 +671,40 @@
                     @endif
 
                     @if($orderDetail->status == 'paid')
-                    <button type="button" onclick="printOrder({{ $orderDetail->id }}, this)" class="pos-order-action-btn inline-flex items-center justify-center w-full p-2 mt-2 text-gray-800 border border-gray-300 rounded dark:border-gray-600 dark:text-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 gap-x-1">
-                        <span data-btn-text class="inline-flex items-center gap-x-1">
-                        <svg class="w-6 h-6 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                        <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M16.444 18H19a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h2.556M17 11V5a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v6h10ZM7 15h10v4a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-4Z"/>
-                        </svg>
-                        @if($orderDetail->split_type && $orderDetail->splitOrders()->where('status', 'paid')->count() > 0)
-                            @lang('modules.order.printSplits')
-                        @else
-                            @lang('app.print')
-                        @endif
-                        </span>
-                        <span data-btn-loading class="hidden">
-                            <svg class="animate-spin inline-block -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" onclick="printOrder({{ $orderDetail->id }}, this)" class="pos-order-action-btn inline-flex items-center justify-center w-full p-2 text-gray-800 border border-gray-300 rounded dark:border-gray-600 dark:text-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 gap-x-1">
+                            <span data-btn-text class="inline-flex items-center gap-x-1">
+                            <svg class="w-5 h-5 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linejoin="round" stroke-width="2" d="M16.444 18H19a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h2.556M17 11V5a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v6h10ZM7 15h10v4a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-4Z"/>
                             </svg>
-                            @lang('app.print')
-                        </span>
-                    </button>
+                            @if($orderDetail->split_type && $orderDetail->splitOrders()->where('status', 'paid')->count() > 0)
+                                @lang('modules.order.printSplits')
+                            @else
+                                @lang('app.print')
+                            @endif
+                            </span>
+                            <span data-btn-loading class="hidden">
+                                <svg class="animate-spin inline-block -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                @lang('app.print')
+                            </span>
+                        </button>
+                        <a href="{{ route('pos.index') }}" class="inline-flex items-center justify-center w-full p-2 text-gray-700 border border-gray-300 rounded dark:border-gray-600 dark:text-gray-200 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 gap-x-1">
+                            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            @lang('app.close')
+                        </a>
+                    </div>
                     @endif
                 </div>
             </div>
         </div>
         @endif
 
+    </div>
     </div>
     <div id="confirmDeleteModal" style="display: none;" class="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50">
         <div class="fixed inset-0 transform transition-all" onclick="closeCancelOrderModal()">

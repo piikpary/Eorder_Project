@@ -28,12 +28,12 @@
                     </div>
 
                     <!-- Search Box -->
-                    <div id="place-autocomplete-card" class="mb-2 border dark:border-gray-500 rounded-lg p-1" wire:ignore>
+                    <div id="place-autocomplete-card" class="mb-2 border dark:border-gray-500 rounded-lg p-1 relative z-[1200]" wire:ignore>
                         <p id="location-search"> </p>
                     </div>
 
                     <div class="mb-4">
-                        <section id="address-map" class="h-96 rounded-lg shadow-md border border-gray-200 mb-2" wire:ignore></section>
+                        <section id="address-map" class="relative z-0 h-96 rounded-lg shadow-md border border-gray-200 mb-2" wire:ignore></section>
                         <x-input-error for="lat" custom-message="{{ __('modules.delivery.pleaseSelectLocation') }}" />
                         <div class="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                             <span>
@@ -139,176 +139,18 @@
         </x-slot>
     </x-confirmation-modal>
 
-    @script
-    <script>
-        const MAP_API_KEY = atob('{{ base64_encode($mapApiKey) }}');
-
-        const STRINGS = {
-            deliveryLocation: "@lang('modules.delivery.deliveryLocation')",
-            shopLocation: "@lang('modules.delivery.shopLocation')",
-            dragToAdjust: "@lang('modules.delivery.dragMarkerToAdjust')",
-            showRange: "@lang('modules.delivery.showDeliveryRange')",
-            hideRange: "@lang('modules.delivery.hideDeliveryRange')",
-            useCurrentLocation: "@lang('modules.delivery.useCurrentLocation')",
-            locationPermissionDenied: "@lang('modules.delivery.locationPermissionDenied')",
-        };
-
-        let addressMap, addressMarker, addressAutocomplete, mapInitialized = false;
-
-        // Defined before use so window assignment is safe
-        function initAddressMap() {
-            if (document.getElementById('address-map')) {
-                setTimeout(() => setupAddressMap(), 300);
-            }
-        }
-
-        // Expose globally AFTER function declaration so Google Maps callback can find it
-        window.initAddressMap = initAddressMap;
-
-        // Listen for Livewire event to re-init map with coordinates (e.g. edit mode)
-        Livewire.on('initAddressMap', (params) => {
-            setTimeout(() => setupAddressMap(params), 300);
-        });
-
-        // Load Google Maps JS if not already loaded
-        // NOTE: do NOT use loading=async with callback= — they are incompatible
-        if (!window.google || !window.google.maps) {
-            const script = document.createElement('script');
-            script.src = MAP_API_KEY
-                ? `https://maps.googleapis.com/maps/api/js?key=${MAP_API_KEY}&loading=async&libraries=places,geocoding,marker&callback=initAddressMap`
-                : `https://maps.googleapis.com/maps/api/js?libraries=places,geocoding,marker&callback=initAddressMap`;
-            script.async = true;
-            document.head.appendChild(script);
-        } else {
-            initAddressMap();
-        }
-
-        function setupAddressMap(params = {}) {
-            const el = document.getElementById('address-map');
-            if (!el || (mapInitialized && !params)) return;
-            mapInitialized = true;
-
-            let { lat = 26.9125, lng = 75.7875 } = (params?.[0] || {});
-
-            addressMap = new google.maps.Map(el, {
-                center: { lat: lat, lng: lng },
-                zoom: 15,
-                gestureHandling: 'greedy',
-                zoomControl: false,
-                streetViewControl: false,
-                mapId: 'DEMO_MAP_ID',
-            });
-
-            // Customer marker
-            addressMarker = new google.maps.marker.AdvancedMarkerElement({
-                position: { lat: lat, lng: lng },
-                map: addressMap,
-                gmpDraggable:true,
-                title: STRINGS.deliveryLocation
-            });
-
-            google.maps.event.addListener(addressMarker, 'dragend', (e) => {
-                updateLatLng(e.latLng.lat(), e.latLng.lng());
-                reverseGeocode(e.latLng);
-            });
-
-            google.maps.event.addListener(addressMap, 'click', (e) => {
-                updateLatLng(e.latLng.lat(), e.latLng.lng());
-                reverseGeocode(e.latLng);
-            });
-
-            // Ensure proper map rendering
-            setTimeout(() => {
-                google.maps.event.trigger(addressMap, 'resize');
-                addressMap.setCenter(new google.maps.LatLng(lat, lng));
-            }, 100);
-
-            addAutocomplete();
-
-            addCurrentLocationButton();
-        }
-
-        function addCurrentLocationButton() {
-            const button = document.createElement('button-element');
-            button.className = 'bg-white p-2 rounded-lg shadow-md m-3';
-            button.title = STRINGS.useCurrentLocation;
-
-            const defaultSvg = `<svg class="w-5 h-5 text-current" width="20" height="20" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3"/><path d="M13 4.069V2h-2v2.069A8.01 8.01 0 0 0 4.069 11H2v2h2.069A8.01 8.01 0 0 0 11 19.931V22h2v-2.069A8.01 8.01 0 0 0 19.931 13H22v-2h-2.069A8.01 8.01 0 0 0 13 4.069M12 18c-3.309 0-6-2.691-6-6s2.691-6 6-6 6 2.691 6 6-2.691 6-6 6"/></svg>`;
-            const loadingSvg = `<svg class="animate-spin w-5 h-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4z"/></svg>`;
-
-            button.innerHTML = defaultSvg;
-
-            button.addEventListener('click', () => {
-            if (!navigator.geolocation) return;
-
-            button.innerHTML = loadingSvg;
-
-            navigator.geolocation.getCurrentPosition(
-                ({ coords: { latitude: lat, longitude: lng } }) => {
-                const coords = { lat, lng };
-                updateLatLng(coords.lat , coords.lng);
-                reverseGeocode(coords);
-                button.innerHTML = defaultSvg;
-                },
-                (error) => {
-                console.error('Geolocation error:', error);
-                button.innerHTML = defaultSvg;
-                },
-                { timeout: 10000, enableHighAccuracy: true }
-            );
-            });
-
-            addressMap.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(button);
-        }
-
-        function updateLatLng(lat, lng) {
-            if (lat && lng) {
-                addressMarker.position = { lat, lng };
-                addressMap.setCenter({ lat, lng });
-                @this.set('lat', lat);
-                @this.set('lng', lng);
-            }
-        }
-
-        function addAutocomplete() {
-            if (!window.placeAutocomplete) {
-                const locationSearchInput = document.getElementById('location-search');
-
-                window.placeAutocomplete = new google.maps.places.PlaceAutocompleteElement({
-                    inputElement: locationSearchInput,
-                });
-            }
-
-            const card = document.getElementById('place-autocomplete-card');
-            card.appendChild(placeAutocomplete);
-
-
-            placeAutocomplete.addEventListener('gmp-select', async ({ placePrediction }) => {
-                const place = placePrediction.toPlace();
-                await place.fetchFields({ fields: ['formattedAddress', 'location'] });
-
-                const { location, formattedAddress } = place;
-
-                @this.set('address', formattedAddress);
-
-                if (location) {
-                    updateLatLng(location.lat(), location.lng());
-                }
-            });
-        }
-
-
-        function reverseGeocode(latLng) {
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ location: latLng }, (results, status) => {
-            if (status === google.maps.GeocoderStatus.OK && results[0]) {
-                @this.set('address', results[0].formatted_address);
-            } else {
-                console.error("Geocoder failed due to: " + status);
-            }
-            });
-        }
-
-    </script>
-    @endscript
+    @include('livewire.shop.partials.address-map-picker-script', [
+        'prefix' => 'address',
+        'apiKey' => $mapApiKey,
+        'provider' => $mapProvider ?? 'google',
+        'event' => 'initAddressMap',
+        'mapElementId' => 'address-map',
+        'searchCardId' => 'place-autocomplete-card',
+        'latField' => 'lat',
+        'lngField' => 'lng',
+        'addressField' => 'address',
+        'defaultLat' => 26.9125,
+        'defaultLng' => 75.7875,
+        'countryCodes' => 'in',
+    ])
 </div>

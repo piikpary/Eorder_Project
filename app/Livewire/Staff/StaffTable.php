@@ -3,8 +3,10 @@
 namespace App\Livewire\Staff;
 
 use App\Models\Role;
+use App\Services\Pos\PosWaitersCache;
 use App\Models\User;
 use App\Scopes\BranchScope;
+use Illuminate\Database\Eloquent\Builder;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -31,6 +33,20 @@ class StaffTable extends Component
         $this->roles = Role::where('name', '<>', 'Super Admin')->get();
     }
 
+    /**
+     * Same scope as {@see render()} so list rows are always resolvable here.
+     * BranchScope would hide users with null branch_id (e.g. restaurant admins) from findOrFail().
+     */
+    protected function staffMembersQuery(): Builder
+    {
+        return User::withoutGlobalScope(BranchScope::class)
+            ->where(function ($q) {
+                $q->where('branch_id', branch()->id)
+                    ->orWhereNull('branch_id');
+            })
+            ->where('restaurant_id', restaurant()->id);
+    }
+
     public function showEditCustomer($id)
     {
         $this->customer = User::withoutGlobalScopes()->where('restaurant_id', restaurant()->id)->findOrFail($id);
@@ -45,21 +61,30 @@ class StaffTable extends Component
 
     public function showDeleteCustomer($id)
     {
-        $this->customer = User::findOrFail($id);
+        $this->customer = $this->staffMembersQuery()->findOrFail($id);
         $this->confirmDeleteCustomerModal = true;
     }
 
     public function deleteCustomer($id)
     {
-        $user = User::find($id);
-        $restaurantId = $user ? $user->restaurant_id : null;
-        User::destroy($id);
+        if ((int) $id === (int) auth()->id()) {
+            $this->alert('error', __('messages.cannotDeleteOwnAccount'), [
+                'toast' => true,
+                'position' => 'top-end',
+            ]);
+
+            return;
+        }
+
+        $user = $this->staffMembersQuery()->findOrFail($id);
+        $restaurantId = $user->restaurant_id;
+        $user->delete();
 
         if ($restaurantId) {
             cache()->forget('restaurant_' . $restaurantId . '_staff_stats');
         }
 
-        cache()->forget('waiters_' . $restaurantId);
+        PosWaitersCache::forgetForRestaurant((int) $restaurantId);
 
         $this->confirmDeleteCustomerModal = false;
         $this->customer = null;
@@ -74,8 +99,11 @@ class StaffTable extends Component
 
     public function setUserRole($role, $userID)
     {
-        $employee = User::find($userID);
+        $employee = $this->staffMembersQuery()->findOrFail($userID);
         $employee->syncRoles([$role]);
+        if ($employee && $employee->restaurant_id) {
+            PosWaitersCache::forgetForRestaurant((int) $employee->restaurant_id);
+        }
         $this->redirect(route('staff.index'), navigate: true);
     }
 
@@ -87,12 +115,7 @@ class StaffTable extends Component
 
     public function render()
     {
-        $query = User::withoutGlobalScope(BranchScope::class)
-            ->where(function ($q) {
-                return $q->where('branch_id', branch()->id)
-                    ->orWhereNull('branch_id');
-            })
-            ->where('restaurant_id', restaurant()->id)
+        $query = $this->staffMembersQuery()
             ->where(function ($q) {
                 return $q->where('name', 'like', '%' . $this->search . '%')
                     ->orWhere('email', 'like', '%' . $this->search . '%');

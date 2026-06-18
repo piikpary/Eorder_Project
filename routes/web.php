@@ -24,6 +24,7 @@ use App\Http\Controllers\StripeController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\RecurringExpenseController;
 use App\Http\Controllers\PosAjaxController;
 use App\Http\Controllers\ViewPngController;
 use App\Http\Controllers\CustomerController;
@@ -74,6 +75,18 @@ use App\Http\Controllers\SuperAdmin\PaystackWebhookController;
 use App\Http\Controllers\SuperAdmin\RazorpayWebhookController;
 use App\Http\Controllers\SuperAdmin\FlutterwaveWebhookController;
 use App\Http\Middleware\EnsureDeliveryExecutiveAuthenticated;
+use App\Http\Controllers\BakongPaymentController;
+use App\Http\Controllers\CustomerLoyaltyPortalController;
+
+  ///loyalty program 
+Route::get('/loyalty', [CustomerLoyaltyPortalController::class, 'login'])->name('loyalty.login');
+Route::post('/loyalty', [CustomerLoyaltyPortalController::class, 'find'])->name('loyalty.find');
+Route::get('/loyalty/card/{token}', [CustomerLoyaltyPortalController::class, 'card'])->name('loyalty.card');
+Route::get('/loyalty/scan/{token}', [CustomerLoyaltyPortalController::class, 'scan'])->name('loyalty.scan');
+Route::get('/loyalty/register', [CustomerLoyaltyPortalController::class, 'register'])
+    ->name('loyalty.register');
+Route::post('/loyalty/register', [CustomerLoyaltyPortalController::class, 'store'])
+    ->name('loyalty.store');
 
 Route::get('/manifest.json', [HomeController::class, 'manifest'])->name('manifest');
 
@@ -98,6 +111,10 @@ Route::group(['prefix' => 'restaurant'], function () {
 });
 
 Route::get('/restaurant/{hash}', [ShopController::class, 'cart'])->name('shop_restaurant');
+Route::post('/restaurant/{hash}/browse-order-type', [ShopController::class, 'syncBrowseOrderType'])
+    ->name('shop.sync_browse_order_type');
+Route::post('/restaurant/{hash}/browse-cart-mutate', [ShopController::class, 'browseCartMutate'])
+    ->name('shop.browse_cart_mutate');
 
 
 // Only register the root route if Subdomain module is not enabled
@@ -113,6 +130,8 @@ Route::get('page/{slug}', [CustomMenuController::class, 'index'])->name('customM
 
 
 Route::post('stripe/order-payment', [StripeController::class, 'orderPayment'])->name('stripe.order_payment');
+Route::post('stripe/order-embedded-setup', [StripeController::class, 'orderEmbeddedSetup'])->name('stripe.order_embedded_setup');
+Route::get('stripe/order-embedded-return', [StripeController::class, 'orderEmbeddedReturn'])->name('stripe.order_embedded_return');
 Route::get('/stripe/success-callback', [StripeController::class, 'success'])->name('stripe.success');
 
 Route::post('stripe/license-payment', [StripeController::class, 'licensePayment'])->name('stripe.license_payment');
@@ -183,6 +202,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified', VerifyR
     Route::post('orders/{uuid}/waiter/accept', [OrderController::class, 'waiterAccept'])->name('orders.waiter.accept');
     Route::post('orders/{uuid}/waiter/decline', [OrderController::class, 'waiterDecline'])->name('orders.waiter.decline');
     Route::post('orders/{uuid}/waiter/status', [OrderController::class, 'updateWaiterResponse'])->name('orders.waiter.status');
+    Route::get('orders/recent', [OrderController::class, 'recent'])->name('orders.recent');
     Route::get('orders/print-split/{orderId}', [OrderController::class, 'printSplitOrder'])->name('orders.print-split');
     Route::get('orders/print-split-receipts/{orderId}', [\App\Http\Controllers\SplitPaymentReceiptController::class, 'printSplitReceipts'])->name('orders.print-split-receipts');
     Route::resource('orders', OrderController::class);
@@ -212,6 +232,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified', VerifyR
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('payments/due', [PaymentController::class, 'due'])->name('payments.due');
     Route::get('payments/expenses', [PaymentController::class, 'expenses'])->name('payments.expenses');
+    Route::get('payments/recurring-expenses', [RecurringExpenseController::class, 'index'])->name('payments.recurring-expenses');
     Route::get('payments/expenseCategory', [PaymentController::class, 'expenseCategory'])->name('payments.expenseCategory');
 
     Route::get('qr-codes', [QRCodeController::class, 'index'])->name('qrcodes.index');
@@ -243,6 +264,9 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified', VerifyR
     Route::get('delivery-executives/{delivery_executive}/orders/{order}/tracking', [DeliveryExecutiveController::class, 'trackingData'])
         ->name('delivery-executives.tracking-data');
     Route::get('billing/upgrade-plan', [PlanController::class, 'index'])->name('pricing.plan');
+
+    Route::post('stripe/license-embedded-setup', [StripeController::class, 'licenseEmbeddedSetup'])->name('stripe.license_embedded_setup');
+    Route::get('stripe/license-embedded-return', [StripeController::class, 'licenseEmbeddedReturn'])->name('stripe.license_embedded_return');
 
     Route::get('/pusher/beams-auth', [DashboardController::class, 'beamAuth'])->name('beam_auth');
     Route::post('/subscribe', [PushNotificationController::class, 'subscribe']);
@@ -381,8 +405,10 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         Route::get('/delivery-platforms', [PosApiController::class, 'getDeliveryPlatforms']);
         Route::post('/orders', [PosApiController::class, 'submitOrder']);
         Route::get('/customers', [PosApiController::class, 'getCustomers']);
+        Route::get('/customers/{id}', [PosApiController::class, 'getCustomer']);
         Route::get('/phone-codes', [PosApiController::class, 'getPhoneCodes']);
         Route::post('/customers', [PosApiController::class, 'saveCustomer']);
+        Route::post('/orders/{orderId}/set-customer', [PosApiController::class, 'assignCustomerToOrder']);
         Route::get('/taxes', [PosApiController::class, 'getTaxes']);
         Route::get('/restaurants', [PosApiController::class, 'getRestaurants']);
 
@@ -428,8 +454,10 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         Route::get('/delivery-platforms', [PosAjaxController::class, 'getDeliveryPlatforms']);
         Route::post('/orders', [PosAjaxController::class, 'submitOrder']);
         Route::get('/customers', [PosAjaxController::class, 'getCustomers']);
+        Route::get('/customers/{id}', [PosAjaxController::class, 'getCustomer']);
         Route::get('/phone-codes', [PosAjaxController::class, 'getPhoneCodes']);
         Route::post('/customers', [PosAjaxController::class, 'saveCustomer']);
+        Route::post('/orders/{orderId}/set-customer', [PosAjaxController::class, 'assignCustomerToOrder']);
         Route::get('/taxes', [PosAjaxController::class, 'getTaxes']);
         Route::get('/restaurants', [PosAjaxController::class, 'getRestaurants']);
 
@@ -440,6 +468,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         Route::post('/set-table', [PosAjaxController::class, 'setTable'])->name('ajax.pos.set-table');
         Route::post('/set-customer', [PosAjaxController::class, 'setCustomer'])->name('ajax.pos.set-customer');
         Route::post('/save-order', [PosAjaxController::class, 'saveOrder'])->name('ajax.pos.save-order');
+        Route::post('/sync-offline-payment', [PosAjaxController::class, 'syncOfflinePayment'])->name('ajax.pos.sync-offline-payment');
         Route::post('/order-type/default', [PosAjaxController::class, 'saveDefaultOrderTypePreference'])->name('ajax.pos.order-type-default');
         Route::get('/menu-item/{id}', [PosAjaxController::class, 'getMenuItem'])->name('ajax.pos.menu-item');
         Route::get('/menu-item/{id}/variations', [PosAjaxController::class, 'getMenuItemVariations'])->name('ajax.pos.menu-item-variations');
@@ -449,6 +478,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         Route::get('/tables-with-unpaid-orders', [PosAjaxController::class, 'getTablesWithUnpaidOrders'])->name('ajax.pos.tables-with-unpaid-orders');
         Route::post('/merge-tables', [PosAjaxController::class, 'mergeTables'])->name('ajax.pos.merge-tables');
         Route::post('/clear-merge-session', [PosAjaxController::class, 'clearMergeSession'])->name('ajax.pos.clear-merge-session');
+        Route::post('/clear-cache', [PosAjaxController::class, 'clearPosCache'])->name('ajax.pos.clear-cache');
         Route::post('/update-order-status/{id}', [PosAjaxController::class, 'updateOrderStatus'])->name('ajax.pos.update-order-status');
         Route::post('/cancel-order/{id}', [PosAjaxController::class, 'cancelOrder'])->name('ajax.pos.cancel-order');
         Route::delete('/delete-order/{id}', [PosAjaxController::class, 'deleteOrder'])->name('ajax.pos.delete-order');
@@ -456,6 +486,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
         Route::post('/orders/{id}/cancel', [PosAjaxController::class, 'cancelOrder'])->name('ajax.pos.orders.cancel');
         Route::post('/orders/{orderId}/remove-charge/{chargeId}', [PosAjaxController::class, 'removeExtraCharge'])->name('ajax.pos.remove-extra-charge');
         Route::post('/orders/{orderId}/update-discount', [PosAjaxController::class, 'updateOrderDiscount'])->name('ajax.pos.update-order-discount');
+        Route::post('/orders/{orderId}/update-note', [PosAjaxController::class, 'updateOrderNote'])->name('ajax.pos.update-order-note');
         Route::post('/orders/{orderId}/update-waiter', [PosAjaxController::class, 'updateWaiter'])->name('ajax.pos.update-waiter');
         Route::post('/orders/{orderId}/update-delivery-executive', [PosAjaxController::class, 'updateDeliveryExecutive'])->name('ajax.pos.update-delivery-executive');
         Route::post('/orders/{orderId}/print', [PosAjaxController::class, 'ajaxPrintOrder'])->name('ajax.pos.print-order');
@@ -470,5 +501,18 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'verified'])->group
 
         // Hotel room-service integrations for AJAX POS
         Route::get('/hotel/stays', [PosAjaxController::class, 'getHotelStays'])->name('ajax.pos.hotel.stays');
+        Route::get('/hotel/room-picker', [PosAjaxController::class, 'getHotelRoomPickerList'])->name('ajax.pos.hotel.room-picker');
     });
+     Route::get('/test-bakong-config', [BakongPaymentController::class, 'testConfig']);
+    Route::get('/test-bakong-qr/{amount?}', [BakongPaymentController::class, 'testQr']);
+    Route::get('/test-bakong-check/{md5?}', [BakongPaymentController::class, 'testCheck']);
+
+    Route::get('/orders/{order}/bakong-payment', [BakongPaymentController::class, 'showOrderPayment'])
+        ->name('bakong.order.payment');
+
+    Route::get('/orders/{order}/bakong-check', [BakongPaymentController::class, 'checkOrderPayment'])
+        ->name('bakong.order.check');
+
+	
+
 });

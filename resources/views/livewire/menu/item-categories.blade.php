@@ -5,7 +5,9 @@
     closeAddCategory() { this.addCategoryOpen = false },
     openEditCategory() { this.editCategoryOpen = true },
     closeEditCategory() { this.editCategoryOpen = false }
-}">
+}"
+@hide-category-modal.window="closeEditCategory()"
+@close-edit-category-modal.window="closeEditCategory()">
     <div class="p-4 bg-white block sm:flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
         <div class="w-full mb-1">
             <div class="mb-4">
@@ -23,6 +25,7 @@
                 </div>
 
                 <div class="inline-flex gap-x-4 mb-4 sm:mb-0">
+                    <x-menu.copy-to-branches-button scope="categories" class="shrink-0" />
                     <x-secondary-link href="{{ route('menu-items.entities.sort') }}">
                         @lang('modules.menu.sortMenuItems')
                     </x-secondary-link>
@@ -51,7 +54,7 @@
                                     @lang('modules.menu.allMenuItems')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium ltr:text-left rtl:text-right text-gray-500 uppercase dark:text-gray-400">
+                                    class="py-2.5 px-4 text-xs font-medium ltr:text-right rtl:text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('app.action')
                                 </th>
                             </tr>
@@ -61,7 +64,21 @@
                             @forelse ($categories as $item)
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" wire:key='menu-item-{{ $item->id . microtime() }}' wire:loading.class.delay='opacity-10'>
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
-                                    {{ $item->category_name }}
+                                    <div class="flex items-center gap-3">
+                                        @if(!empty($item->image))
+                                            <img
+                                                src="{{ $item->category_image_url }}"
+                                                alt="{{ $item->category_name }}"
+                                                class="w-9 h-9 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                                            />
+                                        @else
+                                            <div class="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                                {{ $item->category_initials }}
+                                            </div>
+                                        @endif
+
+                                        <span>{{ $item->category_name }}</span>
+                                    </div>
                                 </td>
                                 <td class="py-2.5 px-4 text-xs text-gray-900 whitespace-nowrap dark:text-white">
                                     {{ $item->items_count }} @lang('modules.menu.item')
@@ -237,5 +254,7 @@
             @endif
         </x-slot>
     </x-confirmation-modal>
+
+    <livewire:menu.copy-menu-to-branches />
 
 </div>

@@ -267,6 +267,39 @@
                             wire:model='metaDescription'></x-textarea>
                         <x-input-error for="metaDescription" class="mt-2" />
                     </div>
+
+                    <div>
+                        <x-label for="metaImage" value="{{ __('modules.settings.metaImage') }}" />
+                        <input id="metaImage" type="file" wire:model="metaImage" accept="image/*"
+                            class="block w-full text-sm border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 text-slate-500 mt-1">
+                        <x-input-error for="metaImage" class="mt-2" />
+
+                        <div class="mt-2 flex items-center gap-3">
+                            @if($metaImage)
+                                <div class="relative">
+                                    <img src="{{ $metaImage->temporaryUrl() }}" alt="Meta Image Preview"
+                                        class="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <button type="button" wire:click="$set('metaImage', null)"
+                                        class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:text-red-600 hover:border-red-200 shadow flex items-center justify-center">
+                                        <span class="text-sm leading-none">×</span>
+                                    </button>
+                                </div>
+                            @elseif(!empty($settings?->meta_image))
+                                <div class="relative">
+                                    <img src="{{ global_setting()->meta_image_url }}" alt="Meta Image"
+                                        class="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <button type="button" wire:click="removeMetaImage"
+                                        class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:text-red-600 hover:border-red-200 shadow flex items-center justify-center">
+                                        <span class="text-sm leading-none">×</span>
+                                    </button>
+                                </div>
+                            @endif
+
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ __('modules.settings.metaImageHelp') }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="md:col-span-2 mt-4">

@@ -18,6 +18,7 @@ class AssignTable extends Component
     public function mount()
     {
         $this->capacityError = null;
+        $this->reservation->loadMissing('area', 'table.area', 'customer');
 
         $this->tables = Area::with(['tables' => function ($query) {
             return $query->where('status', 'active');

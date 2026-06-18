@@ -25,8 +25,9 @@
 
     // cSpell:ignore pikaday
     $pikadayFormat = str_replace(['d', 'm', 'Y', 'y'], ['DD', 'MM', 'YYYY', 'YY'], $phpFormat);
-    $currentDate = now()->format($phpFormat);
-    $currentDateJs = now()->format('Y-m-d');
+    $pickerTz = $restaurantObj?->timezone ?? config('app.timezone');
+    $currentDate = now($pickerTz)->format($phpFormat);
+    $currentDateJs = now($pickerTz)->format('Y-m-d');
 
     // Get value from attributes if provided
     $value = $attributes->get('value');
@@ -67,26 +68,28 @@
     @endphp
 
 <input x-data x-init="
-    // Function to parse date based on PHP format
-    function parseDate(value, phpFormat) {
+    // Function to parse date based on PHP format.
+    // x-init is evaluated as an expression by Livewire/Alpine, so avoid var/const/function declarations.
+    window.__posParseDateSafe = window.__posParseDateSafe || function(value, phpFormat) {
         if (!value) return null;
         try {
-            const parts = value.split('-');
+            const separator = phpFormat.includes('/') ? '/' : '-';
+            const parts = value.split(separator);
             let day, month, year;
-            if (phpFormat === 'd-m-Y') {
+            if (phpFormat === 'd-m-Y' || phpFormat === 'd/m/Y') {
                 day = parseInt(parts[0]);
                 month = parseInt(parts[1]) - 1;
                 year = parseInt(parts[2]);
-            } else if (phpFormat === 'm-d-Y') {
+            } else if (phpFormat === 'm-d-Y' || phpFormat === 'm/d/Y') {
                 month = parseInt(parts[0]) - 1;
                 day = parseInt(parts[1]);
                 year = parseInt(parts[2]);
-            } else if (phpFormat === 'Y-m-d') {
+            } else if (phpFormat === 'Y-m-d' || phpFormat === 'Y/m/d') {
                 year = parseInt(parts[0]);
                 month = parseInt(parts[1]) - 1;
                 day = parseInt(parts[2]);
             } else {
-                // Default: try to parse as d-m-Y
+                // Default: day-month-year
                 day = parseInt(parts[0]);
                 month = parseInt(parts[1]) - 1;
                 year = parseInt(parts[2]);
@@ -98,7 +101,7 @@
             console.error('Error parsing date:', e);
         }
         return null;
-    }
+    };
 
     const phpFormat = '{{ $phpFormat }}';
 
@@ -197,7 +200,7 @@
                 inputElement.value = currentValue;
 
                 // Parse and set the date in the picker
-                const parsedDate = parseDate(currentValue, phpFormat);
+                const parsedDate = window.__posParseDateSafe(currentValue, phpFormat);
                 if (parsedDate) {
                     picker.setDate(parsedDate, false); // false = don't trigger onSelect, just set the date
                     // Ensure the input shows the correct format after setting the date
@@ -210,7 +213,7 @@
                 }
             } else {
                 // Input already has a value, just sync the picker with it
-                const parsedDate = parseDate(currentValue, phpFormat);
+                const parsedDate = window.__posParseDateSafe(currentValue, phpFormat);
                 if (parsedDate) {
                     picker.setDate(parsedDate, false);
                 }

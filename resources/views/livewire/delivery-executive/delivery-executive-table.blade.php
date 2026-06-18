@@ -62,10 +62,10 @@
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     <span @class(['text-xs font-medium px-2 py-1 rounded uppercase tracking-wide whitespace-nowrap ',
                                     'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-400 border border-blue-400' => ($item->status == 'on_delivery'),
-                                    'bg-green-100 text-green-800 dark:bg-gray-700 dark:text-green-400 border border-green-400' => ($item->status == 'available'),
+                                    'bg-green-100 text-green-800 dark:bg-gray-700 dark:text-green-400 border border-green-400' => (in_array($item->status, ['active', 'available'], true)),
                                     'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-400 border border-red-400' => ($item->status == 'inactive'),
                                     ])>
-                                        @lang('modules.staff.' . $item->status)
+                                        @lang('modules.staff.' . (in_array($item->status, ['available', 'active'], true) ? 'active' : $item->status))
                                     </span>
                                 </td>
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
@@ -131,7 +131,7 @@
         </div>
     </div>
 
-    <x-right-modal wire:model.live="showEditCustomerModal">
+    <x-right-modal wire:model.live="showEditCustomerModal" :content-scroll="false">
         <x-slot name="title">
             {{ __("modules.staff.editExecutive") }}
         </x-slot>

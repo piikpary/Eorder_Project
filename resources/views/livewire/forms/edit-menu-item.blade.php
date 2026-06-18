@@ -287,7 +287,7 @@
                             <p class="font-medium">{{ $itemImageTemp->getClientOriginalName() }}</p>
                             <p class="text-gray-500">{{ $this->formatFileSize($itemImageTemp->getSize()) }}</p>
                             @php
-                                $imageInfo = getimagesize($itemImageTemp->getRealPath());
+                                $imageInfo = @getimagesize($itemImageTemp->getRealPath());
                                 if ($imageInfo) {
                                     echo '<p class="text-gray-500">' . $imageInfo[0] . ' × ' . $imageInfo[1] . ' pixels</p>';
                                 }

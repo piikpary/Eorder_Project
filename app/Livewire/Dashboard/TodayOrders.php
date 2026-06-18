@@ -2,10 +2,9 @@
 
 namespace App\Livewire\Dashboard;
 
-use App\Events\TodayOrdersUpdated;
 use App\Models\Kot;
 use App\Models\Order;
-use Carbon\Carbon;
+use App\Services\OrderWaiterResponseService;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -53,14 +52,25 @@ class TodayOrders extends Component
         $recentOrder = $orderQuery->latest()->first();
 
         if (session()->has('today_order_count') && session('today_order_count') < $todayKotCount) {
-            $playSound = true;
+            if ($recentOrder) {
+                OrderWaiterResponseService::autoAcceptWhenPlacedByWaiterOnPos($recentOrder);
+                $recentOrder->refresh();
+            }
 
-            $this->alert('success', __('messages.newOrderReceived'), [
-                'toast' => true,
-                'position' => 'top-end'
-            ]);
+            $isSelfPlacedPosOrder = $recentOrder
+                && OrderWaiterResponseService::wasPlacedByWaiterOnPos($recentOrder);
+
+            $playSound = ! $isSelfPlacedPosOrder;
+
+            if (! $isSelfPlacedPosOrder) {
+                $this->alert('success', __('messages.newOrderReceived'), [
+                    'toast' => true,
+                    'position' => 'top-end',
+                ]);
+            }
 
             if ($recentOrder) {
+
                 // Default to `pending` until the waiter explicitly accepts/declines.
                 // We use `waiter_response_at` to determine whether the waiter has made a decision.
                 if (is_null($recentOrder->waiter_response_at)) {
@@ -73,9 +83,10 @@ class TodayOrders extends Component
                     }
 
                     Order::where('id', $recentOrder->id)->update($update);
+                    $recentOrder->refresh();
                 }
-                // Show confirmation dialog only to the assigned waiter
-                if (user()->hasRole('Waiter_' . user()->restaurant_id)) {
+
+                if (OrderWaiterResponseService::shouldPromptWaiterAcceptDecline($recentOrder)) {
                     $this->confirm(__('messages.newOrderReceived'), [
                         'position' => 'center',
                         'confirmButtonText' => __('app.acceptOrder'),

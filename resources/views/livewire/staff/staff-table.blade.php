@@ -36,7 +36,14 @@
                                 </td>
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     @if ($item->id == auth()->id())
-                                        <span class="text-xs">@lang('messages.cannotEditOwnRole')</span>
+                                        <div class="inline-flex flex-col gap-1.5">
+                                            <span class="text-[11px] text-amber-700 dark:text-amber-400 leading-4">
+                                                @lang('messages.cannotEditOwnRole')
+                                            </span>
+                                            <span class="inline-flex items-center w-fit px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600">
+                                                {{ $item->roles->first()->translated_name ?? $item->roles->pluck('display_name')[0] ?? '--' }}
+                                            </span>
+                                        </div>
                                     @elseif(user_can('Update Staff Member'))
                                         <button wire:key='member-role-{{ $item->id . microtime() }}' id="dropdownHoverButton{{ $item->id }}" data-dropdown-toggle="dropdownHover{{ $item->id }}" data-dropdown-trigger="click" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg font-semibold text-sm text-gray-700 dark:text-gray-300  shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150" type="button">
                                             {{ $item->roles && isset($item->roles->pluck('display_name')[0]) ? $item->roles->pluck('display_name')[0] : '' }}
@@ -113,7 +120,7 @@
         </div>
     </div>
 
-    <x-right-modal wire:model.live="showEditCustomerModal">
+    <x-right-modal wire:model.live="showEditCustomerModal" :content-scroll="false">
         <x-slot name="title">
             {{ __("modules.staff.editMember") }}
         </x-slot>

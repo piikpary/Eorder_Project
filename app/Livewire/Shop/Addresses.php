@@ -35,6 +35,7 @@ class Addresses extends Component
     public $confirmDeleteAddressId = null;
     public $shopBranch;
     public $mapApiKey;
+    public $mapProvider;
 
     public function mount()
     {
@@ -50,6 +51,7 @@ class Addresses extends Component
             abort(404);
         }
         $this->mapApiKey = global_setting()->google_map_api_key ?? null;
+        $this->mapProvider = global_setting()->map_provider ?? 'google';
         $this->refreshAddresses();
     }
 

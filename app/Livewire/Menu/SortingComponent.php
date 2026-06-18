@@ -6,6 +6,7 @@ use App\Models\Menu;
 use Livewire\Component;
 use App\Models\MenuItem;
 use App\Models\ItemCategory;
+use App\Services\Pos\PosBranchCacheInvalidation;
 
 class SortingComponent extends Component
 {
@@ -92,6 +93,7 @@ class SortingComponent extends Component
     public function sortMenus($sortedIds)
     {
         $this->batchUpdateSortOrder(Menu::class, $sortedIds);
+        $this->bumpPosBranchCacheAfterSort();
         $this->loadMenus();
         $this->loadCategories();
     }
@@ -99,6 +101,7 @@ class SortingComponent extends Component
     public function sortCategories($sortedIds)
     {
         $this->batchUpdateSortOrder(ItemCategory::class, $sortedIds);
+        $this->bumpPosBranchCacheAfterSort();
         $this->loadCategories();
     }
 
@@ -108,8 +111,16 @@ class SortingComponent extends Component
             MenuItem::where('id', $sortedItem['value'])->update(['sort_order' => $sortedItem['order']]);
         }
 
+        $this->bumpPosBranchCacheAfterSort();
         $this->loadCategories();
         $this->filterItems();
+    }
+
+    protected function bumpPosBranchCacheAfterSort(): void
+    {
+        if (function_exists('branch') && branch()) {
+            PosBranchCacheInvalidation::invalidateForBranch((int) branch()->id);
+        }
     }
 
     protected function batchUpdateSortOrder(string $model, array $sortedIds): void

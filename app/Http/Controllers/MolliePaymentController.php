@@ -10,6 +10,7 @@ use App\Models\AdminMolliePayment;
 use App\Models\Order;
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 use Mollie\Api\MollieApiClient;
 
 class MolliePaymentController extends Controller
@@ -195,6 +196,8 @@ class MolliePaymentController extends Controller
         $order->amount_paid = $order->amount_paid + $payment->amount;
         $order->status = 'paid';
         $order->save();
+
+        ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
         $payment->update([
             'payment_status' => 'completed',

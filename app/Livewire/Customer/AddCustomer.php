@@ -9,6 +9,7 @@ use Livewire\Attributes\On;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use App\Models\Country;
 use App\Helper\Common;
+use App\Models\User;
 
 class AddCustomer extends Component
 {
@@ -24,6 +25,7 @@ class AddCustomer extends Component
     public $fromPos;
     public $selectedCustomerId = null;
     public $customerPhoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -44,8 +46,13 @@ class AddCustomer extends Component
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
 
-        // Set default phone code from restaurant
-        $this->restaurantPhoneCode = restaurant()->country->phonecode ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+
+        // Set default phone code (prefer detected, fallback to restaurant)
+        $this->restaurantPhoneCode = $detectedPhoneCode
+            ?? restaurant()->country->phonecode
+            ?? $this->allPhoneCodes->first();
         $this->customerPhoneCode = $this->restaurantPhoneCode;
 
     }
@@ -75,6 +82,8 @@ class AddCustomer extends Component
     #[On('showAddCustomerModal')]
     public function showAddCustomer($id = null, $customerId = null, $fromPos = false)
     {
+        $this->resetAddCustomerFormState();
+
         if (!is_null($id)) {
             $this->order = Order::find($id);
         }
@@ -90,10 +99,13 @@ class AddCustomer extends Component
                 $this->customerAddress = $customer->delivery_address;
             }
         } else {
-            $this->customerPhoneCode = restaurant()->country->phonecode ?? $this->allPhoneCodes->first();
+            $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+            $this->phoneCodeDetected = !empty($detectedPhoneCode);
+            $this->customerPhoneCode = $detectedPhoneCode
+                ?? restaurant()->country->phonecode
+                ?? $this->allPhoneCodes->first();
         }
         $this->fromPos = $fromPos ?? false;
-        $this->showAddCustomerModal = true;
     }
 
     public function updatedSearchQuery()
@@ -170,7 +182,11 @@ class AddCustomer extends Component
         $this->availableResults = [];
         $this->selectedCustomerId = null;
 
-        $this->customerPhoneCode = restaurant()->phone_code ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->customerPhoneCode = $detectedPhoneCode
+            ?? restaurant()->phone_code
+            ?? $this->allPhoneCodes->first();
 
         // Make all fields editable when creating new customer
         $this->editingFields = [
@@ -193,7 +209,11 @@ class AddCustomer extends Component
         $this->searchQuery = '';
         $this->availableResults = [];
 
-        $this->customerPhoneCode = restaurant()->phone_code ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->customerPhoneCode = $detectedPhoneCode
+            ?? restaurant()->phone_code
+            ?? $this->allPhoneCodes->first();
 
         // Make all fields editable when creating new customer
         $this->editingFields = [
@@ -310,6 +330,15 @@ class AddCustomer extends Component
 
     public function resetForm()
     {
+        $this->resetAddCustomerFormState();
+        $this->js("window.dispatchEvent(new CustomEvent('add-customer-modal-close'))");
+    }
+
+    /**
+     * Clear customer form fields (no modal close). Used on every open and after successful save.
+     */
+    protected function resetAddCustomerFormState(): void
+    {
         $this->customerName = '';
         $this->customerPhone = '';
         $this->customerPhoneCode = restaurant()->phone_code ?? $this->allPhoneCodes->first();
@@ -324,7 +353,6 @@ class AddCustomer extends Component
             'email' => false,
             'address' => false
         ];
-        $this->showAddCustomerModal = false;
     }
 
     public function render()

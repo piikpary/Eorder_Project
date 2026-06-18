@@ -55,6 +55,8 @@ class LicenseExpire extends Command
                 ->first();
 
             if (!($latestInvoice && $latestInvoice->next_pay_date > now())) {
+                $subscriptionExpiredAt = $restaurant->license_expire_on?->copy();
+
                 $restaurant->package_id = $defaultPackage->id;
                 $restaurant->package_type = 'monthly';
                 $restaurant->license_expire_on = now()->addMonth();
@@ -65,7 +67,7 @@ class LicenseExpire extends Command
 
                 $restaurantUser = Restaurant::restaurantAdmin($restaurant);
                 // info('expire for: ' . $restaurant->name);
-                $restaurantUser->notify(new SubscriptionExpire($restaurant));
+                $restaurantUser->notify(new SubscriptionExpire($restaurant, $subscriptionExpiredAt));
             }
         }
 

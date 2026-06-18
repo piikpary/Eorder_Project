@@ -1,24 +1,15 @@
 <div>
     <aside  id="sidebar" 
-    class="fixed top-0 ltr:left-0 rtl:right-0 z-20 flex flex-col flex-shrink-0 hidden w-56 min-w-[224px] bg-white h-full pt-16 font-normal duration-75 lg:flex transition-width menu-collapsed:hidden"
+    class="fixed top-0 ltr:left-0 rtl:right-0 z-20 flex flex-col flex-shrink-0 hidden w-56 min-w-[224px] bg-white h-full pt-16 md:pt-12 lg:pt-16 font-normal duration-75 lg:flex transition-width menu-collapsed:hidden dark:bg-gray-800 dark:border-gray-700 dark:border-r"
     aria-label="Sidebar">
         <!-- Logo -->
         <div class="relative flex flex-col flex-1 min-h-0 pt-0 ltr:border-r rtl:border-l border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-            <div class="flex flex-col flex-1 pt-5 pb-4 overflow-y-auto mb-16 [&::-webkit-scrollbar]:w-1
-                [&::-webkit-scrollbar-track]:rounded-xl
-                [&::-webkit-scrollbar-thumb]:rounded-xl
-                [&::-webkit-scrollbar-track]:bg-gray-300
-                [&::-webkit-scrollbar-thumb]:bg-gray-400
-                hover:[&::-webkit-scrollbar-thumb]:bg-gray-500
-                dark:[&::-webkit-scrollbar-track]:bg-gray-700
-                dark:[&::-webkit-scrollbar-thumb]:bg-gray-500
-                dark:hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
-                <div class="flex-1 px-3 space-y-1 divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-
+            <div class="flex flex-col flex-1 min-h-0 pt-2 pb-4 mb-16">
+                <div class="shrink-0 px-3 pb-3 border-b border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
                     @if (user()->hasRole('Admin_'.user()->restaurant_id))
                         @livewire('forms.change-branch')
                     @else
-                        <div class="text-sm text-gray-500 dark:text-gray-400 py-2 px-3 font-semibold flex items-center justify-between">
+                        <div class="text-sm text-gray-500 dark:text-gray-400 py-2 font-semibold flex items-center justify-between gap-2 min-w-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">
                                 <path d="M12.166 8.94c-.524 1.062-1.234 2.12-1.96 3.07A32 32 0 0 1 8 14.58a32 32 0 0 1-2.206-2.57c-.726-.95-1.436-2.008-1.96-3.07C3.304 7.867 3 6.862 3 6a5 5 0 0 1 10 0c0 .862-.305 1.867-.834 2.94M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10"/>
                                 <path d="M8 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4m0 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
@@ -27,7 +18,17 @@
                             {{ branch()->name }}
                         </div>
                     @endif
+                </div>
 
+                <div class="flex-1 min-h-0 overflow-y-auto px-3 dark:bg-gray-800 [&::-webkit-scrollbar]:w-1
+                    [&::-webkit-scrollbar-track]:rounded-xl
+                    [&::-webkit-scrollbar-thumb]:rounded-xl
+                    [&::-webkit-scrollbar-track]:bg-gray-300
+                    [&::-webkit-scrollbar-thumb]:bg-gray-400
+                    hover:[&::-webkit-scrollbar-thumb]:bg-gray-500
+                    dark:[&::-webkit-scrollbar-track]:bg-gray-700
+                    dark:[&::-webkit-scrollbar-thumb]:bg-gray-500
+                    dark:hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
                     <ul class="py-2 space-y-1.5">
 
                         @livewire('sidebar-menu-item', ['name' => __('menu.dashboard'), 'icon' => 'dashboard', 'link' => route('dashboard'), 'active' => request()->routeIs('dashboard')])
@@ -140,8 +141,9 @@
                         @endif
 
                         @if ($this->hasModule('Expense') && user_can('Show Expense'))
-                            <x-sidebar-dropdown-menu :name='__("menu.expenses")' icon='expenses' :active='request()->routeIs(["payments.expenses", "payments.expenseCategory"])'>
+                            <x-sidebar-dropdown-menu :name='__("menu.expenses")' icon='expenses' :active='request()->routeIs(["payments.expenses", "payments.recurring-expenses", "payments.expenseCategory"])'>
                                 @livewire('sidebar-dropdown-menu', ['name' => __('menu.expenses'), 'link' => route('payments.expenses'), 'active' => request()->routeIs('payments.expenses')])
+                                @livewire('sidebar-dropdown-menu', ['name' => __('menu.recurringExpenses'), 'link' => route('payments.recurring-expenses'), 'active' => request()->routeIs('payments.recurring-expenses')])
                                 @livewire('sidebar-dropdown-menu', ['name' => __('menu.expensesCategory'), 'link' => route('payments.expenseCategory'), 'active' => request()->routeIs('payments.expenseCategory')])
                             </x-sidebar-dropdown-menu>
                         @endif
@@ -191,7 +193,6 @@
                         @endif
 
                     </ul>
-
                 </div>
             </div>
 

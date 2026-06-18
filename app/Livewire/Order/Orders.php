@@ -11,7 +11,6 @@ use App\Models\Order;
 use App\Models\OrderNotificationSetting;
 use App\Models\PusherSetting;
 use App\Models\ReceiptSetting;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +59,7 @@ class Orders extends Component
     public $isDeliveryExecutiveContext = false;
     public $trackingEnabled = false;
     public $mapApiKey = null;
+    public $mapProvider = 'google';
 
     public function mount($deliveryExecutiveId = null, $deliveryExecutiveName = null, $backUrl = null)
     {
@@ -70,6 +70,7 @@ class Orders extends Component
         $this->isDeliveryExecutiveContext = !empty($this->deliveryExecutiveId);
         $this->trackingEnabled = $this->isDeliveryExecutiveContext && module_enabled('RestApi');
         $this->mapApiKey = global_setting()->google_map_api_key ?? restaurant()?->map_api_key ?? null;
+        $this->mapProvider = global_setting()->map_provider ?? 'google';
 
         $dateFormat = restaurant()->date_format ?? 'd-m-Y';
 
@@ -77,9 +78,7 @@ class Orders extends Component
         $this->dateRangeType = request()->cookie('orders_date_range_type', 'today');
         $this->startDate = Carbon::now($tz)->startOfWeek()->format($dateFormat);
         $this->endDate = Carbon::now($tz)->endOfWeek()->format($dateFormat);
-        $this->waiters = cache()->remember('waiters_' . restaurant()->id, 60 * 60 * 24, function () {
-            return User::role('Waiter_' . restaurant()->id)->get();
-        });
+        $this->waiters = \App\Services\Pos\PosWaitersCache::remember((int) restaurant()->id, (int) branch()->id);
         $this->deliveryApps = DeliveryPlatform::all();
 
         // Load operational shifts for the current branch (for filter dropdown)
@@ -889,6 +888,7 @@ class Orders extends Component
             'trackingEnabled' => $this->trackingEnabled,
             'backUrl' => $this->backUrl,
             'mapApiKey' => $this->mapApiKey,
+            'mapProvider' => $this->mapProvider,
             'kotCount' => $kotCount,
             'billedCount' => $billedCount,
             'paymentDueCount' => $paymentDue,

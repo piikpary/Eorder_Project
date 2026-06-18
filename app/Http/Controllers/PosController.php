@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\OrderStatus;
 use App\Models\DeliveryExecutive;
 use App\Models\Order;
 use App\Models\Table;
@@ -17,6 +18,11 @@ use App\Models\Menu;
 use App\Models\OrderType;
 use App\Models\Tax;
 use App\Models\DeliveryPlatform;
+use App\Models\ItemCategory;
+use App\Models\MenuItem;
+use App\Models\RestaurantCharge;
+use App\Services\Pos\PosOrderTypeClientData;
+use App\Services\Pos\PosWaitersCache;
 
 class PosController extends Controller
 {
@@ -102,14 +108,14 @@ class PosController extends Controller
      */
     private function getDeliveryExecutivesWithBusyState()
     {
-        // Get all delivery executives
-        $deliveryExecutives = DeliveryExecutive::where('status', 'available')->where('is_online', true)->get();
+        // Get all online delivery executives (busy ones included; busy is derived from orders)
+        $deliveryExecutives = DeliveryExecutive::assignable()->get();
 
         // Build map: executive id => is busy (has at least one assigned order not delivered)
         $deliveryExecutiveBusyMap = [];
         foreach ($deliveryExecutives as $executive) {
             $hasUndeliveredOrder = Order::where('delivery_executive_id', $executive->id)
-                ->where('order_status', '!=', 'delivered')
+                ->whereNotIn('order_status', OrderStatus::terminalProgressValues())
                 ->whereDate('date_time', '=', now()->toDateString())
                 ->exists();
             $deliveryExecutiveBusyMap[$executive->id] = $hasUndeliveredOrder;
@@ -118,9 +124,31 @@ class PosController extends Controller
         return [$deliveryExecutives, $deliveryExecutiveBusyMap];
     }
 
+    private function getWaiterRunningOrdersMap(int $branchId)
+    {
+        return Order::query()
+            ->where('branch_id', $branchId)
+            ->whereNotNull('waiter_id')
+            ->whereNotIn('status', ['draft', 'paid', 'canceled'])
+            ->selectRaw('waiter_id, COUNT(*) as running_orders')
+            ->groupBy('waiter_id')
+            ->pluck('running_orders', 'waiter_id');
+    }
+
     public function index()
     {
-        abort_if((!in_array('Order', restaurant_modules()) || !user_can('Create Order')), 403);
+        $missingPermissions = [];
+        if (!in_array('Order', restaurant_modules())) {
+            $missingPermissions[] = 'Order module not enabled';
+        }
+        if (!user_can('Create Order')) {
+            $missingPermissions[] = 'Create Order permission missing';
+        }
+
+        if (!empty($missingPermissions)) {
+            abort(403, 'POS access denied. Missing: ' . implode(', ', $missingPermissions));
+        }
+   
 
         // Handle table order ID from query parameter (similar to Pos.php)
         $tableOrderID = request('tableOrderID');
@@ -143,17 +171,10 @@ class PosController extends Controller
         $restaurant = restaurant()->load(['paymentGateways', 'package']);
         $branch = branch();
 
-        // Get waiters
-        $users = cache()->remember('waiters_' . $restaurant->id . '_' . $branch->id, 60 * 60 * 24, function () use ($restaurant, $branch) {
-            return User::withoutGlobalScope(BranchScope::class)
-                ->where(function ($q) use ($branch) {
-                    return $q->where('branch_id', $branch->id)
-                        ->orWhereNull('branch_id');
-                })
-                ->role('waiter_' . $restaurant->id)
-                ->where('restaurant_id', $restaurant->id)
-                ->get();
-        });
+        // Get waiters (cached; cleared by WaiterObserver / PosWaitersCache::forgetForRestaurant)
+        $users = PosWaitersCache::remember((int) $restaurant->id, (int) $branch->id);
+        $users = PosWaitersCache::forPosActor($users, auth()->user(), (int) $restaurant->id);
+        $waiterRunningOrdersMap = $this->getWaiterRunningOrdersMap((int) $branch->id);
 
         // Get taxes
         $taxes = cache()->remember('taxes_' . $restaurant->id . '_' . $branch->id, 60 * 60 * 24, function () {
@@ -177,6 +198,8 @@ class PosController extends Controller
         // Get order types
         $orderTypes = OrderType::where('branch_id', $branch->id)
             ->where('is_active', true)
+            ->availableForRestaurant()
+            ->orderBy('order_type_name')
             ->get();
 
         // Get cancel reasons
@@ -199,7 +222,7 @@ class PosController extends Controller
         $limitMessage = '';
         $shouldBlockPos = false;
 
-        if (module_enabled('MultiPOS') && class_exists(\Modules\MultiPOS\Entities\PosMachine::class)) {
+        if (module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules()) && class_exists(\Modules\MultiPOS\Entities\PosMachine::class)) {
             $cookieName = config('multipos.cookie.name', 'pos_token');
             $deviceId = request()->cookie($cookieName);
 
@@ -210,6 +233,13 @@ class PosController extends Controller
 
                 if ($posMachine) {
                     $hasPosMachine = true;
+                    if (auth()->check()) {
+                        try {   
+                            $posMachine->activateIfPendingRegisteredByApprover(auth()->user());
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Failed to activate POS machine: ' . $e->getMessage());
+                        }
+                    }
                     $machineStatus = $posMachine->status;
                 }
             }
@@ -267,7 +297,7 @@ class PosController extends Controller
             $orderTypeId = request()->get('orderTypeId');
         } elseif ($disablePopup && $defaultOrderTypeId) {
             // Auto-select default order type if popup is disabled
-            $defaultOrderType = \App\Models\OrderType::find($defaultOrderTypeId);
+            $defaultOrderType = OrderType::find($defaultOrderTypeId);
             if ($defaultOrderType && $defaultOrderType->is_active) {
                 $orderTypeId = $defaultOrderType->id;
             }
@@ -281,11 +311,10 @@ class PosController extends Controller
         $search = request()->get('search', '');
         $menuId = request()->get('menuId', null);
         $filterCategories = request()->get('filterCategories', null);
-        $menuItemsLoaded = 48;
         $normalizedDeliveryAppId = ($selectedDeliveryApp === 'default' || !$selectedDeliveryApp) ? null : (int) $selectedDeliveryApp;
 
         // Get categories for menu filter
-        $categoryList = \App\Models\ItemCategory::select('id', 'category_name')
+        $categoryList = ItemCategory::select('id', 'category_name')
             ->withCount(['items' => function ($query) use ($menuId, $branch) {
                 if ($menuId) {
                     $query->where('menu_id', $menuId);
@@ -295,26 +324,11 @@ class PosController extends Controller
             ->having('items_count', '>', 0)
             ->get();
 
-        // Get menu items (simplified - will be loaded via AJAX)
-        $menuItemsQuery = \App\Models\MenuItem::where('branch_id', $branch->id);
-
-        if ($menuId) {
-            $menuItemsQuery->where('menu_id', $menuId);
-        }
-
-        if ($filterCategories) {
-            $menuItemsQuery->where('item_category_id', $filterCategories);
-        }
-
-        if ($search) {
-            $menuItemsQuery->where('item_name', 'like', '%' . $search . '%');
-        }
-
-        $totalMenuItemsCount = $menuItemsQuery->count();
-        $menuItems = $menuItemsQuery->with(['taxes:id,tax_name,tax_percent'])
-            ->withCount(['variations', 'modifierGroups'])
-            ->limit($menuItemsLoaded)
-            ->get();
+        // JS POS: load full catalog once via AJAX + filter in browser (no paginated server slices).
+        $posMenuClientSideCatalog = true;
+        $totalMenuItemsCount = (int) MenuItem::where('branch_id', $branch->id)->count();
+        $menuItems = collect();
+        $menuItemsLoaded = $totalMenuItemsCount;
 
         // Variables for kot_items view
         $customerId = null;
@@ -327,6 +341,7 @@ class PosController extends Controller
         // and local $tableId/$tableNo are out of scope here.
         $tableNo = null;
         $tableId = null;
+        $tableHasActiveOrder = false;
         if (request()->filled('tableOrderID')) {
             $tableForPos = Table::with('activeOrder')->find(request('tableOrderID'));
             if ($tableForPos) {
@@ -335,11 +350,12 @@ class PosController extends Controller
 
                 // If no active order exists for the table, POS should default to Dine In.
                 if ($tableForPos->activeOrder) {
+                    $tableHasActiveOrder = true;
                     $orderTypeId = $tableForPos->activeOrder->order_type_id;
                     $orderType = $tableForPos->activeOrder->order_type;
                     $orderTypeSlug = $tableForPos->activeOrder->order_type_slug;
                 } else {
-                    $defaultOrderType = \App\Models\OrderType::where('type', 'dine_in')
+                    $defaultOrderType = OrderType::where('type', 'dine_in')
                         ->where('is_active', true)
                         ->first();
 
@@ -357,15 +373,35 @@ class PosController extends Controller
             }
         }
 
-        // Apply price context to menu items based on (possibly updated) order type
-        if ($orderTypeId) {
-            foreach ($menuItems as $menuItem) {
-                $menuItem->setPriceContext($orderTypeId, $normalizedDeliveryAppId);
-            }
-        }
+        $orderTypePolicyResult = $this->applyPosOrderTypeSelectionPolicy(
+            $orderTypes,
+            $deliveryPlatforms,
+            (bool) $changeOrderType,
+            $tableHasActiveOrder,
+            $orderTypeId,
+            $orderType,
+            $orderTypeSlug
+        );
+        $posOrderTypeSelectionPolicy = $orderTypePolicyResult['posOrderTypeSelectionPolicy'];
+        $allowOrderTypeChange = $orderTypePolicyResult['allowOrderTypeChange'];
+        $orderTypeId = $orderTypePolicyResult['orderTypeId'];
+        $orderType = $orderTypePolicyResult['orderType'];
+        $orderTypeSlug = $orderTypePolicyResult['orderTypeSlug'];
+
         $orderNote = null;
         $noOfPax = 1; // Default number of pax
-        $selectWaiter = user()->id;
+        // Do not auto-assign current user as waiter for fresh orders.
+        $selectWaiter = null;
+        $assignedTableWaiter = $this->assignedWaiterFromTable($tableId);
+        if ($assignedTableWaiter) {
+            $selectWaiter = (int) $assignedTableWaiter->id;
+        }
+        $selectWaiter = PosWaitersCache::normalizeWaiterSelection(
+            $selectWaiter,
+            auth()->user(),
+            (int) $restaurant->id,
+            $users
+        );
         $selectDeliveryExecutive = null;
 
         $pickupRange = $restaurant->pickup_days_range ?? 1;
@@ -635,18 +671,30 @@ class PosController extends Controller
         $confirmDeleteModal = false;
         $deleteOrderModal = false;
 
-        // Order type selection flag
-        $allowOrderTypeSelection = false;
-        $isWaiterLocked = $this->assignedWaiterFromTable($tableId) !== null;
+        // Order type selection flag (locked when only one non-delivery type is active)
+        $allowOrderTypeSelection = $allowOrderTypeChange;
+        $isWaiterLocked = $assignedTableWaiter !== null
+            || PosWaitersCache::actorIsRestrictedPosWaiter(auth()->user(), (int) $restaurant->id);
         $currentWaiter = $users->firstWhere('id', $selectWaiter) ?? \App\Models\User::find($selectWaiter);
         $waiterName = $currentWaiter?->name ?? __('modules.order.selectWaiter');
 
         $posLoyaltyEnabled = $this->isLoyaltyEnabledForPos();
 
+        $tableSeatingCapacity = $this->resolveTableSeatingCapacity($tableId, $branch->id);
+
+        $modalScript = PosOrderTypeClientData::buildModalScriptPayload(
+            (int) $branch->id,
+            $branch,
+            $orderTypes,
+            $deliveryPlatforms
+        );
+        extract($modalScript);
+
         return view('pos.index', compact(
             'restaurant',
             'users',
             'taxes',
+            'waiterRunningOrdersMap',
             'deliveryExecutives',
             'deliveryExecutiveBusyMap',
             'deliveryPlatforms',
@@ -680,6 +728,7 @@ class PosController extends Controller
             'selectedDeliveryApp',
             'tableNo',
             'tableId',
+            'tableSeatingCapacity',
             'orderNote',
             'noOfPax',
             'selectWaiter',
@@ -742,7 +791,15 @@ class PosController extends Controller
             'currentWaiter',
             'waiterName',
             'allowOrderTypeSelection',
-            'posLoyaltyEnabled'
+            'allowOrderTypeChange',
+            'posOrderTypeSelectionPolicy',
+            'posLoyaltyEnabled',
+            'posMenuClientSideCatalog',
+            'posOrderTypePriceMaps',
+            'posExtraChargesBySlug',
+            'posDeliveryDefaultFee',
+            'posOrderTypesForModal',
+            'posDeliveryPlatformsForModal'
         ));
     }
 
@@ -752,8 +809,14 @@ class PosController extends Controller
         abort_if((!in_array('Order', restaurant_modules())), 403);
         $orderID = $id;
         $order = Order::find($orderID);
+        if (!$order) {
+            return redirect()->route('pos.index')->with('error', __('modules.order.orderNotFound'));
+        }
 
         $showOrderDetail = request()->boolean('show-order-detail');
+        if ($showOrderDetail && in_array((string) $order->status, ['billed', 'payment_due', 'paid'], true)) {
+            return redirect()->route('orders.show', $orderID);
+        }
 
         // When show-order-detail=true → show existing KOT details
         return $this->loadPosWithOrder($orderID, !$showOrderDetail);
@@ -801,17 +864,10 @@ class PosController extends Controller
         // Use order's tax_mode when viewing an existing order (match tt Livewire)
         $taxMode = $restaurant->tax_mode ?? 'order';
 
-        // Get waiters
-        $users = cache()->remember('waiters_' . $restaurant->id, 60 * 60 * 24, function () use ($restaurant, $branch) {
-            return \App\Models\User::withoutGlobalScope(\App\Scopes\BranchScope::class)
-                ->where(function ($q) use ($branch) {
-                    return $q->where('branch_id', $branch->id)
-                        ->orWhereNull('branch_id');
-                })
-                ->role('waiter_' . $restaurant->id)
-                ->where('restaurant_id', $restaurant->id)
-                ->get();
-        });
+        // Get waiters (cached; cleared by WaiterObserver / PosWaitersCache::forgetForRestaurant)
+        $users = PosWaitersCache::remember((int) $restaurant->id, (int) $branch->id);
+        $users = PosWaitersCache::forPosActor($users, auth()->user(), (int) $restaurant->id);
+        $waiterRunningOrdersMap = $this->getWaiterRunningOrdersMap((int) $branch->id);
 
         // Get taxes
         $taxes = cache()->remember('taxes_' . $restaurant->id, 60 * 60 * 24, function () {
@@ -835,6 +891,8 @@ class PosController extends Controller
         // Get order types
         $orderTypes = \App\Models\OrderType::where('branch_id', $branch->id)
             ->where('is_active', true)
+            ->availableForRestaurant()
+            ->orderBy('order_type_name')
             ->get();
 
         // Get cancel reasons
@@ -857,7 +915,7 @@ class PosController extends Controller
         $limitMessage = '';
         $shouldBlockPos = false;
 
-        if (module_enabled('MultiPOS') && class_exists(\Modules\MultiPOS\Entities\PosMachine::class)) {
+        if (module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules()) && class_exists(\Modules\MultiPOS\Entities\PosMachine::class)) {
             $cookieName = config('multipos.cookie.name', 'pos_token');
             $deviceId = request()->cookie($cookieName);
 
@@ -868,6 +926,13 @@ class PosController extends Controller
 
                 if ($posMachine) {
                     $hasPosMachine = true;
+                    if (auth()->check()) {
+                        try {
+                            $posMachine->activateIfPendingRegisteredByApprover(auth()->user());
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Failed to activate POS machine: ' . $e->getMessage());
+                        }
+                    }
                     $machineStatus = $posMachine->status;
                 }
             }
@@ -890,7 +955,7 @@ class PosController extends Controller
         }
 
         // Load the existing order with all necessary relationships (match tt: taxes.tax for order-level tax display)
-        $orderDetail = Order::with([
+        $posOrderRelations = [
             'items.menuItem.taxes',
             'items.menuItemVariation',
             'items.modifierOptions',
@@ -908,8 +973,13 @@ class PosController extends Controller
             },
             'kot.items.menuItem.taxes',
             'kot.items.menuItemVariation',
-            'kot.items.modifierOptions'
-        ])->find($orderID);
+            'kot.items.modifierOptions',
+        ];
+        if (function_exists('module_enabled') && module_enabled('Hotel') && in_array('Hotel', restaurant_modules())) {
+            $posOrderRelations[] = 'hotelStay.room';
+            $posOrderRelations[] = 'hotelStay.stayGuests.guest';
+        }
+        $orderDetail = Order::with($posOrderRelations)->find($orderID);
 
         if (!$orderDetail) {
             return redirect()->route('pos.index')->with('error', __('modules.order.orderNotFound'));
@@ -931,7 +1001,14 @@ class PosController extends Controller
         $tableNo = $orderDetail->table?->table_code;
         $orderNote = $orderDetail->order_note;
         $noOfPax = $orderDetail->number_of_pax ?? 1;
-        $selectWaiter = $orderDetail->waiter_id ?? user()->id;
+        // Preserve unassigned waiter state on existing orders instead of defaulting to current user.
+        $selectWaiter = $orderDetail->waiter_id ?? null;
+        $selectWaiter = PosWaitersCache::normalizeWaiterSelection(
+            $selectWaiter,
+            auth()->user(),
+            (int) $restaurant->id,
+            $users
+        );
         $selectDeliveryExecutive = $orderDetail->delivery_executive_id ?? null;
         $selectedDeliveryApp = $orderDetail->delivery_app_id;
         $deliveryFee = $orderDetail->delivery_fee ?? 0;
@@ -1161,7 +1238,6 @@ class PosController extends Controller
         $search = request()->get('search', '');
         $menuId = request()->get('menuId', null);
         $filterCategories = request()->get('filterCategories', null);
-        $menuItemsLoaded = 48;
 
         // Get categories for menu filter
         $categoryList = \App\Models\ItemCategory::select('id', 'category_name')
@@ -1174,34 +1250,10 @@ class PosController extends Controller
             ->having('items_count', '>', 0)
             ->get();
 
-        // Get menu items
-        $menuItemsQuery = \App\Models\MenuItem::where('branch_id', $branch->id);
-
-        if ($menuId) {
-            $menuItemsQuery->where('menu_id', $menuId);
-        }
-
-        if ($filterCategories) {
-            $menuItemsQuery->where('item_category_id', $filterCategories);
-        }
-
-        if ($search) {
-            $menuItemsQuery->where('item_name', 'like', '%' . $search . '%');
-        }
-
-        $totalMenuItemsCount = $menuItemsQuery->count();
-        $menuItems = $menuItemsQuery->with(['taxes:id,tax_name,tax_percent'])
-            ->withCount(['variations', 'modifierGroups'])
-            ->limit($menuItemsLoaded)
-            ->get();
-
-        // Apply price context to menu items based on order type
-        if ($orderTypeId) {
-            $normalizedDeliveryAppId = ($selectedDeliveryApp === 'default' || !$selectedDeliveryApp) ? null : (int)$selectedDeliveryApp;
-            foreach ($menuItems as $menuItem) {
-                $menuItem->setPriceContext($orderTypeId, $normalizedDeliveryAppId);
-            }
-        }
+        $posMenuClientSideCatalog = true;
+        $totalMenuItemsCount = (int) MenuItem::where('branch_id', $branch->id)->count();
+        $menuItems = collect();
+        $menuItemsLoaded = $totalMenuItemsCount;
 
         // Other variables
         $pickupRange = $restaurant->pickup_days_range ?? 1;
@@ -1228,9 +1280,11 @@ class PosController extends Controller
         $confirmDeleteModal = false;
         $deleteOrderModal = false;
 
-        // Order type selection flag
-        $allowOrderTypeSelection = false;
-        $isWaiterLocked = $this->assignedWaiterFromTable($tableId) !== null;
+        $posOrderTypeSelectionPolicy = PosOrderTypeClientData::resolveSelectionPolicy($orderTypes, $deliveryPlatforms);
+        $allowOrderTypeChange = (bool) ($posOrderTypeSelectionPolicy['allowOrderTypeChange'] ?? true);
+        $allowOrderTypeSelection = $allowOrderTypeChange;
+        $isWaiterLocked = $this->assignedWaiterFromTable($tableId) !== null
+            || PosWaitersCache::actorIsRestrictedPosWaiter(auth()->user(), (int) $restaurant->id);
         $currentWaiter = $users->firstWhere('id', $selectWaiter) ?? \App\Models\User::find($selectWaiter);
         $waiterName = $currentWaiter?->name ?? __('modules.order.selectWaiter');
         $includeChargesInTaxBase = $restaurant->include_charges_in_tax_base ?? false;
@@ -1267,10 +1321,21 @@ class PosController extends Controller
 
         $posLoyaltyEnabled = $this->isLoyaltyEnabledForPos();
 
+        $tableSeatingCapacity = $this->resolveTableSeatingCapacity($tableId, $branch->id);
+
+        $modalScript = PosOrderTypeClientData::buildModalScriptPayload(
+            (int) $branch->id,
+            $branch,
+            $orderTypes,
+            $deliveryPlatforms
+        );
+        extract($modalScript);
+
         return view('pos.index', compact(
             'restaurant',
             'users',
             'taxes',
+            'waiterRunningOrdersMap',
             'deliveryExecutives',
             'deliveryExecutiveBusyMap',
             'deliveryPlatforms',
@@ -1302,6 +1367,7 @@ class PosController extends Controller
             'selectedDeliveryApp',
             'tableNo',
             'tableId',
+            'tableSeatingCapacity',
             'orderNote',
             'noOfPax',
             'selectWaiter',
@@ -1361,12 +1427,20 @@ class PosController extends Controller
             'currentWaiter',
             'waiterName',
             'allowOrderTypeSelection',
+            'allowOrderTypeChange',
+            'posOrderTypeSelectionPolicy',
             'showRestaurantClosedBanner',
             'restaurantClosedMessage',
             'loyaltyPointsAvailable',
             'loyaltyPointsRedeemed',
             'loyaltyDiscountAmount',
-            'posLoyaltyEnabled'
+            'posLoyaltyEnabled',
+            'posMenuClientSideCatalog',
+            'posOrderTypePriceMaps',
+            'posExtraChargesBySlug',
+            'posDeliveryDefaultFee',
+            'posOrderTypesForModal',
+            'posDeliveryPlatformsForModal'
         ));
     }
 
@@ -1459,6 +1533,69 @@ class PosController extends Controller
         }
 
         return ['pickupDate' => $pickupDate, 'pickupTime' => $pickupTime, 'isPastTime' => $isPastTime];
+    }
+
+    /**
+     * Seating capacity for the assigned table (AJAX POS sidebar validation).
+     */
+    private function resolveTableSeatingCapacity($tableId, int $branchId): ?int
+    {
+        if (empty($tableId)) {
+            return null;
+        }
+
+        $cap = Table::where('branch_id', $branchId)->whereKey($tableId)->value('seating_capacity');
+
+        return $cap !== null ? (int) $cap : null;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, OrderType>  $orderTypes
+     * @param  \Illuminate\Support\Collection<int, DeliveryPlatform>  $deliveryPlatforms
+     * @return array{
+     *     posOrderTypeSelectionPolicy: array,
+     *     allowOrderTypeChange: bool,
+     *     orderTypeId: ?int,
+     *     orderType: ?string,
+     *     orderTypeSlug: ?string,
+     * }
+     */
+    private function applyPosOrderTypeSelectionPolicy(
+        $orderTypes,
+        $deliveryPlatforms,
+        bool $changeOrderType,
+        bool $tableHasActiveOrder,
+        ?int $orderTypeId,
+        ?string $orderType,
+        ?string $orderTypeSlug,
+    ): array {
+        $policy = PosOrderTypeClientData::resolveSelectionPolicy($orderTypes, $deliveryPlatforms);
+
+        if (!$changeOrderType && !$tableHasActiveOrder) {
+            if ($policy['mode'] === 'locked_single' && !empty($policy['autoOrderTypeId'])) {
+                $autoOt = OrderType::find($policy['autoOrderTypeId']);
+                if ($autoOt && $autoOt->is_active) {
+                    $orderTypeId = (int) $autoOt->id;
+                    $orderType = $autoOt->type;
+                    $orderTypeSlug = $autoOt->slug;
+                }
+            } elseif ($policy['mode'] === 'delivery_only' && !empty($policy['autoOrderTypeId']) && !$orderTypeId) {
+                $autoOt = OrderType::find($policy['autoOrderTypeId']);
+                if ($autoOt && $autoOt->is_active) {
+                    $orderTypeId = (int) $autoOt->id;
+                    $orderType = $autoOt->type;
+                    $orderTypeSlug = $autoOt->slug;
+                }
+            }
+        }
+
+        return [
+            'posOrderTypeSelectionPolicy' => $policy,
+            'allowOrderTypeChange' => (bool) ($policy['allowOrderTypeChange'] ?? true),
+            'orderTypeId' => $orderTypeId,
+            'orderType' => $orderType,
+            'orderTypeSlug' => $orderTypeSlug,
+        ];
     }
 
 }

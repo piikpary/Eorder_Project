@@ -3,11 +3,19 @@
         <div class="text-base font-semibold text-gray-800 dark:text-white flex items-center gap-2 flex-wrap">
             @if (!is_null($reservation->table_id))
             <div class="flex items-center gap-2">
-                <div @class(['p-2 rounded-md tracking-wide', 'bg-skin-base/[0.2] text-skin-base' => (!is_null($reservation->table_id)), 'bg-yellow-200 text-yellow-800' => (is_null($reservation->table_id))])>
-                    <h3 wire:loading.class.delay='opacity-50'
-                        @class(['font-semibold'])>
+                <div @class([
+                    'min-w-[4.5rem] rounded-md px-3 py-2 text-center tracking-wide',
+                    'bg-skin-base/[0.2] text-skin-base' => ! is_null($reservation->table_id),
+                    'bg-yellow-200 text-yellow-800' => is_null($reservation->table_id),
+                ])>
+                    <h3 wire:loading.class.delay="opacity-50" class="font-semibold leading-tight">
                         {{ $reservation->table->table_code }}
                     </h3>
+                    @if ($reservation->table?->area)
+                    <p class="mt-0.5 text-xs font-medium leading-tight opacity-90">
+                        {{ $reservation->table->area->area_name }}
+                    </p>
+                    @endif
                 </div>
 
                 @if (user_can('Update Reservation'))
@@ -85,6 +93,15 @@
 
     </div>
 
+    @if ($reservation->area && (is_null($reservation->table_id) || ! $reservation->table?->area || $reservation->area_id !== $reservation->table->area_id))
+    <div class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt shrink-0" viewBox="0 0 16 16">
+            <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/>
+        </svg>
+        <span>@lang('modules.reservation.preferredArea'): <strong>{{ $reservation->area->area_name }}</strong></span>
+    </div>
+    @endif
+
     @if (!is_null($reservation->special_requests))
     <div class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 p-2">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square flex-shrink-0" viewBox="0 0 16 16">
@@ -112,7 +129,7 @@
 
 
     @if ($tableReservation)
-    <x-dialog-modal wire:model.live="showTableModal" maxWidth="2xl">
+    <x-dialog-modal wire:model.live="showTableModal" maxWidth="3xl">
         <x-slot name="title">
             @if ($tableReservation->table_id)
                 @lang('modules.reservation.changeTable')

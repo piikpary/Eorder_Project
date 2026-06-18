@@ -4,6 +4,8 @@ namespace App\Livewire\Forms;
 
 use Livewire\Component;
 use App\Models\CustomMenu;
+use App\Helper\Files;
+use Livewire\WithFileUploads;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
@@ -11,7 +13,7 @@ use Jantinnerezo\LivewireAlert\LivewireAlert;
 class DisableLanding extends Component
 {
 
-    use LivewireAlert;
+    use LivewireAlert, WithFileUploads;
 
     public $settings;
     public $disableLandingSite;
@@ -27,6 +29,7 @@ class DisableLanding extends Component
     public $metaKeyword;
     public $metaDescription;
     public $metaTitle;
+    public $metaImage;
     public $trixId;
     public $menuName;
     public $menuSlug;
@@ -84,7 +87,14 @@ class DisableLanding extends Component
                     }
                 }
             ],
+            'metaImage' => \App\Support\ImageUpload::mimesRule(),
         ]);
+
+        if ($this->metaImage) {
+            // Store a reasonably small/shareable image; UI shows a small preview.
+            $fileName = Files::uploadLocalOrS3($this->metaImage, 'meta-image', 600, 600);
+            $this->settings->meta_image = $fileName;
+        }
 
         $this->settings->disable_landing_site = $this->disableLandingSite;
         $this->settings->landing_type = $this->landingType;
@@ -110,6 +120,24 @@ class DisableLanding extends Component
             'showCancelButton' => false,
             'cancelButtonText' => __('app.close')
         ]);
+    }
+
+    public function removeMetaImage(): void
+    {
+        if (! $this->settings) {
+            return;
+        }
+
+        if (! empty($this->settings->meta_image)) {
+            Files::deleteFile($this->settings->meta_image, 'meta-image');
+        }
+
+        $this->settings->meta_image = null;
+        $this->settings->save();
+
+        $this->metaImage = null;
+
+        cache()->forget('global_setting');
     }
 
     public function showEditDynamicMenu($id)

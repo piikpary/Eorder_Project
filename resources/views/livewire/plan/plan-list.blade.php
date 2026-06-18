@@ -235,11 +235,56 @@
         </x-slot>
     </x-dialog-modal>
 
+    <!-- Stripe Embedded Card Modal -->
+    <x-dialog-modal wire:model.live="showStripeEmbeddedModal" maxWidth="lg">
+        <x-slot name="title">
+            @lang('modules.billing.stripe')
+        </x-slot>
+
+        <x-slot name="content">
+            <div class="space-y-4">
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                    {{ __('modules.billing.payNow') }}
+                </div>
+
+                <div>
+                    <x-label for="stripe_cardholder_name" value="Cardholder name" />
+                    <x-input id="stripe_cardholder_name" class="block mt-1 w-full" type="text" autocomplete="cc-name" />
+                </div>
+
+                <div>
+                    <x-label value="Card details" />
+                    <div id="stripe-card-element" class="mt-1 p-3 border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600"></div>
+                    <div id="stripe-card-errors" class="mt-2 text-sm text-red-600"></div>
+                </div>
+
+                <div id="stripe-embedded-loading" class="hidden text-sm text-gray-500 dark:text-gray-400">
+                    @lang('app.loading')
+                </div>
+            </div>
+        </x-slot>
+
+        <x-slot name="footer">
+            <div class="flex w-full justify-between gap-2">
+                <x-secondary-button type="button" wire:click="$toggle('showStripeEmbeddedModal')" wire:loading.attr="disabled">
+                    @lang('app.cancel')
+                </x-secondary-button>
+
+                <x-button type="button" id="stripe-embedded-pay-btn" wire:loading.attr="disabled">
+                    @lang('modules.billing.payNow')
+                </x-button>
+            </div>
+        </x-slot>
+    </x-dialog-modal>
+
     @if(!$free)
 
         @if($stripeSettings->razorpay_status == 1 || $stripeSettings->stripe_status == 1 || $stripeSettings->flutterwave_status == 1 || $stripeSettings->paypal_status == 1 || $stripeSettings->payfast_status == 1 || $stripeSettings->paystack_status == 1 || $stripeSettings->xendit_status == 1 || $stripeSettings->paddle_status == 1 || $stripeSettings->mollie_status == 1 || $stripeSettings->tap_status == 1)
             @push('scripts')
                 <script src="https://code.jquery.com/jquery-3.7.0.min.js" integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+                @if($stripeSettings->stripe_status == 1)
+                    <script src="https://js.stripe.com/v3/"></script>
+                @endif
                 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
                 <script src="https://checkout.flutterwave.com/v3.js"></script>
                 <script src="https://www.paypal.com/sdk/js?client-id={{ $stripeSettings->paypal_client }}&currency={{ $selectedCurrencyCode }}"></script>
@@ -290,12 +335,106 @@
                             });
 
                             // Stripe payment handling
-                            $wire.on('stripePlanPaymentInitiated', (payment) => {
-                                document.getElementById('license_payment').value = payment.payment.id;
-                                document.getElementById('package_type').value = payment.payment.package_type;
-                                document.getElementById('package_id').value = payment.payment.package_id;
-                                document.getElementById('currency_id').value = payment.payment.currency_id;
-                                document.getElementById('license-payment-form').submit();
+                            let stripe = null;
+                            let stripeCard = null;
+                            let stripeClientSecret = null;
+                            let stripePaymentId = null;
+
+                            async function stripeEmbeddedSetup(paymentId) {
+                                const loadingEl = document.getElementById('stripe-embedded-loading');
+                                loadingEl?.classList.remove('hidden');
+
+                                const response = await fetch("{{ route('stripe.license_embedded_setup') }}", {
+                                    method: "POST",
+                                    credentials: "same-origin",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "X-CSRF-TOKEN": "{{ csrf_token() }}",
+                                        "Accept": "application/json",
+                                    },
+                                    body: JSON.stringify({ payment_id: paymentId }),
+                                });
+
+                                const data = await response.json();
+                                loadingEl?.classList.add('hidden');
+
+                                if (!response.ok) {
+                                    throw new Error(data?.message || "Unable to initialize payment");
+                                }
+
+                                return data;
+                            }
+
+                            function mountStripeCard(publishableKey) {
+                                if (!window.Stripe) {
+                                    throw new Error("Stripe.js not loaded");
+                                }
+
+                                if (!stripe || stripe._publishableKey !== publishableKey) {
+                                    stripe = Stripe(publishableKey);
+                                    stripe._publishableKey = publishableKey;
+                                }
+
+                                if (stripeCard) {
+                                    try {
+                                        stripeCard.unmount();
+                                        stripeCard.destroy();
+                                    } catch (e) {
+                                    }
+                                    stripeCard = null;
+                                }
+
+                                const elements = stripe.elements();
+                                const cardElement = elements.create("card", { hidePostalCode: true });
+                                const container = document.getElementById("stripe-card-element");
+                                container.innerHTML = "";
+                                cardElement.mount("#stripe-card-element");
+                                stripeCard = cardElement;
+                            }
+
+                            async function confirmStripePayment() {
+                                const errorEl = document.getElementById("stripe-card-errors");
+                                const payBtn = document.getElementById("stripe-embedded-pay-btn");
+                                const nameEl = document.getElementById("stripe_cardholder_name");
+
+                                errorEl.innerText = "";
+                                payBtn.disabled = true;
+
+                                try {
+                                    const result = await stripe.confirmCardPayment(stripeClientSecret, {
+                                        payment_method: {
+                                            card: stripeCard,
+                                            billing_details: {
+                                                name: nameEl?.value || "",
+                                            }
+                                        }
+                                    });
+
+                                    if (result.error) {
+                                        errorEl.innerText = result.error.message || "Payment failed";
+                                        payBtn.disabled = false;
+                                        return;
+                                    }
+
+                                    window.location.href = "{{ route('stripe.license_embedded_return') }}" + "?payment_id=" + encodeURIComponent(stripePaymentId);
+                                } catch (e) {
+                                    errorEl.innerText = e.message || "Payment failed";
+                                    payBtn.disabled = false;
+                                }
+                            }
+
+                            document.getElementById("stripe-embedded-pay-btn")?.addEventListener("click", confirmStripePayment);
+
+                            $wire.on('openStripeEmbeddedModal', async (payload) => {
+                                try {
+                                    stripePaymentId = payload.paymentId ?? payload[0]?.paymentId;
+                                    const setup = await stripeEmbeddedSetup(stripePaymentId);
+                                    stripeClientSecret = setup.client_secret;
+                                    mountStripeCard(setup.publishable_key);
+                                } catch (e) {
+                                    console.error(e);
+                                    window.location.href = "{{ route('dashboard') }}";
+                                }
                             });
 
                             $wire.on('redirectToFlutterwave', (params) => {

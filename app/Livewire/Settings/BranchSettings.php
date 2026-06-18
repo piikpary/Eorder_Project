@@ -2,14 +2,10 @@
 
 namespace App\Livewire\Settings;
 
-use App\Models\Menu;
 use App\Models\Branch;
+use App\Services\BranchMenuCloneService;
 use Livewire\Component;
-use App\Models\MenuItem;
 use Livewire\Attributes\On;
-use App\Models\ItemCategory;
-use App\Models\KotPlace;
-use App\Models\ModifierGroup;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 
 class BranchSettings extends Component
@@ -19,8 +15,8 @@ class BranchSettings extends Component
     // Form fields
     public $branchName;
     public $branchAddress;
-    public $branchCrNumber;
-    public $branchVatNumber;
+    public string $branchCrNumber = '';
+    public string $branchVatNumber = '';
     public $branchLat = '26.9125';
     public $branchLng = '75.7875';
     public $isEditing = false;
@@ -37,6 +33,7 @@ class BranchSettings extends Component
     public $cloneReservationSettings = false;
     public $cloneDeliverySettings = false;
     public $cloneKotSettings = false;
+    public bool $showCloneDependencyNote = false;
     public $menus;
     public $menu;
 
@@ -65,6 +62,7 @@ class BranchSettings extends Component
         $this->cloneReservationSettings = false;
         $this->cloneDeliverySettings = false;
         $this->cloneKotSettings = false;
+        $this->showCloneDependencyNote = false;
     }
 
     private function checkBranchLimit(): bool
@@ -119,8 +117,8 @@ class BranchSettings extends Component
         $this->activeBranch = $branch;
         $this->branchName = $branch->name;
         $this->branchAddress = $branch->address;
-        $this->branchCrNumber = $branch->cr_number ?? '';
-        $this->branchVatNumber = $branch->vat_number ?? '';
+        $this->branchCrNumber = (string) ($branch->cr_number ?? '');
+        $this->branchVatNumber = (string) ($branch->vat_number ?? '');
         $this->branchLat = $branch->lat ?? '26.9125';
         $this->branchLng = $branch->lng ?? '75.7875';
         $this->formMode = 'edit';
@@ -182,6 +180,8 @@ class BranchSettings extends Component
             $rules = [
             'branchName'    => 'required|unique:branches,name,null,id,restaurant_id,' . restaurant()->id,
             'branchAddress' => 'required',
+            'branchCrNumber' => 'nullable|string|max:50',
+            'branchVatNumber' => 'nullable|string|max:50',
             'branchLat'     => 'required|numeric|between:-90,90',
             'branchLng'     => 'required|numeric|between:-180,180',
             ];
@@ -205,8 +205,8 @@ class BranchSettings extends Component
                 'name'          => $this->branchName,
                 'restaurant_id' => restaurant()->id,
                 'address'       => $this->branchAddress,
-                'cr_number'     => $this->branchCrNumber ?: null,
-                'vat_number'    => $this->branchVatNumber ?: null,
+                'cr_number'     => $this->branchCrNumber !== '' ? $this->branchCrNumber : null,
+                'vat_number'    => $this->branchVatNumber !== '' ? $this->branchVatNumber : null,
                 'lat'           => $this->branchLat,
                 'lng'           => $this->branchLng,
                 'cloned_branch_name' => $this->cloneData ? Branch::find($this->cloneData)->name : null,
@@ -237,6 +237,8 @@ class BranchSettings extends Component
             $rules = [
             'branchName'    => 'required|unique:branches,name,' . $this->activeBranchId . ',id,restaurant_id,' . restaurant()->id,
             'branchAddress' => 'required',
+            'branchCrNumber' => 'nullable|string|max:50',
+            'branchVatNumber' => 'nullable|string|max:50',
             'branchLat'     => 'required|numeric|between:-90,90',
             'branchLng'     => 'required|numeric|between:-180,180',
             ];
@@ -260,8 +262,8 @@ class BranchSettings extends Component
                 'name'          => $this->branchName,
                 'restaurant_id' => restaurant()->id,
                 'address'       => $this->branchAddress,
-                'cr_number'     => $this->branchCrNumber ?: null,
-                'vat_number'    => $this->branchVatNumber ?: null,
+                'cr_number'     => $this->branchCrNumber !== '' ? $this->branchCrNumber : null,
+                'vat_number'    => $this->branchVatNumber !== '' ? $this->branchVatNumber : null,
                 'lat'           => $this->branchLat,
                 'lng'           => $this->branchLng,
                 'cloned_branch_name' => $this->cloneData ? Branch::find($this->cloneData)->name : null,
@@ -292,143 +294,81 @@ class BranchSettings extends Component
         $this->resetForm();
     }
 
-    protected function cloneBranchData($sourceBranchId, Branch $newBranch)
+    protected function cloneBranchData($sourceBranchId, Branch $newBranch): void
     {
-        if (!$sourceBranchId) {
+        if (! $sourceBranchId) {
             return;
         }
 
-        // if ($this->cloneDeliverySettings && $sourceBranch->deliverySetting) {
-        //     $clonedSetting = $sourceBranch->deliverySetting->replicate();
-        //     $clonedSetting->branch_id = $newBranch->id;
-        //     $clonedSetting->save();
-        // }
+        app(BranchMenuCloneService::class)->clone((int) $sourceBranchId, $newBranch, [
+            'clone_menu' => $this->cloneMenu,
+            'clone_categories' => $this->clonecategories,
+            'clone_menu_items' => $this->cloneMenuItems,
+            'clone_item_modifiers' => $this->cloneItemModifires,
+            'clone_modifier_groups' => $this->cloneModifiersGroups,
+        ]);
+    }
 
-        // Maps to maintain old ID => new ID
-        $menuMap = [];
-        $categoryMap = [];
-        $itemMap = [];
+    public function handleCloneMenuItemsChange(): void
+    {
+        if ($this->cloneMenuItems) {
+            $autoSelected = false;
 
-        // Clone Menus
-        $menus = Menu::withoutGlobalScopes()->where('branch_id', $sourceBranchId)->get();
-
-        if ($this->cloneMenu && $menus->isNotEmpty()) {
-
-            foreach ($menus as $menu) {
-                Menu::withoutEvents(function () use ($menu, $newBranch, &$menuMap) {
-                    $clone = $menu->replicate();
-                    $clone->branch_id = $newBranch->id;
-                    $clone->save();
-                    $menuMap[$menu->id] = $clone->id;
-                });
+            if (! $this->cloneMenu) {
+                $this->cloneMenu = true;
+                $autoSelected = true;
             }
 
-        }
-
-        // Clone Item Categories
-        $categories = ItemCategory::withoutGlobalScopes()->where('branch_id', $sourceBranchId)->get();
-
-        if ($this->clonecategories && $categories->isNotEmpty()) {
-            foreach ($categories as $category) {
-                ItemCategory::withoutEvents(function () use ($category, $newBranch, &$categoryMap) {
-                    $clone = $category->replicate();
-                    $clone->branch_id = $newBranch->id;
-                    $clone->save();
-                    $categoryMap[$category->id] = $clone->id;
-                });
+            if (! $this->clonecategories) {
+                $this->clonecategories = true;
+                $autoSelected = true;
             }
+
+            $this->showCloneDependencyNote = $autoSelected;
+        } else {
+            $this->cloneItemModifires = false;
+            $this->showCloneDependencyNote = false;
         }
+    }
 
-        // Clone Menu Items (once only)
-        $menuItems = MenuItem::with('modifiers', 'taxes')->withoutGlobalScopes()->where('branch_id', $sourceBranchId)->get();
+    public function handleCloneItemModifiersChange(): void
+    {
+        if ($this->cloneItemModifires) {
+            $autoSelected = false;
 
-        if ($this->cloneMenuItems && $menuItems->isNotEmpty()) {
-
-            foreach ($menuItems as $item) {
-                MenuItem::withoutEvents(function () use ($item, $newBranch, $menuMap, $categoryMap, &$itemMap) {
-                    $clone = $item->replicate();
-                    $clone->branch_id = $newBranch->id;
-                    // Update kot_place_id according to new branch id
-
-                    $kotPlace = KotPlace::withoutGlobalScopes()
-                        ->where('branch_id', $newBranch->id)
-                        ->first();
-                    $clone->kot_place_id = $kotPlace->id ?? null;
-
-                    $clone->menu_id = $menuMap[$item->menu_id] ?? null;
-                    $clone->item_category_id = $categoryMap[$item->item_category_id] ?? null;
-                    $clone->save();
-
-                    $itemMap[$item->id] = $clone->id;
-
-                    // Clone taxes associated with the menu item (only when tax_mode is 'item')
-                    if ($item->taxes && $item->taxes->isNotEmpty()) {
-                        $taxIds = $item->taxes->pluck('id')->toArray();
-                        $clone->taxes()->sync($taxIds);
-                    }
-
-                    return $clone;
-                });
-            }
-        }
-
-        // Clone Item Modifiers (after items are cloned and mapped)
-        if ($this->cloneItemModifires && $menuItems->isNotEmpty()) {
-            foreach ($menuItems as $item) {
-                $clonedItemId = $itemMap[$item->id] ?? null;
-
-                if ($clonedItemId && $item->modifiers) {
-                    foreach ($item->modifiers as $modifier) {
-                        $clonedModifier = $modifier->replicate();
-                        $clonedModifier->menu_item_id = $clonedItemId;
-                        $clonedModifier->save();
-                    }
+            foreach ([
+                'cloneMenuItems' => true,
+                'cloneMenu' => true,
+                'clonecategories' => true,
+                'cloneModifiersGroups' => true,
+            ] as $property => $value) {
+                if (! $this->{$property}) {
+                    $this->{$property} = $value;
+                    $autoSelected = true;
                 }
             }
-        }
 
-        // Clone Modifier Groups
-            $modifierGroups = ModifierGroup::withoutGlobalScopes()->where('branch_id', $sourceBranchId)->get();
-
-        if ($this->cloneModifiersGroups && $modifierGroups->isNotEmpty()) {
-            foreach ($modifierGroups as $group) {
-                $clonedGroup = $group->replicate();
-                $clonedGroup->branch_id = $newBranch->id;
-                $clonedGroup->save();
-            }
+            $this->showCloneDependencyNote = $autoSelected;
+        } else {
+            $this->showCloneDependencyNote = false;
         }
     }
 
-    public function handleCloneMenuItemsChange()
+    public function dismissCloneDependencyNote(): void
     {
-        // If menu items are selected, ensure menu is also selected
-        if ($this->cloneMenuItems && !$this->cloneMenu && !$this->clonecategories) {
-            $this->cloneMenu = true;
-            $this->clonecategories = true;
-        }
-    }
-
-    public function handleCloneItemModifiersChange()
-    {
-        // If item modifiers are selected, ensure menu items and menu are also selected
-        if ($this->cloneItemModifires) {
-
-            if (!$this->cloneMenuItems && !$this->cloneMenu && !$this->clonecategories) {
-                $this->cloneMenuItems = true;
-                $this->cloneMenu = true;
-                $this->clonecategories = true;
-            }
-        }
+        $this->showCloneDependencyNote = false;
     }
 
     public function render()
     {
         $branches = Branch::where('restaurant_id', restaurant()->id)->get();
         $mapApiKey = global_setting()->google_map_api_key ?? null;
+        $mapProvider = global_setting()->map_provider ?? 'google';
 
         return view('livewire.settings.branch-settings', [
             'branches' => $branches,
-            'mapApiKey' => $mapApiKey
+            'mapApiKey' => $mapApiKey,
+            'mapProvider' => $mapProvider,
         ]);
     }
 

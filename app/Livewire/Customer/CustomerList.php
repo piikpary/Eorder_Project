@@ -4,7 +4,6 @@ namespace App\Livewire\Customer;
 
 use Livewire\Component;
 use App\Models\Customer;
-use Livewire\Attributes\On;
 use App\Exports\CustomerExport;
 use App\Imports\CustomerImport;
 use App\Imports\CustomersImport;
@@ -20,7 +19,6 @@ class CustomerList extends Component
     use WithFileUploads;
     use LivewireAlert;
     public $search;
-    public $showAddCustomer;
     public $file;
     public $showImportCustomer;
 
@@ -36,12 +34,6 @@ class CustomerList extends Component
         }
     }
 
-
-    #[On('closeAddCustomer')]
-    public function closeAddCustomer()
-    {
-        $this->showAddCustomer = false;
-    }
 
     public function closeImportCustomer()
     {

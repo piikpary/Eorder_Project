@@ -4,6 +4,7 @@ namespace App\Livewire\Forms;
 
 use App\Models\Country;
 use App\Models\DeliveryExecutive;
+use App\Models\User;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
 
@@ -15,9 +16,10 @@ class AddExecutive extends Component
     public $memberName;
     public $memberEmail;
     public $memberPhone;
-    public $status = 'available';
+    public $status = DeliveryExecutive::STATUS_ACTIVE;
     public $availabilityStatus = 1;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -28,6 +30,12 @@ class AddExecutive extends Component
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->phoneCode = $detectedPhoneCode
+            ?? restaurant()->country->phonecode
+            ?? $this->allPhoneCodes->first();
     }
 
     public function updatedPhoneCodeIsOpen($value)
@@ -64,6 +72,7 @@ class AddExecutive extends Component
                 'regex:/^[0-9\s]{5,20}$/',
                 'unique:delivery_executives,phone'
             ],
+            'status' => 'required|in:' . DeliveryExecutive::STATUS_ACTIVE . ',' . DeliveryExecutive::STATUS_INACTIVE,
             'availabilityStatus' => 'required|in:0,1',
         ]);
 
@@ -81,7 +90,7 @@ class AddExecutive extends Component
         $this->memberEmail = '';
         $this->memberPhone = '';
         $this->phoneCode = '';
-        $this->status = 'available';
+        $this->status = DeliveryExecutive::STATUS_ACTIVE;
         $this->availabilityStatus = 1;
 
         $this->dispatch('hideAddStaff');

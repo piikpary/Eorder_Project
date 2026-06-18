@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Shop;
 
+use App\Concerns\PrintsShopKot;
+use App\Services\ShopCartKotPrintUrls;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Razorpay\Api\Api;
@@ -28,10 +30,13 @@ use Mollie\Api\MollieApiClient;
 use App\Models\AdminMolliePayment;
 use App\Models\TapPayment;
 use App\Services\RestaurantAvailabilityService;
+use App\Traits\PrinterSetting;
 
 class OrderDetail extends Component
 {
     use LivewireAlert;
+    use PrinterSetting;
+    use PrintsShopKot;
 
     // Note: HasLoyaltyIntegration trait is conditionally loaded
     // If the Loyalty module doesn't exist, stub methods below handle it gracefully
@@ -45,6 +50,7 @@ class OrderDetail extends Component
     public $paymentGateway;
     public $razorpayStatus;
     public $stripeStatus;
+    public bool $showStripeOrderPaymentModal = false;
     public $flutterwaveStatus;
     public $showPaymentModal = false;
     public $paymentOrder;
@@ -116,6 +122,8 @@ class OrderDetail extends Component
         if (!$customer && $this->restaurant->customer_login_required) {
             return redirect()->route('home');
         }
+
+        $this->restaurant->loadMissing('euAllergenSetting');
 
         $this->shopBranch = request()->filled('branch')
             ? Branch::find(request()->branch)
@@ -1994,7 +2002,107 @@ class OrderDetail extends Component
         }
 
         $this->total = floatval($this->paymentOrder->total) - floatval($this->paymentOrder->amount_paid ?: 0);
+
+        $options = $this->getActivePaymentOptions();
+
+        if (count($options) === 1) {
+            $this->autoStartSinglePaymentOption($options[0]);
+            return;
+        }
+
         $this->showPaymentModal = true;
+    }
+
+    private function getActivePaymentOptions(): array
+    {
+        $pg = $this->paymentGateway;
+
+        if (!$pg) {
+            return [];
+        }
+
+        $options = [];
+
+        if ((bool) ($pg->stripe_status ?? false)) {
+            $options[] = 'stripe';
+        }
+        if ((bool) ($pg->razorpay_status ?? false)) {
+            $options[] = 'razorpay';
+        }
+        if ((bool) ($pg->flutterwave_status ?? false)) {
+            $options[] = 'flutterwave';
+        }
+        if ((bool) ($pg->paypal_status ?? false)) {
+            $options[] = 'paypal';
+        }
+        if ((bool) ($pg->payfast_status ?? false)) {
+            $options[] = 'payfast';
+        }
+        if ((bool) ($pg->paystack_status ?? false)) {
+            $options[] = 'paystack';
+        }
+        if ((bool) ($pg->xendit_status ?? false)) {
+            $options[] = 'xendit';
+        }
+        if ((bool) ($pg->epay_status ?? false)) {
+            $options[] = 'epay';
+        }
+        if ((bool) ($pg->mollie_status ?? false)) {
+            $options[] = 'mollie';
+        }
+        if ((bool) ($pg->tap_status ?? false)) {
+            $options[] = 'tap';
+        }
+
+        if ((bool) ($pg->is_qr_payment_enabled ?? false) && !empty($pg->qr_code_image_url)) {
+            $options[] = 'qr';
+        }
+
+        if (!empty($this->offlinePaymentMethods) && count($this->offlinePaymentMethods) > 0) {
+            foreach ($this->offlinePaymentMethods as $method) {
+                if (!empty($method?->name)) {
+                    $options[] = 'offline:' . $method->name;
+                }
+            }
+        }
+
+        return $options;
+    }
+
+    private function autoStartSinglePaymentOption(string $option): void
+    {
+        if ($option === 'qr') {
+            $this->showPaymentModal = true;
+            $this->showQrCode = true;
+            $this->showPaymentDetail = false;
+            $this->selectedOfflinePaymentMethod = null;
+            return;
+        }
+
+        if (str_starts_with($option, 'offline:')) {
+            $methodName = str_replace('offline:', '', $option);
+            $this->showPaymentModal = true;
+            $this->showQrCode = false;
+            $this->showPaymentDetail = true;
+            $this->selectedOfflinePaymentMethod = $methodName;
+            return;
+        }
+
+        $this->showPaymentModal = false;
+
+        match ($option) {
+            'stripe' => $this->initiateStripePayment($this->paymentOrder->id),
+            'razorpay' => $this->initiatePayment($this->paymentOrder->id),
+            'flutterwave' => $this->initiateFlutterwavePayment($this->paymentOrder->id),
+            'paypal' => $this->initiatePaypalPayment($this->paymentOrder->id),
+            'payfast' => $this->initiatePayfastPayment($this->paymentOrder->id),
+            'paystack' => $this->initiatePaystackPayment($this->paymentOrder->id),
+            'xendit' => $this->initiateXenditPayment($this->paymentOrder->id),
+            'epay' => $this->initiateEpayPayment($this->paymentOrder->id),
+            'mollie' => $this->initiateMolliePayment($this->paymentOrder->id),
+            'tap' => $this->initiateTapPayment($this->paymentOrder->id),
+            default => null,
+        };
     }
 
     public function hidePaymentModal()
@@ -2070,7 +2178,14 @@ class OrderDetail extends Component
             'amount' => $this->total
         ]);
 
-        $this->dispatch('stripePaymentInitiated', payment: $payment);
+        $this->showPaymentModal = false;
+        $this->showStripeOrderPaymentModal = true;
+        $this->dispatch('stripeOrderEmbeddedInit', stripePaymentId: $payment->id);
+    }
+
+    public function closeStripeOrderPaymentModal(): void
+    {
+        $this->showStripeOrderPaymentModal = false;
     }
 
     #[On('razorpayPaymentCompleted')]
@@ -2110,6 +2225,14 @@ class OrderDetail extends Component
                     'branch_id' => $this->shopBranch->id
                 ]
             );
+
+            if ($order->placed_via === 'shop' && ShopCartKotPrintUrls::shouldPrintKotAfterShopOnlinePayment($order, $this->restaurant)) {
+                $this->printKot($order->fresh([
+                    'kot.items.menuItem',
+                    'kot.items.menuItemVariation',
+                    'kot.items.modifierOptions',
+                ]));
+            }
 
             $this->sendNotifications($order);
 

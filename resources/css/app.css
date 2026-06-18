@@ -296,3 +296,14 @@
 .dark-pikaday .is-disabled .pika-button {
     opacity: 0.4;
 }
+
+/* SweetAlert2 toast should not block underlying clicks on POS */
+.swal2-container.swal2-top-end,
+.swal2-container.swal2-top-right,
+.swal2-container.swal2-top-left {
+    pointer-events: none !important;
+}
+
+.swal2-container .swal2-popup.swal2-toast {
+    pointer-events: auto !important;
+}

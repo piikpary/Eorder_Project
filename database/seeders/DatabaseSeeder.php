@@ -51,6 +51,8 @@ class DatabaseSeeder extends Seeder
                 $this->call(AreaSeeder::class, false, ['branch' => $branch]);
                 $this->call(TableSeeder::class, false, ['branch' => $branch]);
                 $this->call(DeliveryExecutiveSeeder::class, false, ['branch' => $branch]);
+                $this->call(CustomerSeeder::class, false, ['restaurant' => $restaurant, 'branch' => $branch]);
+                $this->call(ReservationSeeder::class, false, ['branch' => $branch]);
                 $this->call(MenuItemSeeder::class, false, ['branch' => $branch]);
                 $this->call(OrderSeeder::class, false, ['branch' => $branch]);
 
@@ -66,5 +68,7 @@ class DatabaseSeeder extends Seeder
                 ]);
             }
         }
+
+        cache()->clear();
     }
 }

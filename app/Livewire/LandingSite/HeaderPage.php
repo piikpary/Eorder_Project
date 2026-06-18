@@ -78,7 +78,7 @@ class HeaderPage extends Component
             'languageSettingid' => 'required',
             'headerTitle' => 'required',
             'headerDescription' => 'required',
-            'headerImage' => $this->existingImageUrl ? '' : 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
+            'headerImage' => $this->existingImageUrl ? '' : \App\Support\ImageUpload::requiredMimesRule()
         ]);
         $frontDetail = FrontDetail::updateOrCreate(
             [

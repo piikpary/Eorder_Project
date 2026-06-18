@@ -5,6 +5,7 @@ namespace App\Livewire\Forms;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Country;
+use App\Services\Pos\PosWaitersCache;
 use Livewire\Component;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Illuminate\Support\Facades\Hash;
@@ -20,6 +21,7 @@ class EditStaff extends Component
     public $memberRole;
     public $phoneNumber;
     public $restaurantPhoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -39,6 +41,12 @@ class EditStaff extends Component
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->restaurantPhoneCode) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->restaurantPhoneCode = $detectedPhoneCode;
+        }
     }
 
     public function updatedPhoneCodeIsOpen($value)
@@ -91,7 +99,7 @@ class EditStaff extends Component
 
         $user->syncRoles([$this->memberRole]);
 
-        cache()->forget('waiters_' . $user->restaurant_id);
+        PosWaitersCache::forgetForRestaurant((int) $user->restaurant_id);
 
         // Reset the value
         $this->memberName = '';

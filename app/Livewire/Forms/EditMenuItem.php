@@ -13,6 +13,7 @@ use App\Models\MenuItemVariation;
 use App\Scopes\AvailableMenuItemScope;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use App\Models\Tax;
+use App\Services\Pos\PosBranchCacheInvalidation;
 
 class EditMenuItem extends Component
 {
@@ -164,11 +165,11 @@ class EditMenuItem extends Component
     {
         if ($this->itemImageTemp) {
             $this->validate([
-                'itemImageTemp' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+                'itemImageTemp' => \App\Support\ImageUpload::IMAGE_MIMES_MAX_2048,
             ]);
 
             // Check image dimensions
-            $imageInfo = getimagesize($this->itemImageTemp->getRealPath());
+            $imageInfo = @getimagesize($this->itemImageTemp->getRealPath());
             if ($imageInfo) {
                 $width = $imageInfo[0];
                 $height = $imageInfo[1];
@@ -274,6 +275,11 @@ class EditMenuItem extends Component
         // Sync taxes if tax_mode is 'item'
         if (restaurant()->tax_mode === 'item') {
             $this->menuItem->taxes()->sync($this->selectedTaxes);
+            if (function_exists('restaurant') && restaurant()) {
+                PosBranchCacheInvalidation::invalidateForRestaurant(restaurant());
+            } else {
+                PosBranchCacheInvalidation::invalidateForBranch(function_exists('branch') && branch() ? (int) branch()->id : null);
+            }
         }
 
         // Efficiently update translations - only update what has changed
@@ -311,9 +317,20 @@ class EditMenuItem extends Component
         }
 
         if ($this->itemImageTemp) {
+            $oldImage = $this->menuItem->image;
+            $newImage = Files::uploadLocalOrS3($this->itemImageTemp, 'item', width: 350, height: 350);
+
             $this->menuItem->update([
-                'image' => Files::uploadLocalOrS3($this->itemImageTemp, 'item', width: 350, height: 350),
+                'image' => $newImage,
             ]);
+
+            if (! empty($oldImage) && $oldImage !== $newImage) {
+                MenuItem::deleteImageFileIfUnreferenced($oldImage);
+            }
+
+            if ($this->menuItem->branch_id) {
+                PosBranchCacheInvalidation::invalidateForBranch((int) $this->menuItem->branch_id);
+            }
         }
 
         if ($this->hasVariations) {
@@ -354,6 +371,12 @@ class EditMenuItem extends Component
         } else {
             // If variations are now disabled, delete all old variations
             MenuItemVariation::where('menu_item_id', $this->menuItem->id)->delete();
+        }
+
+        // Mass updates above bypass MenuItemObserver; sync server POS caches + bump tax revision
+        // so Blade POS clears localStorage catalog on next load (syncPosTaxRevisionCache).
+        if ($this->menuItem && $this->menuItem->branch_id) {
+            PosBranchCacheInvalidation::invalidateForBranch((int) $this->menuItem->branch_id);
         }
 
         $this->dispatch('hideEditMenuItem');

@@ -11,10 +11,10 @@
 
 
     <div >
-        <div class="flex items-end justify-between cursor-pointer mb-4">
+        <div class="mb-4 flex flex-wrap items-start justify-between gap-3 cursor-pointer">
             <div class="flex items-center min-w-0">
                 <div class="space-y-2">
-                    <p class="font-medium text-gray-900 truncate dark:text-white flex gap-2 ">
+                    <p class="flex flex-wrap items-center gap-2 font-medium text-gray-900 dark:text-white">
 
                             {{ $order->show_formatted_order_number }}
 
@@ -44,7 +44,7 @@
                     @endif
                 </div>
             </div>
-            <div class="inline-flex flex-col text-right text-base font-semibold text-gray-900 dark:text-white">
+            <div class="inline-flex w-full flex-col text-left text-base font-semibold text-gray-900 dark:text-white sm:w-auto sm:text-right">
                 <div>{{ currency_format($order->total, $restaurant->currency_id) }}</div>
                 <div class="text-xs text-gray-500 font-light">@lang('modules.order.includeTax')</div>
             </div>
@@ -52,29 +52,33 @@
 
         <div
             class="w-full divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+            @php
+                $orderSuccessEuSelectable = $restaurant ? $restaurant->selectableEuAllergenKeys() : [];
+                $orderSuccessEuEnabled = count($orderSuccessEuSelectable) > 0;
+            @endphp
             @foreach ($order->items as $key => $item)
             <div class="space-y-4 p-3">
-                <div class="flex justify-between items-center gap-4">
-                    <div class="flex gap-4 items-center">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <div class="flex min-w-0 items-start gap-3 sm:gap-4">
                         <a class="shrink-0">
                             <img class="w-12 h-12 rounded-md object-cover shadow-sm" src="{{ $item->menuItem->item_photo_url }}"
                                 alt="{{ $item->menuItem->item_name }}" />
                         </a>
 
-                        <a class="min-w-0 flex flex-col font-medium text-gray-900  dark:text-white">
-                            <div class="text-gray-900 dark:text-white inline-flex items-center">
+                        <a class="min-w-0 flex-1 flex flex-col font-medium text-gray-900 dark:text-white">
+                            <div class="inline-flex items-center text-gray-900 dark:text-white break-words">
                                 {{ $item->menuItem->item_name }}
                             </div>
-                            <div class="text-xs text-gray-600 dark:text-white inline-flex items-center">
+                            <div class="inline-flex items-center text-xs text-gray-600 dark:text-white break-words">
                                 {{ (isset($item->menuItemVariation) ? $item->menuItemVariation->variation : '')
                                 }}
                             </div>
                             @if($item->modifierOptions->isNotEmpty())
                             <div class="text-xs text-gray-600 dark:text-white">
                                 @foreach ($item->modifierOptions as $modifier)
-                                <div class="flex items-center justify-between text-xs mb-1 py-0.5 px-1 border-l-2 border-blue-500 bg-gray-200 dark:bg-gray-800 rounded-md">
-                                    <span class="text-gray-900 dark:text-white">{{ $modifier->name }}</span>
-                                    <span class="text-gray-600 dark:text-gray-300">{{ currency_format($modifier->price, $restaurant->currency_id) }}</span>
+                                <div class="mb-1 flex items-start justify-between gap-2 rounded-md border-l-2 border-blue-500 bg-gray-200 px-1 py-0.5 text-xs dark:bg-gray-800">
+                                    <span class="break-words text-gray-900 dark:text-white">{{ $modifier->name }}</span>
+                                    <span class="whitespace-nowrap text-gray-600 dark:text-gray-300">{{ currency_format($modifier->price, $restaurant->currency_id) }}</span>
                                 </div>
                                 @endforeach
                             </div>
@@ -85,10 +89,66 @@
                                     {{ $item->menuItem->preparation_time }} @lang('modules.menu.minutes')
                                 </div>
                             @endif
+
+                            @if ($orderSuccessEuEnabled && !empty($item->menuItem->eu_allergen_keys))
+                                @php
+                                    $osLineAllergens = array_values(array_unique(array_intersect(
+                                        \App\Support\EuAnnexIiAllergens::keys(),
+                                        $orderSuccessEuSelectable,
+                                        array_filter((array) $item->menuItem->eu_allergen_keys, 'is_string')
+                                    )));
+                                @endphp
+                                @if (count($osLineAllergens) > 0)
+                                    <div class="mt-1.5 flex w-full min-w-0 flex-wrap gap-1.5"
+                                        role="group"
+                                        aria-label="{{ __('modules.settings.euAllergensCustomerDisplayHeading') }}">
+                                        @foreach ($osLineAllergens as $osAllergenKey)
+                                            @php
+                                                $osAllergenLabel = __(\App\Support\EuAnnexIiAllergens::langKey($osAllergenKey));
+                                            @endphp
+                                            <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-200/85 bg-amber-50/95 px-2 py-1 dark:border-amber-700/50 dark:bg-amber-950/35">
+                                                <img src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($osAllergenKey) }}"
+                                                    alt=""
+                                                    class="h-4 w-4 shrink-0 object-contain"
+                                                    width="16"
+                                                    height="16"
+                                                    loading="lazy" />
+                                                <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-gray-800 dark:text-gray-100 sm:max-w-[14rem]">{{ $osAllergenLabel }}</span>
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            @endif
+
+                            @php
+                                $osLineDietary = \App\Support\DietaryLabels::normalize(
+                                    is_array($item->menuItem->dietary_labels ?? null) ? $item->menuItem->dietary_labels : []
+                                );
+                            @endphp
+                            @if (count($osLineDietary) > 0)
+                                <div class="mt-1.5 flex w-full min-w-0 flex-wrap gap-1.5"
+                                    role="group"
+                                    aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}">
+                                    @foreach ($osLineDietary as $osDietaryKey)
+                                        @php
+                                            $osDietaryLabel = __(\App\Support\DietaryLabels::langKey($osDietaryKey));
+                                        @endphp
+                                        <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200/85 bg-emerald-50/95 px-2 py-1 dark:border-emerald-700/50 dark:bg-emerald-950/35">
+                                            <img src="{{ \App\Support\DietaryLabels::defaultIconUrl($osDietaryKey) }}"
+                                                alt=""
+                                                class="h-4 w-4 shrink-0 object-contain"
+                                                width="16"
+                                                height="16"
+                                                loading="lazy" />
+                                            <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-emerald-900 dark:text-emerald-100 sm:max-w-[14rem]">{{ $osDietaryLabel }}</span>
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
                         </a>
                     </div>
 
-                    <div class="flex items-center justify-end gap-4">
+                    <div class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4">
                         <p class="text-sm font-normal text-gray-900 dark:text-white">x{{ $item->quantity }}</p>
 
                         <div class="flex flex-col items-end gap-1">
@@ -176,7 +236,7 @@
                 @endphp
             @else
                 @php
-                    $newOrderLink = module_enabled('Subdomain')?url('/'):route('shop_restaurant',['hash' => $restaurant->hash]);
+                    $newOrderLink = module_enabled('Subdomain') ? url('/?new_order=1') : route('shop_restaurant', ['hash' => $restaurant->hash, 'new_order' => 1]);
                 @endphp
             @endif
         @else
@@ -187,7 +247,7 @@
 
 
 
-        <x-primary-link wire:navigate class="inline-flex items-center mb-2" href="{{ $newOrderLink }}">
+        <x-primary-link class="inline-flex items-center mb-2" href="{{ $newOrderLink }}">
             @lang('modules.order.newOrder')
             <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />

@@ -35,7 +35,7 @@ class DeliveryApps extends Component
     {
         return [
             'name' => 'required|string|max:255|unique:delivery_platforms,name,' . ($this->editingIndex ?: 'NULL') . ',id,branch_id,' . (branch()->id ?? 'NULL'),
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'logo' => \App\Support\ImageUpload::mimesRule(),
             'commissionType' => 'required|in:percent,fixed',
             'commissionValue' => 'required|numeric|min:0|max:' . ($this->commissionType === 'percent' ? '100' : '999999.99'),
             'isActive' => 'boolean',
@@ -50,7 +50,7 @@ class DeliveryApps extends Component
         'commissionValue.min' => 'Commission value cannot be negative',
         'commissionValue.max' => 'Commission value cannot exceed 100% for percentage or 999999.99 for fixed amount',
         'logo.image' => 'Logo must be an image file',
-        'logo.mimes' => 'Logo must be a file of type: jpeg, png, jpg, gif, webp',
+        'logo.mimes' => 'Logo must be a file of type: jpeg, png, jpg, gif, svg, webp',
         'logo.max' => 'Logo size cannot exceed 2MB',
     ];
 

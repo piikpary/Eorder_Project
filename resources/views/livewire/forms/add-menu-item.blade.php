@@ -193,6 +193,10 @@
 
             </div>
 
+            @include('livewire.forms.partials.menu-item-dietary-label-chips', ['dietaryDomPrefix' => 'add-mi'])
+
+            @include('livewire.forms.partials.menu-item-eu-allergen-chips', ['euAllergenDomPrefix' => 'add-mi'])
+
             <div>
                 <x-label for="preparationTime" :value="__('modules.menu.preparationTime')" />
                 <div class="relative rounded-md mt-1">
@@ -254,7 +258,7 @@
                             <p class="font-medium">{{ $itemImageTemp->getClientOriginalName() }}</p>
                             <p class="text-gray-500">{{ $this->formatFileSize($itemImageTemp->getSize()) }}</p>
                             @php
-                                $imageInfo = getimagesize($itemImageTemp->getRealPath());
+                                $imageInfo = @getimagesize($itemImageTemp->getRealPath());
                                 if ($imageInfo) {
                                     echo '<p class="text-gray-500">' . $imageInfo[0] . ' × ' . $imageInfo[1] . ' pixels</p>';
                                 }

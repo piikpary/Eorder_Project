@@ -199,12 +199,12 @@ class Files
      */
     public static function uploadLocalOrS3($uploadedFile, $dir, $width = null, int $height = 800, $name = null)
     {
+        // Validation errors must bubble up to the caller (Livewire/UI) instead of halting execution.
         try {
             self::validateUploadedFile($uploadedFile);
         } catch (Exception $e) {
-            dd($e->getMessage());
+            throw new Exception($e->getMessage());
         }
-
         // Create directory and store temp file
         self::createDirectoryIfNotExist($dir);
 

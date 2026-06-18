@@ -15,6 +15,7 @@
                     </form>
                 </div>
 
+                <x-menu.copy-to-branches-button scope="item_modifiers" class="shrink-0 me-2" />
                 @if(user_can('Create Item Category'))
                 <x-button type="button" @click="openAddItemModifier()">@lang('modules.modifier.addItemModifier')</x-button>
                 @endif
@@ -189,5 +190,7 @@
             @endif
         </x-slot>
     </x-confirmation-modal>
+
+    <livewire:menu.copy-menu-to-branches />
 
 </div>

@@ -4,35 +4,36 @@
         <div class="overflow-x-auto">
             <div class="inline-block min-w-full align-middle">
                 <div class="overflow-hidden shadow">
-                    <table class="min-w-full divide-y divide-gray-200 table-fixed dark:divide-gray-600">
+                    {{-- table-auto + min-widths: avoid table-fixed crushing the modules column --}}
+                    <table class="min-w-[900px] w-full divide-y divide-gray-200 table-auto dark:divide-gray-600">
                         <thead class="bg-gray-100 dark:bg-gray-700">
                             <tr>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="w-12 py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('app.id')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="min-w-[11rem] py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('modules.package.packageName')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="min-w-[7rem] py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('modules.package.monthlyPrice')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="min-w-[7rem] py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('modules.package.annualPrice')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="min-w-[7rem] py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('modules.package.lifetimePrice')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
+                                    class="min-w-[18rem] py-2.5 px-3 text-xs font-medium text-left text-gray-500 uppercase dark:text-gray-400">
                                     @lang('modules.package.moduleInPackage')
                                 </th>
                                 <th scope="col"
-                                    class="py-2.5 px-4 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">
+                                    class="min-w-[8rem] py-2.5 px-3 text-xs font-medium text-gray-500 uppercase dark:text-gray-400 text-right">
                                     @lang('app.action')
                                 </th>
                             </tr>
@@ -41,11 +42,11 @@
 
                             @forelse ($packages as $item)
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" wire:key='member-{{ $item->id . rand(1111, 9999) . microtime() }}' wire:loading.class.delay='opacity-10'>
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="py-2.5 px-3 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     {{ $loop->iteration }}
                                 </td>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="py-2.5 px-3 text-sm text-gray-900 align-top dark:text-white">
                                     <div class="flex flex-col items-start gap-y-1">
                                         <span class="inline-flex items-center">
                                             {{ $item->package_name}}
@@ -114,21 +115,21 @@
                                         @endif
                                     </div>
                                 </td>
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="py-2.5 px-3 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     @if ($item->package_type->value != 'default' && $item->package_type->value != 'trial')
                                         {{ global_currency_format($item->monthly_price, $item->currency_id) }}
                                     @else
                                     --
                                     @endif
                                 </td>
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="py-2.5 px-3 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     @if ($item->package_type->value != 'default' && $item->package_type->value != 'trial')
                                         {{ global_currency_format($item->annual_price, $item->currency_id) }}
                                     @else
                                     --
                                     @endif
                                 </td>
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="py-2.5 px-3 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                                     @if ($item->package_type->value != 'default' && $item->package_type->value != 'trial')
                                         {{ global_currency_format($item->price, $item->currency_id) }}
                                     @else
@@ -136,9 +137,9 @@
                                     @endif
                                 </td>
 
-                                <td class="py-4 px-4 text-sm text-gray-900 dark:text-white max-w-lg">
+                                <td class="py-4 px-3 text-sm text-gray-900 dark:text-white max-w-lg">
                                     <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                                        <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                                             @foreach ($allModules as $module)
                                                 <div class="flex items-center space-x-2 text-xs">
                                                     @if($item->modules->contains('id', $module->id))
@@ -174,7 +175,7 @@
                                     </div>
                                 </td>
 
-                                <td class="py-2.5 px-4 space-x-2 whitespace-nowrap text-right rtl:space-x-reverse">
+                                <td class="py-2.5 px-3 space-x-2 whitespace-nowrap text-right rtl:space-x-reverse">
                                     @if (user_can('Update Package'))
                                         <x-secondary-link href="{{ route('superadmin.packages.edit', $item->id) }}" wire:navigate class="text-blue-600 hover:underline">
                                             <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -199,7 +200,7 @@
                             </tr>
                             @empty
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <td class="py-2.5 px-4 space-x-6 dark:text-gray-400" colspan="7">
+                                <td class="py-2.5 px-3 space-x-6 dark:text-gray-400" colspan="7">
                                     @lang('messages.noPackageFound')
                                 </td>
                             </tr>

@@ -24,6 +24,17 @@
     <meta name="keywords" content="{{ global_setting()->meta_keyword ?? global_setting()->name }}">
     <meta name="description" content="{{ global_setting()->meta_description ?? global_setting()->name }}">
 
+    @php
+        $landingMetaTitle = global_setting()->meta_title ?? global_setting()->name;
+        $landingMetaImage = global_setting()->meta_image_url ?? global_setting()->upload_fav_icon_android_chrome_512_url;
+    @endphp
+    <meta property="og:title" content="{{ $landingMetaTitle }}">
+    <meta property="og:image" content="{{ $landingMetaImage }}">
+    <meta property="og:image:alt" content="{{ $landingMetaTitle }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $landingMetaTitle }}">
+    <meta name="twitter:image" content="{{ $landingMetaImage }}">
+
     <title>{{ global_setting()->meta_title ?? global_setting()->name }}</title>
 
     <!-- Scripts -->
@@ -46,12 +57,13 @@
 </head>
 
 <body class="font-sans antialiased dark:bg-gray-900">
+    @include('sections.offline-banner')
     <div class="mx-auto max-w-lg lg:max-w-screen-xl min-h-svh shadow-md lg:shadow-none">
         <header class="lg:hidden">
             <nav class="bg-white border-gray-200 px-4 py-2.5 dark:bg-gray-800 dark:text-gray">
                 <div class="flex flex-wrap justify-between items-center mx-auto">
                     <a href="{{ url('/') }}" class="flex items-center gap-1 app-logo">
-                        <img src="{{ global_setting()->logoUrl }}" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9"
+                        <x-global-logo class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9"
                             alt="App Logo" />
                         @if (global_setting()->show_logo_text)
                             <span
@@ -137,7 +149,7 @@
             <nav class="bg-white border-gray-200 px-4 lg:px-6 py-2.5 dark:bg-gray-800 sticky top-4 rounded-md mt-2 ">
                 <div class="flex flex-wrap justify-between items-center mx-auto max-w-screen-xl">
                     <a href="{{ url('/') }}" class="flex items-center gap-1 app-logo">
-                        <img src="{{ global_setting()->logoUrl }}" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9"
+                        <x-global-logo class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9"
                             alt="App Logo" />
                         @if (global_setting()->show_logo_text)
                             <span
@@ -271,9 +283,11 @@
                         @endif
                     @endforeach
                 </ul>
-                <div class="flex mt-4 space-x-6 sm:justify-center sm:mt-0 rtl:space-x-reverse">
+                <div class="flex mt-4 space-x-6 sm:justify-center sm:mt-0 rtl:space-x-reverse items-center">
                     @if (languages()->count() > 1)
-                        @livewire('shop.languageSwitcher')
+                        <span class="inline-flex items-center leading-none text-gray-500 hover:text-gray-900 dark:hover:text-white">
+                            @livewire('shop.languageSwitcher')
+                        </span>
                     @endif
 
                     @if (global_setting()->facebook_link)

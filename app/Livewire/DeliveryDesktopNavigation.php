@@ -62,11 +62,9 @@ class DeliveryDesktopNavigation extends Component
             return '';
         }
 
-        return in_array($order->order_status->value, [
-            OrderStatus::DELIVERED->value,
-            OrderStatus::CANCELLED->value,
-            OrderStatus::SERVED->value,
-        ], true) ? 'history' : 'assigned';
+        return in_array($order->order_status->value, OrderStatus::terminalProgressValues(), true)
+            ? 'history'
+            : 'assigned';
     }
 
     public function render()

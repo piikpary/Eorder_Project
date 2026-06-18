@@ -4,6 +4,7 @@ namespace App\Livewire\Shop;
 
 use App\Events\ReservationReceived;
 use App\Events\ReservationConfirmationSent;
+use App\Models\Area;
 use App\Models\Branch;
 use App\Models\Reservation;
 use App\Models\ReservationSetting;
@@ -25,7 +26,7 @@ class BookATable extends Component
     public $slotType;
     public $specialRequest;
     public $restaurant;
-    public $availableTimeSlots = [];
+    public $availableTimeSlots = '';
     public $shopBranch;
 
     public $disabledDates = [];
@@ -33,8 +34,9 @@ class BookATable extends Component
     public $disabledSlotTypes = [];
     public $timeSlots = [];
 
-    // Slot types as constants
-    private const SLOT_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
+    public $selectedAreaId = '';
+
+    public const SLOT_TYPES = ['Breakfast', 'Lunch', 'Dinner'];
 
     public function mount()
     {
@@ -52,6 +54,13 @@ class BookATable extends Component
         $this->shopBranch = $this->getBranch();
 
         $this->refreshAvailabilityData();
+    }
+
+    public function hydrate(): void
+    {
+        if ($normalized = $this->normalizeBookingDate($this->date)) {
+            $this->date = $normalized;
+        }
     }
 
     private function now()
@@ -76,13 +85,53 @@ class BookATable extends Component
 
     private function getDayOfWeek($date = null)
     {
-        return Carbon::parse($date ?? $this->date)->format('l');
+        $normalized = $this->normalizeBookingDate($date);
+
+        return Carbon::parse($normalized ?? $this->now()->format('Y-m-d'))->format('l');
+    }
+
+    /**
+     * Normalize booking date to Y-m-d for queries and storage.
+     */
+    protected function normalizeBookingDate(?string $date = null): ?string
+    {
+        $date = trim((string) ($date ?? $this->date));
+
+        if ($date === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            try {
+                return Carbon::parse($date)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+
+        $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
+
+        try {
+            return Carbon::createFromFormat($dateFormat, $date)->format('Y-m-d');
+        } catch (\Exception $e) {
+            try {
+                return Carbon::parse($date)->format('Y-m-d');
+            } catch (\Exception $e2) {
+                return null;
+            }
+        }
     }
 
     private function refreshAvailabilityData()
     {
+        $this->resetSelectedTimeSlot();
         $this->loadAvailabilityData();
         $this->loadAvailableTimeSlots();
+    }
+
+    private function resetSelectedTimeSlot(): void
+    {
+        $this->availableTimeSlots = '';
     }
 
     public function loadAvailabilityData()
@@ -183,7 +232,7 @@ class BookATable extends Component
 
         public function isTimeSlotPast($timeSlot)
     {
-        $isToday = $this->date == $this->now()->format('Y-m-d');
+        $isToday = $this->normalizeBookingDate() === $this->now()->format('Y-m-d');
         $currentTime = $this->now()->format('H:i:s');
         return $isToday && $timeSlot <= $currentTime;
     }
@@ -201,13 +250,14 @@ class BookATable extends Component
         }
 
         // Check disable slot minutes for today
-        $isToday = $this->date == $this->now()->format('Y-m-d');
+        $bookingDate = $this->normalizeBookingDate();
+        $isToday = $bookingDate === $this->now()->format('Y-m-d');
         if ($isToday) {
             // Get disable slot minutes from restaurant or use default
             $disableSlotMinutes = $this->restaurant ? (int)($this->restaurant->disable_slot_minutes ?? 30) : 30;
             $currentTimeWithBuffer = $this->now()->copy()->addMinutes($disableSlotMinutes);
 
-            $slotDateTime = Carbon::parse("{$this->date} {$timeSlot}", timezone());
+            $slotDateTime = Carbon::parse("{$bookingDate} {$timeSlot}", timezone());
 
             if ($slotDateTime->lte($currentTimeWithBuffer)) {
                 return true;
@@ -219,49 +269,23 @@ class BookATable extends Component
 
     public function updatedDate($value)
     {
-        // Skip if value is empty or null
         if (!$value || trim($value) === '') {
             return;
         }
 
-        // Convert date from restaurant format to Y-m-d format
-        $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
-        $convertedDate = null;
+        $previousDay = $this->normalizeBookingDate($this->date);
+        $convertedDate = $this->normalizeBookingDate($value);
 
-        // Check if value is already in Y-m-d format
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
-            // Already in Y-m-d format, validate and use it
-            try {
-                $parsedDate = Carbon::parse($value);
-                $convertedDate = $parsedDate->format('Y-m-d');
-            } catch (\Exception $e) {
-                Log::warning('Failed to parse Y-m-d date: ' . $value, ['exception' => $e]);
-                return;
-            }
-        } else {
-            // Try to parse from restaurant format
-            try {
-                $parsedDate = Carbon::createFromFormat($dateFormat, $value);
-                $convertedDate = $parsedDate->format('Y-m-d');
-            } catch (\Exception $e) {
-                // If parsing fails, try to parse as is (might be in different format)
-                try {
-                    $parsedDate = Carbon::parse($value);
-                    $convertedDate = $parsedDate->format('Y-m-d');
-                } catch (\Exception $e2) {
-                    // If both fail, log and return without updating
-                    Log::warning('Failed to parse date: ' . $value, ['exception' => $e2]);
-                    return;
-                }
-            }
+        if (!$convertedDate) {
+            Log::warning('Failed to parse booking date: ' . $value);
+
+            return;
         }
 
-        // Only update if the value has actually changed to avoid infinite loops
-        if ($convertedDate && $this->date !== $convertedDate) {
-            $this->date = $convertedDate;
-            $this->refreshAvailabilityData();
-        } elseif ($convertedDate && $this->date === $convertedDate) {
-            // Date is the same, but refresh availability in case it's needed
+        $this->date = $convertedDate;
+
+        // Only reset time slots when the calendar day actually changes (not display-format sync).
+        if ($previousDay !== $convertedDate) {
             $this->refreshAvailabilityData();
         }
     }
@@ -290,6 +314,64 @@ class BookATable extends Component
     {
         $this->slotType = $type;
         $this->refreshAvailabilityData();
+    }
+
+    protected function branchAreas()
+    {
+        if (! $this->shopBranch) {
+            return collect();
+        }
+
+        return Area::withoutGlobalScopes()
+            ->where('branch_id', $this->shopBranch->id)
+            ->with(['tables' => function ($query) {
+                $query->where('status', 'active')->orderBy('table_code');
+            }])
+            ->withCount(['tables' => function ($query) {
+                $query->where('status', 'active');
+            }])
+            ->orderBy('area_name')
+            ->get();
+    }
+
+    /**
+     * Table IDs already assigned to a reservation at the selected date and time.
+     *
+     * @return array<int>
+     */
+    protected function reservedTableIdsForSelectedSlot(): array
+    {
+        $bookingDate = $this->normalizeBookingDate();
+
+        if (! $this->shopBranch || ! $bookingDate || ! $this->availableTimeSlots) {
+            return [];
+        }
+
+        return Reservation::query()
+            ->where('branch_id', $this->shopBranch->id)
+            ->whereNotNull('table_id')
+            ->whereDate('reservation_date_time', $bookingDate)
+            ->whereTime('reservation_date_time', $this->availableTimeSlots)
+            ->whereNotIn('reservation_status', ['Cancelled', 'No_Show'])
+            ->pluck('table_id')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    protected function validateSelectedArea(): bool
+    {
+        if ($this->selectedAreaId === '' || $this->selectedAreaId === null) {
+            return true;
+        }
+
+        $valid = $this->branchAreas()->contains('id', (int) $this->selectedAreaId);
+
+        if (! $valid) {
+            $this->addError('selectedAreaId', __('modules.reservation.invalidPreferredArea'));
+        }
+
+        return $valid;
     }
 
     public function submitReservation()
@@ -333,13 +415,19 @@ class BookATable extends Component
             return;
         }
 
+        if (! $this->validateSelectedArea()) {
+            return;
+        }
+
+        $bookingDate = $this->normalizeBookingDate();
+
         // Check if the selected time slot is disabled due to disable slot minutes
-        $isToday = $this->date == $this->now()->format('Y-m-d');
+        $isToday = $bookingDate === $this->now()->format('Y-m-d');
         if ($isToday) {
             $disableSlotMinutes = $this->restaurant ? (int)($this->restaurant->disable_slot_minutes ?? 30) : 30;
             $currentTimeWithBuffer = $this->now()->copy()->addMinutes($disableSlotMinutes);
 
-            $slotDateTime = Carbon::parse("{$this->date} {$this->availableTimeSlots}", timezone());
+            $slotDateTime = Carbon::parse("{$bookingDate} {$this->availableTimeSlots}", timezone());
 
             if ($slotDateTime->lte($currentTimeWithBuffer)) {
                 $this->alert('error', __('messages.slotDisabled'), [
@@ -351,13 +439,14 @@ class BookATable extends Component
         }
 
         $reservation = Reservation::create([
-            'reservation_date_time' => $this->date . ' ' . $this->availableTimeSlots,
+            'reservation_date_time' => $bookingDate . ' ' . $this->availableTimeSlots,
             'customer_id' => customer()->id,
             'branch_id' => $this->shopBranch->id,
             'party_size' => $this->numberOfGuests,
             'reservation_slot_type' => $this->slotType,
             'reservation_status' => $this->restaurant->default_table_reservation_status,
-            'special_requests' => $this->specialRequest
+            'special_requests' => $this->specialRequest,
+            'area_id' => $this->selectedAreaId !== '' ? (int) $this->selectedAreaId : null,
         ]);
 
         // Dispatch event for reservation confirmation notification
@@ -382,6 +471,8 @@ class BookATable extends Component
         return view('livewire.shop.book-a-table', [
             'isRestaurantOpenForReservations' => (bool) ($availability['is_open'] ?? true),
             'restaurantClosedMessage' => RestaurantAvailabilityService::getMessage($availability, $this->restaurant),
+            'branchAreas' => $this->branchAreas(),
+            'reservedTableIds' => $this->reservedTableIdsForSelectedSlot(),
         ]);
     }
 }

@@ -7,11 +7,10 @@
     'showLiveBlink' => false,
 ])
 
-<div @class([
-    'flex-col gap-3 items-center bg-white/90 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 dark:bg-gray-800/90',
-    'border border-gray-100/80 dark:border-gray-700/80',
-    'p-3.5 sm:p-4 overflow-hidden',
-])>
+    <div @class([
+        'flex-col gap-3 items-center bg-white/90 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 dark:bg-gray-800/90',
+        'border border-gray-100/80 dark:border-gray-700/80',
+        'p-3.5 sm:p-4 overflow-hidden'])>
     <a @class(['group flex flex-col gap-2.5 items-stretch w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-skin-base/60 rounded-xl'])
         @if ($order->status == 'kot')
             href="{{ route('pos.kot', $order->id).'?show-order-detail=true' }}"
@@ -20,14 +19,17 @@
         @else
             wire:click="$dispatch('showOrderDetail', { id: {{ $order->id }} })"
         @endif
+
         wire:key='order-item-{{ $order->id . microtime() }}' href="javascript:;">
         <div class="flex flex-col sm:flex-row gap-3.5 sm:gap-4 sm:justify-between w-full min-w-0">
-            <div class="flex gap-3 min-w-0 flex-1">
+            <div class="flex gap-3 min-w-0 flex-1 items-start">
 
                 <div @class([
-                    'w-9 h-9 rounded-lg bg-skin-base/10 text-skin-base inline-flex items-center justify-center',
+                    'rounded-lg bg-skin-base/10 text-skin-base inline-flex items-center justify-center overflow-hidden shrink-0',
+                    'h-9 w-9' => in_array($order->order_type, ['pickup', 'delivery'], true),
+                    'min-h-9 min-w-12 max-w-[38%] px-1.5 py-1 sm:max-w-[32%]' => ! in_array($order->order_type, ['pickup', 'delivery'], true),
                 ])>
-                    <h3 wire:loading.class.delay='opacity-50' @class(['font-semibold text-sm leading-none'])>
+                    <h3 wire:loading.class.delay='opacity-50' @class(['font-semibold text-sm leading-none m-0'])>
                         @if ($order->order_type == 'pickup')
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                                 class="bi bi-bag-fill" viewBox="0 0 16 16">
@@ -44,16 +46,26 @@
                                 </g>
                             </svg>
                         @else
-                            {{ $order->table?->table_code ?? '--' }}
+                            @php $tableCodeDisplay = $order->table?->table_code ?? '--'; @endphp
+                            <span
+                                class="block max-w-full text-center text-[10px] font-extrabold leading-tight tracking-tight text-skin-base break-words hyphens-auto line-clamp-3 sm:text-[11px]"
+                                title="{{ $tableCodeDisplay }}">
+                                {{ $tableCodeDisplay }}
+                            </span>
                         @endif
                     </h3>
                 </div>
 
-                <div class="min-w-0 flex-1 space-y-0.5">
-                    <div class="font-medium text-gray-900 truncate text-sm dark:text-gray-100">
-                        {{ $order->customer ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin')) : '--' }}
+                <div class="min-w-0 flex-1 space-y-0.5 overflow-hidden">
+                    @php
+                        $orderCardCustomerLabel = $order->customer
+                            ? ($order->customer->name ? $order->customer->name : __('modules.customer.walkin'))
+                            : '--';
+                    @endphp
+                    <div class="min-w-0 font-medium text-gray-900 truncate text-sm dark:text-gray-100" title="{{ $orderCardCustomerLabel }}">
+                        {{ $orderCardCustomerLabel }}
                     </div>
-                    <div class="flex items-center gap-1">
+                    <div class="flex min-w-0 items-center gap-1 font-medium text-gray-900 truncate text-sm dark:text-gray-100">
                         @if($order->status != 'draft')
                             <div class="font-medium text-gray-600 text-xs  dark:text-gray-400 truncate">
                                 {{ $order->show_formatted_order_number }}
@@ -74,49 +86,23 @@
             <div class="ltr:text-right rtl:text-left flex-shrink-0">
                 <div class="flex flex-col items-end gap-1.5">
                     <span @class([
-                        'text-[10px] font-semibold px-2 py-0.5 rounded-md uppercase tracking-wide whitespace-nowrap shadow-sm/50',
-                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border border-gray-300/80' =>
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-md uppercase tracking-wide whitespace-nowrap shadow-sm/50 border',
+                        'bg-gray-100 text-gray-800 border-gray-300/80 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600/80' =>
                             $order->status == 'draft',
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-400 border border-yellow-400' =>
+                        'bg-yellow-100 text-yellow-800 border-yellow-400 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700/60' =>
                             $order->status == 'kot',
-                        'bg-blue-100 text-blue-800 dark:bg-gray-700 dark:text-blue-400 border border-blue-400' =>
+                        'bg-blue-100 text-blue-800 border-blue-400 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700/60' =>
                             $order->status == 'billed' || $order->status == 'out_for_delivery',
-                        'bg-green-100 text-green-800 dark:bg-gray-700 dark:text-green-400 border border-green-400' =>
+                        'bg-green-100 text-green-800 border-green-400 dark:bg-green-900/30 dark:text-green-200 dark:border-green-700/60' =>
                             $order->status == 'paid' || $order->status == 'delivered',
-                        'bg-red-100 text-red-800 dark:bg-gray-700 dark:text-red-400 border border-red-400' =>
+                        'bg-red-100 text-red-800 border-red-400 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700/60' =>
                             $order->status == 'canceled' || $order->status == 'payment_due',
-                        'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-orange-400 border border-orange-400' =>
+                        'bg-orange-100 text-orange-800 border-orange-400 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-700/60' =>
                             $order->status == 'pending_verification',
                     ])>
                         @lang('modules.order.' . $order->status)
                     </span>
-
-                @if($order->placed_via)
-                    <span @class([
-                            'text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wide inline-flex items-center flex-wrap gap-1 shadow-sm/40',
-                            'bg-indigo-100 text-indigo-800 dark:bg-indigo-700 dark:text-indigo-400 border border-indigo-400' => $order->placed_via === 'pos',
-                            'bg-emerald-100 text-emerald-800 dark:bg-emerald-700 dark:text-emerald-400 border border-emerald-400' => $order->placed_via === 'shop',
-                            'bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-400 border border-amber-400' => $order->placed_via === 'kiosk',
-                        ])>
-                            @if($order->placed_via === 'pos')
-                                <svg class="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clip-rule="evenodd"></path>
-                                </svg>
-                            @elseif($order->placed_via === 'shop')
-                                <svg class="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 2L3 7v11a1 1 0 001 1h12a1 1 0 001-1V7l-7-5zM8 15a1 1 0 100-2 1 1 0 000 2zm4 0a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
-                                </svg>
-                            @elseif($order->placed_via === 'kiosk')
-                                <svg class="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 7.707 7.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3z" clip-rule="evenodd"></path>
-                                </svg>
-                            @endif
-                            <span class="whitespace-nowrap">{{ __('app.via_' . $order->placed_via) }}</span>
-                            @if(module_enabled('Kiosk') && class_exists(\Modules\Kiosk\Entities\Kiosk::class) && $order->kiosk)
-                                <span class="whitespace-nowrap">: {{ $order->kiosk->code }}</span>
-                            @endif
-                        </span>
-                    @endif
+{{-- --}}
                 </div>
 
 
@@ -174,7 +160,7 @@
 
         <div class="flex flex-col sm:flex-row w-full sm:justify-between sm:items-center gap-2.5 sm:gap-3 border-t border-dashed border-gray-200 dark:border-gray-600/80 pt-2 ">
             <div class="inline-flex gap-2 items-center flex-shrink-0">
-               
+
                 <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
                     {{ currency_format($order->display_total ?? $order->total ?? 0, restaurant()->currency_id) }}
                 </div>
@@ -193,6 +179,7 @@
                             'text-blue-500' => $order->order_status->value == 'out_for_delivery',
                             'text-green-400' => $order->order_status->value == 'served',
                             'text-green-500' => $order->order_status->value == 'delivered',
+                            'text-emerald-600' => $order->order_status->value == 'completed',
                             'text-red-500' => $order->order_status->value == 'cancelled',
                         ]) viewBox="0 0 16 16">
                         <circle cx="8" cy="8" r="8" />
@@ -228,90 +215,103 @@
 
 
 
-    <div class="flex justify-between gap-1 mt-2">
-        @if ($order->waiter)
-            <div class="inline-flex items-center text-gray-600 text-xs sm:text-sm gap-1.5 ltr:pl-1 rtl:pr-1 dark:text-gray-400 flex-shrink-0">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 -2.89 122.88 122.88"
-                    version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
-                    xmlns:xlink="http://www.w3.org/1999/xlink" style="enable-background:new 0 0 122.88 117.09"
-                    xml:space="preserve">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <style type="text/css">
-                            .st0 {
-                                fill-rule: evenodd;
-                                clip-rule: evenodd;
-                            }
-                        </style>
-                        <g>
-                            <path class="st0"
-                                d="M36.82,107.86L35.65,78.4l13.25-0.53c5.66,0.78,11.39,3.61,17.15,6.92l10.29-0.41c4.67,0.1,7.3,4.72,2.89,8 c-3.5,2.79-8.27,2.83-13.17,2.58c-3.37-0.03-3.34,4.5,0.17,4.37c1.22,0.05,2.54-0.29,3.69-0.34c6.09-0.25,11.06-1.61,13.94-6.55 l1.4-3.66l15.01-8.2c7.56-2.83,12.65,4.3,7.23,10.1c-10.77,8.51-21.2,16.27-32.62,22.09c-8.24,5.47-16.7,5.64-25.34,1.01 L36.82,107.86L36.82,107.86z M29.74,62.97h91.9c0.68,0,1.24,0.57,1.24,1.24v5.41c0,0.67-0.56,1.24-1.24,1.24h-91.9 c-0.68,0-1.24-0.56-1.24-1.24v-5.41C28.5,63.53,29.06,62.97,29.74,62.97L29.74,62.97z M79.26,11.23 c25.16,2.01,46.35,23.16,43.22,48.06l-93.57,0C25.82,34.23,47.09,13.05,72.43,11.2V7.14l-4,0c-0.7,0-1.28-0.58-1.28-1.28V1.28 c0-0.7,0.57-1.28,1.28-1.28h14.72c0.7,0,1.28,0.58,1.28,1.28v4.58c0,0.7-0.58,1.28-1.28,1.28h-3.89L79.26,11.23L79.26,11.23 L79.26,11.23z M0,77.39l31.55-1.66l1.4,35.25L1.4,112.63L0,77.39L0,77.39z">
-                            </path>
-                        </g>
-                    </g>
-                </svg>
+    <div class="flex items-center gap-2 mt-2">
+        <div class="flex-[6] min-w-0">
+            @if (isset($order->waiter_response) && $order->waiter_id)
+                @if (user_can('Update Order'))
+                    <div onclick="event.stopPropagation();" class="w-full">
+                        <form method="POST" action="{{ route('orders.waiter.status', $order->uuid) }}">
+                            @csrf
+                            <div x-data="{ open: false }" class="relative w-full">
+                                <input type="hidden" name="waiter_response" x-ref="waiterResponse" value="{{ $order->waiter_response }}">
 
-                {{ $order->waiter->name ?? '--' }}
-            </div>
-        @endif
+                                <button type="button"
+                                    x-on:click.prevent.stop="open = true"
+                                    @class([
+                                        'w-full h-6 inline-flex items-center gap-1 text-[10px] font-medium px-2 rounded-md uppercase tracking-wide border cursor-pointer min-w-0',
+                                        'transition focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-900',
+                                        'bg-amber-100 text-amber-950 dark:bg-amber-900/30 dark:text-amber-100 border-amber-300 dark:border-amber-700/60' => $order->waiter_response === 'pending',
+                                        'bg-emerald-100 text-emerald-950 dark:bg-emerald-900/30 dark:text-emerald-100 border-emerald-300 dark:border-emerald-700/60' => $order->waiter_response === 'accepted',
+                                        'bg-rose-100 text-rose-950 dark:bg-rose-900/30 dark:text-rose-100 border-rose-300 dark:border-rose-700/60' => $order->waiter_response === 'declined',
+                                    ])>
+                                    <span class="min-w-0 flex-1 truncate text-left normal-case tracking-normal text-gray-900 dark:text-gray-100">
+                                        {{ $order->waiter->name ?? '--' }}
+                                    </span>
+                                    <span @class([
+                                        'flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                                        'bg-amber-200/70 text-amber-950 dark:bg-amber-800/40 dark:text-amber-100' => $order->waiter_response === 'pending',
+                                        'bg-emerald-200/70 text-emerald-950 dark:bg-emerald-800/40 dark:text-emerald-100' => $order->waiter_response === 'accepted',
+                                        'bg-rose-200/70 text-rose-950 dark:bg-rose-800/40 dark:text-rose-100' => $order->waiter_response === 'declined',
+                                    ])>
+                                        @lang('app.waiterResponse_' . $order->waiter_response)
+                                    </span>
+                                    <span class="flex-shrink-0 opacity-70">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3">
+                                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.25a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z" clip-rule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </button>
 
-        @if ($order->status == 'kot' && user_can('Create Order'))
-            <div class="flex-shrink-0">
-                <x-secondary-link href="{{ route('pos.kot', ['id' => $order->id]) }}"
-                    class="text-xs">@lang('modules.order.newKot')</x-secondary-link>
-            </div>
-        @endif
-    </div>
+                                <div x-cloak x-show="open" x-on:keydown.escape.window="open = false" class="fixed inset-0 z-50">
+                                    <div class="absolute inset-0 bg-black/40" x-on:click="open = false"></div>
+                                    <div class="absolute left-1/2 top-1/2 w-[92vw] max-w-xs -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl p-3"
+                                        x-on:click.stop>
+                                        <div class="text-xs font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                                            @lang('app.waiterResponse')
+                                        </div>
 
-    @if (isset($order->waiter_response) && $order->waiter_id)
-        @if (user_can('Update Order'))
-            <div onclick="event.stopPropagation();" class="flex-shrink-0 mt-2">
-                <form method="POST" action="{{ route('orders.waiter.status', $order->uuid) }}">
-                    @csrf
-                    <div class="relative inline-flex items-center">
-                        <select
-                            name="waiter_response"
-                            onchange="this.form.submit();"
-                            style="-webkit-appearance:none;-moz-appearance:none;appearance:none;background-image:none;"
-                            @class([
-                                'text-xs font-medium px-2 py-1.5 rounded uppercase tracking-wide whitespace-nowrap flex-shrink-0 border appearance-none bg-none pr-7 cursor-pointer',
-                                'transition focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-900',
-                                'bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-300 border-amber-400' => $order->waiter_response === 'pending',
-                                'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-300 border-green-400' => $order->waiter_response === 'accepted',
-                                'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-300 border-red-400' => $order->waiter_response === 'declined',
-                            ])
-                        >
-                            <option value="pending" @selected($order->waiter_response === 'pending')>
-                                @lang('app.waiterResponse_pending')
-                            </option>
-                            <option value="accepted" @selected($order->waiter_response === 'accepted')>
-                                @lang('app.waiterResponse_accepted')
-                            </option>
-                            <option value="declined" @selected($order->waiter_response === 'declined')>
-                                @lang('app.waiterResponse_declined')
-                            </option>
-                        </select>
+                                        <div class="space-y-1.5">
+                                            <button type="button"
+                                                class="w-full text-left text-[10px] font-medium px-2 py-1 rounded-md border normal-case tracking-normal bg-amber-50 text-amber-950 border-amber-200 hover:bg-amber-100 active:bg-amber-200 dark:bg-amber-900/20 dark:text-amber-100 dark:border-amber-700/60 dark:hover:bg-amber-900/30"
+                                                x-on:click.prevent.stop="$refs.waiterResponse.value='pending'; $el.closest('form').submit(); open=false;">
+                                                @lang('app.waiterResponse_pending')
+                                            </button>
+                                            <button type="button"
+                                                class="w-full text-left text-[10px] font-medium px-2 py-1 rounded-md border normal-case tracking-normal bg-emerald-50 text-emerald-950 border-emerald-200 hover:bg-emerald-100 active:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-100 dark:border-emerald-700/60 dark:hover:bg-emerald-900/30"
+                                                x-on:click.prevent.stop="$refs.waiterResponse.value='accepted'; $el.closest('form').submit(); open=false;">
+                                                @lang('app.waiterResponse_accepted')
+                                            </button>
+                                            <button type="button"
+                                                class="w-full text-left text-[10px] font-medium px-2 py-1 rounded-md border normal-case tracking-normal bg-rose-50 text-rose-950 border-rose-200 hover:bg-rose-100 active:bg-rose-200 dark:bg-rose-900/20 dark:text-rose-100 dark:border-rose-700/60 dark:hover:bg-rose-900/30"
+                                                x-on:click.prevent.stop="$refs.waiterResponse.value='declined'; $el.closest('form').submit(); open=false;">
+                                                @lang('app.waiterResponse_declined')
+                                            </button>
+                                        </div>
 
-                        <span class="pointer-events-none absolute inset-y-0 right-1.5 inline-flex items-center opacity-70">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
-                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.25a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z" clip-rule="evenodd" />
-                            </svg>
+                                        <div class="mt-3 flex justify-end">
+                                            <button type="button"
+                                                class="text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                                                x-on:click="open = false">
+                                                @lang('app.close')
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                @else
+                    <div class="w-full">
+                        <span @class([
+                            'inline-flex w-full justify-center text-[10px] font-medium px-1.5 py-0.5 rounded-md uppercase tracking-wide whitespace-nowrap',
+                            'bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-300 border border-amber-400' => $order->waiter_response === 'pending',
+                            'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-300 border border-green-400' => $order->waiter_response === 'accepted',
+                            'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-300 border border-red-400' => $order->waiter_response === 'declined',
+                        ])>
+                            @lang('app.waiterResponse_' . $order->waiter_response)
                         </span>
                     </div>
-                </form>
-            </div>
-        @else
-            <span @class([
-                'text-xs font-medium px-2 py-0.5 rounded uppercase tracking-wide whitespace-nowrap flex-shrink-0',
-                'bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-300 border border-amber-400' => $order->waiter_response === 'pending',
-                'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-300 border border-green-400' => $order->waiter_response === 'accepted',
-                'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-300 border border-red-400' => $order->waiter_response === 'declined',
-            ])>
-                @lang('app.waiterResponse_' . $order->waiter_response)
-            </span>
-        @endif
-    @endif
+                @endif
+            @endif
+        </div>
+
+        <div class="flex-[4] flex justify-end min-w-0">
+            @if ($order->status == 'kot' && user_can('Create Order'))
+                <x-secondary-link href="{{ route('pos.kot', ['id' => $order->id]) }}"
+                    class="w-full h-6 inline-flex items-center justify-center text-center !text-[10px] !leading-none font-medium uppercase tracking-wide">@lang('modules.order.newKot')</x-secondary-link>
+            @endif
+        </div>
+    </div>
 
     @if($showTrackButton && $trackEndpoint)
         <div class="w-full mt-2">

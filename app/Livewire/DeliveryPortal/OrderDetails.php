@@ -3,6 +3,7 @@
 namespace App\Livewire\DeliveryPortal;
 
 use App\Enums\OrderStatus;
+use App\Models\DeliveryExecutive;
 use App\Models\Order;
 use App\Services\OrderCashCollectionService;
 use Carbon\Carbon;
@@ -127,7 +128,7 @@ class OrderDetails extends Component
             $executive = delivery_executive();
 
             if ($executive) {
-                $executive->update(['status' => 'available']);
+                $executive->update(['status' => DeliveryExecutive::STATUS_ACTIVE]);
                 session(['delivery_executive' => $executive->fresh()]);
             }
         }
@@ -223,11 +224,7 @@ class OrderDetails extends Component
             return route('delivery.assigned-orders');
         }
 
-        return in_array($this->order->order_status->value, [
-            OrderStatus::DELIVERED->value,
-            OrderStatus::CANCELLED->value,
-            OrderStatus::SERVED->value,
-        ], true)
+        return in_array($this->order->order_status->value, OrderStatus::terminalProgressValues(), true)
             ? route('delivery.history')
             : route('delivery.assigned-orders');
     }
@@ -244,11 +241,7 @@ class OrderDetails extends Component
             return false;
         }
 
-        return in_array($this->order->order_status->value, [
-            OrderStatus::DELIVERED->value,
-            OrderStatus::CANCELLED->value,
-            OrderStatus::SERVED->value,
-        ], true);
+        return in_array($this->order->order_status->value, OrderStatus::terminalProgressValues(), true);
     }
 
     private function getLatestExecutiveCoordinates(): array

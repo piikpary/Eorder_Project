@@ -22,8 +22,17 @@ class DeliveryExecutiveSeeder extends Seeder
             $customer->phone = fake()->unique()->numerify('##########'); // 10 numbers only
             $customer->phone = preg_replace('/[^0-9]/', '', $customer->phone);
             $customer->phone_code = '91';
-            $customer->status = 'available';
+            $customer->status = DeliveryExecutive::STATUS_ACTIVE;
+            $customer->is_online = true;
             $customer->save();
+            
+
+            if($i == 0) {
+                $customer->unique_code = 'TT00'.$customer->id;
+            } 
+
+            $customer->branch_id = $branch->id;
+            $customer->saveQuietly();
         }
     }
 }

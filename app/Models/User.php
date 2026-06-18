@@ -181,7 +181,7 @@ class User extends Authenticatable
 
     public function getTimezoneFromIp(): string
     {
-        $ip = request()->ip();
+        $ip = $this->getClientIpFromRequest();
 
         try {
             $response = Http::get('http://ip-api.com/json/' . $ip);
@@ -202,16 +202,35 @@ class User extends Authenticatable
 
     public function getCountryFromIp(): string
     {
-        $ip = request()->ip();
+        // If you're behind Cloudflare, this is the most reliable signal.
+        $cfCountry = request()->header('CF-IPCountry');
+        if (is_string($cfCountry) && preg_match('/^[A-Z]{2}$/', $cfCountry) && $cfCountry !== 'XX') {
+            return $cfCountry;
+        }
+
+        $ip = $this->getClientIpFromRequest();
+
+
+        // 3. Handle localhost
+        if ($ip === '127.0.0.1' || $ip === '::1') {
+            $ip = @file_get_contents('https://api.ipify.org');
+
+        }
+
+
         $ipCountry = 'US';
 
         try {
             $response = Http::get('http://ip-api.com/json/' . $ip);
 
+
+
             if ($response->failed()) {
                 $ipCountry = 'US';
             } else {
+
                 if ($response->json()['status'] == 'success') {
+
                     $ipCountry = $response->json()['countryCode'];
                 }
             }
@@ -219,12 +238,53 @@ class User extends Authenticatable
             $ipCountry = 'US';
         }
 
+
+
         return $ipCountry;
+    }
+
+    private function getClientIpFromRequest(): string
+    {
+        // Prefer common proxy/CDN headers when TrustProxies isn't configured.
+        $candidates = [
+            request()->header('CF-Connecting-IP'),
+            request()->header('X-Real-IP'),
+        ];
+
+        $xff = request()->header('X-Forwarded-For');
+        if (is_string($xff) && $xff !== '') {
+            // XFF can be a list: client, proxy1, proxy2...
+            $first = trim(explode(',', $xff)[0] ?? '');
+            if ($first !== '') {
+                $candidates[] = $first;
+            }
+        }
+
+        $candidates[] = request()->ip();
+
+        foreach ($candidates as $ip) {
+            if (!is_string($ip) || $ip === '') {
+                continue;
+            }
+            $ip = trim($ip);
+
+            // Skip obvious non-routable placeholders.
+            if (in_array($ip, ['127.0.0.1', '::1'], true)) {
+                continue;
+            }
+
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
+        }
+
+        return request()->ip();
     }
 
     public function getPhoneCodeFromIp(): ?string
     {
         $ipCountry = $this->getCountryFromIp();
+
 
         try {
             $country = \App\Models\Country::where('countries_code', $ipCountry)->first();
@@ -242,6 +302,16 @@ class User extends Authenticatable
 
         return null;
     }
+
+    public function routeNotificationForTwilio()
+    {
+        if (!is_null($this->phone_number) && !is_null($this->phone_code)) {
+            return '+' . $this->phone_code . $this->phone_number;
+        }
+
+        return null;
+    }
+
 
     public function routeNotificationForMsg91($notification)
     {

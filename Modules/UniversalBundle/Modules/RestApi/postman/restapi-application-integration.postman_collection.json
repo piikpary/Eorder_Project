@@ -1,0 +1,4159 @@
+{
+  "info": {
+    "name": "TableTrack RestApi Application Integration",
+    "_postman_id": "d7d90670-bf79-4cb8-8bd1-b4a2df90f30e",
+    "description": "Auto-generated from Modules/RestApi/Routes/api.php",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "auth",
+      "item": [
+        {
+          "name": "GET /api/application-integration/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 41)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "customer-app",
+      "item": [
+        {
+          "name": "GET /api/application-integration/customer/catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer",
+                "catalog"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 66)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/customer/orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer",
+                "orders"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 68)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/application-integration/customer/orders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer",
+                "orders"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 67).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample\": \"value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "partner",
+      "item": [
+        {
+          "name": "auth",
+          "item": [
+            {
+              "name": "POST /api/application-integration/partner/auth/login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/auth/login",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 192).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/auth/logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/auth/logout",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 193).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "devices",
+          "item": [
+            {
+              "name": "POST /api/application-integration/partner/devices/register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/devices/register",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "devices",
+                    "register"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 217).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/devices/unregister",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/devices/unregister",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "devices",
+                    "unregister"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 218).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "general",
+          "item": [
+            {
+              "name": "GET /api/application-integration/partner/profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "profile"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 200)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/fcm-token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/fcm-token",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "fcm-token"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 214).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/location",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/location",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "location"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 211).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "orders",
+          "item": [
+            {
+              "name": "GET /api/application-integration/partner/orders/history",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/orders/history",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "orders",
+                    "history"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 205)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/partner/orders/latest",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/orders/latest",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "orders",
+                    "latest"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 204)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/orders/{id}/start",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/orders/{id}/start",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "orders",
+                    "{id}",
+                    "start"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 206).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/partner/orders/{id}/status",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Partner-Unique-Code",
+                    "value": "{{partner_unique_code}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/partner/orders/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "partner",
+                    "orders",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 207).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "platform",
+      "item": [
+        {
+          "name": "GET /api/application-integration/platform/config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/platform/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "platform",
+                "config"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 45)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/platform/permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/platform/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "platform",
+                "permissions"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 46)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/platform/printers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/platform/printers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "platform",
+                "printers"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 47)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/platform/receipt-settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/platform/receipt-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "platform",
+                "receipt-settings"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 48)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/application-integration/platform/switch-branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/platform/switch-branch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "platform",
+                "switch-branch"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 49).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample\": \"value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "pos",
+      "item": [
+        {
+          "name": "cash-register",
+          "item": [
+            {
+              "name": "DELETE /api/application-integration/pos/cash-register/denominations/{uuid}",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/denominations/{uuid}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "denominations",
+                    "{uuid}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 176)."
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE /api/application-integration/pos/cash-register/registers/{id}",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/registers/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "registers",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 155)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/denominations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/denominations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "denominations"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 172)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/denominations/{uuid}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/denominations/{uuid}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "denominations",
+                    "{uuid}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 173)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/registers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/registers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "registers"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 151)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/registers/{id}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/registers/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "registers",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 152)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/sessions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 158)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/sessions/active",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/active",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "active"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 159)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/sessions/{id}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 160)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/sessions/{id}/summary",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/{id}/summary",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "{id}",
+                    "summary"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 163)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/cash-register/sessions/{id}/transactions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/{id}/transactions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "{id}",
+                    "transactions"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 164)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/denominations",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/denominations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "denominations"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 174).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/registers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/registers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "registers"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 153).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/sessions/open",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/open",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "open"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 161).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/sessions/{id}/close",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/sessions/{id}/close",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "sessions",
+                    "{id}",
+                    "close"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 162).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/transactions/cash-in",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/transactions/cash-in",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "transactions",
+                    "cash-in"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 167).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/transactions/cash-out",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/transactions/cash-out",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "transactions",
+                    "cash-out"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 168).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/cash-register/transactions/safe-drop",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/transactions/safe-drop",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "transactions",
+                    "safe-drop"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 169).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/cash-register/denominations/{uuid}",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/denominations/{uuid}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "denominations",
+                    "{uuid}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 175).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/cash-register/registers/{id}",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/cash-register/registers/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "cash-register",
+                    "registers",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 154).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "catalog",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/categories",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "categories"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 74)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/extra-charges/{orderType}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/extra-charges/{orderType}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "extra-charges",
+                    "{orderType}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 80)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/items",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/items",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "items"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 75)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/items/category/{categoryId}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/items/category/{categoryId}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "items",
+                    "category",
+                    "{categoryId}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 76)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/items/menu/{menuId}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/items/menu/{menuId}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "items",
+                    "menu",
+                    "{menuId}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 77)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/items/{itemId}/modifier-groups",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/items/{itemId}/modifier-groups",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "items",
+                    "{itemId}",
+                    "modifier-groups"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 79)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/items/{itemId}/variations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/items/{itemId}/variations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "items",
+                    "{itemId}",
+                    "variations"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 78)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/menus",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/menus",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "menus"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 73)."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "customers",
+          "item": [
+            {
+              "name": "DELETE /api/application-integration/pos/customers/{id}",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/customers/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "customers",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 180)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/customers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "customers"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 110)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/customers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/customers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "customers"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 112).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "delivery",
+          "item": [
+            {
+              "name": "DELETE /api/application-integration/pos/delivery-executives/{id}",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-executives/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-executives",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 132)."
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE /api/application-integration/pos/delivery-platforms/{id}",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-platforms/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-platforms",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 129)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-executives",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-executives",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-executives"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 120)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-fee-tiers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-fee-tiers",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-fee-tiers"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 125)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-orders"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 136)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-platforms",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-platforms",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-platforms"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 86)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-platforms/{id}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-platforms/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-platforms",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 126)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/delivery-settings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-settings",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-settings"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 123)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/delivery-executives",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-executives",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-executives"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 130).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/delivery-fee/calculate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-fee/calculate",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-fee",
+                    "calculate"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 124).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/delivery-platforms",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-platforms",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-platforms"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 127).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/delivery-executives/{id}",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-executives/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-executives",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 131).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/delivery-executives/{id}/status",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-executives/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-executives",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 133).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/delivery-platforms/{id}",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/delivery-platforms/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "delivery-platforms",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 128).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "general",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/branches",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/branches",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "branches"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 115)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/phone-codes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/phone-codes",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "phone-codes"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 111)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/restaurants",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/restaurants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "restaurants"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 114)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/taxes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/taxes",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "taxes"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 113)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/waiters",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/waiters",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "waiters"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 119)."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "kot",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/kot-cancel-reasons",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kot-cancel-reasons",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kot-cancel-reasons"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 108)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/kot-places",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kot-places",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kot-places"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 107)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/kots",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kots",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kots"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 103)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/kots/{id}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kots/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kots",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 104)."
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/kot-items/{id}/status",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kot-items/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kot-items",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 106).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/kots/{id}/status",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/kots/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "kots",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 105).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "multi-pos",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/multi-pos/check",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/multi-pos/check",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "multi-pos",
+                    "check"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 146)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/multi-pos/register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/multi-pos/register",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "multi-pos",
+                    "register"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 145).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "notifications",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/notifications",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/notifications",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "notifications"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 140)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/notifications/register-token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/notifications/register-token",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "notifications",
+                    "register-token"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 139).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/notifications/test",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/notifications/test",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "notifications",
+                    "test"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 142).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/notifications/{id}/read",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/notifications/{id}/read",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "notifications",
+                    "{id}",
+                    "read"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 141).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "orders",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/actions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/actions",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "actions"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 85)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/get-order-number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/get-order-number",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "get-order-number"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 87)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/order-types",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/order-types",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "order-types"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 84)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 90)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/orders/{id}",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 91)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/orders/{id}/kots",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/kots",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "kots"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 100)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 88).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders/{id}/kot",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/kot",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "kot"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 99).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders/{id}/pay",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/pay",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "pay"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 95).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders/{id}/split-payments",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/split-payments",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "split-payments"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 94).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders/{id}/status",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 92).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/orders/{id}/tip",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/tip",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "tip"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 93).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/orders/{id}",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 89).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/orders/{id}/assign-delivery",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/assign-delivery",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "assign-delivery"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 134).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/orders/{id}/delivery-status",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/delivery-status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "delivery-status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 135).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT /api/application-integration/pos/orders/{id}/items",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/orders/{id}/items",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "orders",
+                    "{id}",
+                    "items"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 98).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "reservations",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/reservations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/reservations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "reservations"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 116)."
+              },
+              "response": []
+            },
+            {
+              "name": "GET /api/application-integration/pos/reservations/today",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/reservations/today",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "reservations",
+                    "today"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 83)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/reservations",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/reservations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "reservations"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 117).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/reservations/{id}/status",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/reservations/{id}/status",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "reservations",
+                    "{id}",
+                    "status"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 118).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "tables",
+          "item": [
+            {
+              "name": "GET /api/application-integration/pos/tables",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/tables",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "tables"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 81)."
+              },
+              "response": []
+            },
+            {
+              "name": "POST /api/application-integration/pos/tables/{tableId}/unlock",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/application-integration/pos/tables/{tableId}/unlock",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "application-integration",
+                    "pos",
+                    "tables",
+                    "{tableId}",
+                    "unlock"
+                  ]
+                },
+                "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 82).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sample\": \"value\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "pusher",
+      "item": [
+        {
+          "name": "GET /api/application-integration/pusher/beams-settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/beams-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "beams-settings"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 32)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/pusher/broadcast-settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/broadcast-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "broadcast-settings"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 31)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/pusher/diagnostics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "diagnostics"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 37)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/pusher/presence/{channel}/members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/presence/{channel}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "presence",
+                "{channel}",
+                "members"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 35)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/pusher/settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "settings"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 30)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/pusher/status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "status"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 33)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/application-integration/pusher/authorize-channel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/pusher/authorize-channel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "pusher",
+                "authorize-channel"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 34).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample\": \"value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "shared",
+      "item": [
+        {
+          "name": "DELETE /api/application-integration/customer-addresses/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer-addresses/{id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer-addresses",
+                "{id}"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 62)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/areas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/areas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "areas"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 58)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/currencies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/currencies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "currencies"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 54)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/customer-addresses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer-addresses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer-addresses"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 59)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/languages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/languages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "languages"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 53)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/payment-gateways",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/payment-gateways",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "payment-gateways"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 55)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "roles"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 57)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/application-integration/staff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/staff",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "staff"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 56)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/application-integration/customer-addresses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer-addresses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer-addresses"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 60).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample\": \"value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /api/application-integration/customer-addresses/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/application-integration/customer-addresses/{id}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "application-integration",
+                "customer-addresses",
+                "{id}"
+              ]
+            },
+            "description": "Auto-generated from Modules/RestApi/Routes/api.php (line 61).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample\": \"value\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "partner_unique_code",
+      "value": ""
+    }
+  ]
+}

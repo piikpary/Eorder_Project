@@ -112,11 +112,11 @@
                 <thead class="bg-gray-50/90 dark:bg-gray-700/40">
                     <tr>
                         <th
-                            class="px-2 py-1.5 text-xs font-medium text-left text-gray-500  dark:text-gray-400">
+                            class="px-2 py-1.5 text-xs font-medium text-left text-gray-500  dark:text-gray-400 rtl:text-right ltr:text-left">
                             @lang('modules.menu.itemName')
                         </th>
                         <th
-                            class="px-2 py-1.5 text-xs font-medium text-right text-gray-500  dark:text-gray-400">
+                            class="px-2 py-1.5 text-xs font-medium text-right text-gray-500  dark:text-gray-400 rtl:text-left ltr:text-right">
                             &nbsp;
                         </th>
                     </tr>
@@ -162,7 +162,7 @@
                                     @endif
                                 </div>
                             </td>
-                            <td @class(['p-2.5 pl-0 text-right font-medium text-gray-900 dark:text-white', 'bg-green-50 dark:bg-green-800/30' => $item->status == 'ready'])>
+                            <td @class(['p-2.5 ltr:pl-0 rtl:pr-0 text-right font-medium text-gray-900 dark:text-white', 'bg-green-50 dark:bg-green-800/30' => $item->status == 'ready'])>
                                 @if($kotSettings->enable_item_level_status && $kot->status != 'cancelled')
                                     @php
                                         $currentStatus = $item->status ?? 'pending';

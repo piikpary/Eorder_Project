@@ -33,11 +33,12 @@
             @else
                 @php
                     $steps = match($order->order_type) {
-                        'delivery' => ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered'],
-                        'pickup' => ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered'],
-                        default => ['placed', 'confirmed', 'preparing', 'food_ready', 'served'],
+                        'delivery' => ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered', 'completed'],
+                        'pickup' => ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered', 'completed'],
+                        default => ['placed', 'confirmed', 'preparing', 'food_ready', 'served', 'completed'],
                     };
                     $currentStepIndex = array_search($order->order_status->value, $steps);
+                    $currentStepIndex = $currentStepIndex !== false ? $currentStepIndex : 0;
                 @endphp
 
                 <div>
@@ -98,6 +99,11 @@
                                             @case('delivered')
                                                 <svg {!! $svgBase !!}>
                                                     <path {!! $pathBase !!} d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-3v3l2 2"/>
+                                                </svg>
+                                            @break
+                                            @case('completed')
+                                                <svg {!! $svgBase !!}>
+                                                    <path {!! $pathBase !!} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
                                             @break
                                             @case('served')
@@ -278,6 +284,10 @@
         <!-- Order Details Section -->
         <div class="bg-white border border-gray-200 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <!-- Order Items -->
+            @php
+                $orderDetailEuSelectable = $restaurant ? $restaurant->selectableEuAllergenKeys() : [];
+                $orderDetailEuEnabled = count($orderDetailEuSelectable) > 0;
+            @endphp
             <div class="border-b border-gray-200 divide-y divide-gray-200 dark:border-gray-700 dark:divide-gray-700">
                 @foreach ($order->items as $item)
                     @php
@@ -353,23 +363,42 @@
                                     </div>
                                     <div class="space-y-1 text-xs">
 
-                                        @if($order->kot->isNotEmpty())
-                                            @php
+                                        @php
+                                            $status = null;
+                                            $statusLabel = null;
+                                            $statusClasses = null;
+
+                                            if ($order->order_type === 'delivery') {
+                                                $status = $order->order_status->value ?? null;
+                                                $statusLabel = \App\Enums\OrderStatus::tryFrom($status)?->translatedLabel()
+                                                    ?? \Illuminate\Support\Str::of((string)$status)->replace('_', ' ')->title();
+
+                                                $statusClasses = match ($status) {
+                                                    'delivered' => 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+                                                    'cancelled' => 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+                                                    'out_for_delivery', 'picked_up', 'reached_destination' => 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+                                                    default => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
+                                                };
+                                            } elseif ($order->kot->isNotEmpty()) {
                                                 $kotItem = $order->kot->flatMap->items->where('menu_item_id', $item->menu_item_id)
                                                     ->where('menu_item_variation_id', $item->menu_item_variation_id)
                                                     ->first();
                                                 $status = $kotItem ? $kotItem->status : null;
-                                            @endphp
-                                            @if($status)
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                                                    @if($status === 'pending') bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300
-                                                    @elseif($status === 'cooking') bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300
-                                                    @elseif($status === 'ready') bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300
-                                                    @else bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300
-                                                    @endif">
-                                                    {{ ucfirst($status) }}
-                                                </span>
-                                            @endif
+                                                $statusLabel = $status ? ucfirst($status) : null;
+
+                                                $statusClasses = match ($status) {
+                                                    'pending' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
+                                                    'cooking' => 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+                                                    'ready' => 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+                                                    default => 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300',
+                                                };
+                                            }
+                                        @endphp
+
+                                        @if($status)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $statusClasses }}">
+                                                {{ $statusLabel }}
+                                            </span>
                                         @endif
                                     </div>
                                     <span class="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
@@ -385,6 +414,62 @@
                                                 <span class="ml-1 text-skin-base">
                                                     (+{{ currency_format($modifier->pivot->modifier_option_price ?? $modifier->price, $restaurant->currency_id) }})
                                                 </span>
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
+
+                                @if ($orderDetailEuEnabled && !empty($item->menuItem->eu_allergen_keys))
+                                    @php
+                                        $orderDetailLineAllergens = array_values(array_unique(array_intersect(
+                                            \App\Support\EuAnnexIiAllergens::keys(),
+                                            $orderDetailEuSelectable,
+                                            array_filter((array) $item->menuItem->eu_allergen_keys, 'is_string')
+                                        )));
+                                    @endphp
+                                    @if (count($orderDetailLineAllergens) > 0)
+                                        <div class="mt-1.5 flex w-full min-w-0 flex-wrap gap-1.5"
+                                            role="group"
+                                            aria-label="{{ __('modules.settings.euAllergensCustomerDisplayHeading') }}">
+                                            @foreach ($orderDetailLineAllergens as $odAllergenKey)
+                                                @php
+                                                    $odAllergenLabel = __(\App\Support\EuAnnexIiAllergens::langKey($odAllergenKey));
+                                                @endphp
+                                                <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-200/85 bg-amber-50/95 px-2 py-1 dark:border-amber-700/50 dark:bg-amber-950/35">
+                                                    <img src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($odAllergenKey) }}"
+                                                        alt=""
+                                                        class="h-4 w-4 shrink-0 object-contain"
+                                                        width="16"
+                                                        height="16"
+                                                        loading="lazy" />
+                                                    <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-gray-800 dark:text-gray-100 sm:max-w-[14rem]">{{ $odAllergenLabel }}</span>
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                @endif
+
+                                @php
+                                    $orderDetailLineDietary = \App\Support\DietaryLabels::normalize(
+                                        is_array($item->menuItem->dietary_labels ?? null) ? $item->menuItem->dietary_labels : []
+                                    );
+                                @endphp
+                                @if (count($orderDetailLineDietary) > 0)
+                                    <div class="mt-1.5 flex w-full min-w-0 flex-wrap gap-1.5"
+                                        role="group"
+                                        aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}">
+                                        @foreach ($orderDetailLineDietary as $odDietaryKey)
+                                            @php
+                                                $odDietaryLabel = __(\App\Support\DietaryLabels::langKey($odDietaryKey));
+                                            @endphp
+                                            <span class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200/85 bg-emerald-50/95 px-2 py-1 dark:border-emerald-700/50 dark:bg-emerald-950/35">
+                                                <img src="{{ \App\Support\DietaryLabels::defaultIconUrl($odDietaryKey) }}"
+                                                    alt=""
+                                                    class="h-4 w-4 shrink-0 object-contain"
+                                                    width="16"
+                                                    height="16"
+                                                    loading="lazy" />
+                                                <span class="max-w-[12rem] truncate text-xs font-medium leading-tight text-emerald-900 dark:text-emerald-100 sm:max-w-[14rem]">{{ $odDietaryLabel }}</span>
                                             </span>
                                         @endforeach
                                     </div>
@@ -960,8 +1045,8 @@
                 $isSubdomainEnabled = function_exists('module_enabled') && module_enabled('Subdomain');
                 if ($order->order_type === 'delivery' || $order->isFullyPaid() || in_array($order->status, ['pending_verification', 'canceled', 'delivered'])) {
                     $newOrderLink = $order->table_id
-                        ? route('table_order', [$order->table->hash])
-                        : ($isSubdomainEnabled ? url('/') : route('shop_restaurant', ['hash' => $restaurant->hash]));
+                        ? route('table_order', [$order->table->hash]) . '?new_order=1'
+                        : ($isSubdomainEnabled ? url('/?new_order=1') : route('shop_restaurant', ['hash' => $restaurant->hash, 'new_order' => 1]));
                 } else {
                     $newOrderLink = ($isSubdomainEnabled ? url('/') : route('shop_restaurant', ['hash' => $restaurant->hash])) . '?current_order=' . $order->id;
                 }
@@ -1054,7 +1139,7 @@
                     @lang('modules.order.paid')
                 </x-alert>
 
-                <x-secondary-link wire:navigate class="inline-flex items-center justify-center w-1/2 gap-2" href="{{ $newOrderLink }}">
+                <x-secondary-link class="inline-flex items-center justify-center w-1/2 gap-2" href="{{ $newOrderLink }}">
                     @lang('modules.order.newOrder')
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -1077,7 +1162,7 @@
                             <div class="w-full p-3 text-sm font-medium text-center text-red-700 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:text-red-300 dark:border-red-800">
                                 {{ $restaurantClosedMessage }}
                             </div>
-                            <x-secondary-link wire:navigate class="inline-flex items-center justify-center gap-2" href="{{ $newOrderLink }}">
+                            <x-secondary-link class="inline-flex items-center justify-center gap-2" href="{{ $newOrderLink }}">
                                 @lang('modules.order.newOrder')
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -1106,7 +1191,7 @@
                                 @endif
 
                             @endif
-                            <x-secondary-link wire:navigate class="inline-flex items-center justify-center gap-2" href="{{ $newOrderLink }}">
+                            <x-secondary-link class="inline-flex items-center justify-center gap-2" href="{{ $newOrderLink }}">
                                 @lang('modules.order.newOrder')
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -1370,6 +1455,45 @@
                 @endif
             </x-slot>
         </x-dialog-modal>
+
+        @if($paymentGateway->stripe_status)
+            <x-dialog-modal wire:model.live="showStripeOrderPaymentModal" maxWidth="md">
+                <x-slot name="title">
+                    @lang('modules.billing.stripe')
+                </x-slot>
+
+                <x-slot name="content">
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-600 dark:text-gray-300">
+                            @lang('modules.billing.payNow')
+                        </div>
+                        <div>
+                            <x-label for="order_detail_stripe_cardholder" value="Cardholder name" />
+                            <x-input id="order_detail_stripe_cardholder" class="block mt-1 w-full" type="text" autocomplete="cc-name" />
+                        </div>
+                        <div>
+                            <x-label value="Card details" />
+                            <div id="order-detail-stripe-card-element" class="mt-1 p-3 border border-gray-300 rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600"></div>
+                            <div id="order-detail-stripe-card-errors" class="mt-2 text-sm text-red-600"></div>
+                        </div>
+                        <div id="order-detail-stripe-loading" class="hidden text-sm text-gray-500 dark:text-gray-400">
+                            @lang('app.loading')
+                        </div>
+                    </div>
+                </x-slot>
+
+                <x-slot name="footer">
+                    <div class="flex w-full justify-between gap-2">
+                        <x-secondary-button type="button" wire:click="closeStripeOrderPaymentModal" wire:loading.attr="disabled">
+                            @lang('app.cancel')
+                        </x-secondary-button>
+                        <x-button type="button" id="order-detail-stripe-pay-btn" wire:loading.attr="disabled">
+                            @lang('modules.billing.payNow')
+                        </x-button>
+                    </div>
+                </x-slot>
+            </x-dialog-modal>
+        @endif
 
         <x-dialog-modal wire:model.live="showTipModal" maxWidth="md">
             <x-slot name="title">
@@ -1854,9 +1978,107 @@
                         payViaRazorpay(payment);
                     });
 
-                    $wire.on('stripePaymentInitiated', (payment) => {
-                        document.getElementById('order_payment').value = payment.payment.id;
-                        document.getElementById('order-payment-form').submit();
+                    let orderDetailStripe = null;
+                    let orderDetailStripeCard = null;
+                    let orderDetailStripeClientSecret = null;
+                    let orderDetailStripePaymentId = null;
+
+                    async function orderDetailStripeEmbeddedSetup(stripePaymentId) {
+                        const loadingEl = document.getElementById('order-detail-stripe-loading');
+                        loadingEl?.classList.remove('hidden');
+                        const response = await fetch("{{ route('stripe.order_embedded_setup') }}", {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': "{{ csrf_token() }}",
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({ stripe_payment_id: stripePaymentId }),
+                        });
+                        const data = await response.json();
+                        loadingEl?.classList.add('hidden');
+                        if (!response.ok) {
+                            throw new Error(data?.message || 'Unable to initialize payment');
+                        }
+                        return data;
+                    }
+
+                    function mountOrderDetailStripeCard(publishableKey) {
+                        if (!window.Stripe) {
+                            throw new Error('Stripe.js not loaded');
+                        }
+                        if (!orderDetailStripe || orderDetailStripe._pk !== publishableKey) {
+                            orderDetailStripe = Stripe(publishableKey);
+                            orderDetailStripe._pk = publishableKey;
+                        }
+                        if (orderDetailStripeCard) {
+                            try {
+                                orderDetailStripeCard.unmount();
+                                orderDetailStripeCard.destroy();
+                            } catch (e) {
+                            }
+                            orderDetailStripeCard = null;
+                        }
+                        const elements = orderDetailStripe.elements();
+                        orderDetailStripeCard = elements.create('card', { hidePostalCode: true });
+                        const el = document.getElementById('order-detail-stripe-card-element');
+                        if (el) {
+                            el.innerHTML = '';
+                            orderDetailStripeCard.mount('#order-detail-stripe-card-element');
+                        }
+                    }
+
+                    async function confirmOrderDetailStripePayment() {
+                        const errEl = document.getElementById('order-detail-stripe-card-errors');
+                        const payBtn = document.getElementById('order-detail-stripe-pay-btn');
+                        const nameEl = document.getElementById('order_detail_stripe_cardholder');
+                        errEl.innerText = '';
+                        if (payBtn) {
+                            payBtn.disabled = true;
+                        }
+                        try {
+                            const result = await orderDetailStripe.confirmCardPayment(orderDetailStripeClientSecret, {
+                                payment_method: {
+                                    card: orderDetailStripeCard,
+                                    billing_details: { name: nameEl?.value || '' },
+                                },
+                            });
+                            if (result.error) {
+                                errEl.innerText = result.error.message || 'Payment failed';
+                                if (payBtn) {
+                                    payBtn.disabled = false;
+                                }
+                                return;
+                            }
+                            window.location.href = "{{ route('stripe.order_embedded_return') }}" + "?stripe_payment_id=" + encodeURIComponent(orderDetailStripePaymentId);
+                        } catch (e) {
+                            errEl.innerText = e.message || 'Payment failed';
+                            if (payBtn) {
+                                payBtn.disabled = false;
+                            }
+                        }
+                    }
+
+                    document.getElementById('order-detail-stripe-pay-btn')?.addEventListener('click', confirmOrderDetailStripePayment);
+
+                    $wire.on('stripeOrderEmbeddedInit', async (payload) => {
+                        orderDetailStripePaymentId = payload?.stripePaymentId ?? payload?.[0]?.stripePaymentId;
+                        const errEl = document.getElementById('order-detail-stripe-card-errors');
+                        if (errEl) {
+                            errEl.innerText = '';
+                        }
+                        await new Promise((r) => setTimeout(r, 100));
+                        try {
+                            const setup = await orderDetailStripeEmbeddedSetup(orderDetailStripePaymentId);
+                            orderDetailStripeClientSecret = setup.client_secret;
+                            mountOrderDetailStripeCard(setup.publishable_key);
+                        } catch (e) {
+                            console.error(e);
+                            if (errEl) {
+                                errEl.innerText = e.message || 'Payment failed';
+                            }
+                        }
                     });
 
                     $wire.on('epayPaymentInitiated', (payment) => {

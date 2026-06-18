@@ -15,6 +15,7 @@ use App\Models\Printer;
 use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Expenses;
+use App\Models\ExpensesRecurring;
 use App\Models\KotPlace;
 use App\Models\MenuItem;
 use App\Models\OrderItem;
@@ -30,6 +31,7 @@ use App\Models\KotCancelReason;
 use App\Observers\AreaObserver;
 use App\Observers\MenuObserver;
 use App\Observers\UserObserver;
+use App\Observers\WaiterObserver;
 use App\Models\RestaurantCharge;
 use App\Observers\OrderObserver;
 use App\Observers\TableObserver;
@@ -44,6 +46,7 @@ use App\Observers\TableSessionObserver;
 use App\Observers\CurrencyObserver;
 use App\Observers\CustomerObserver;
 use App\Observers\ExpensesObserver;
+use App\Observers\ExpensesRecurringObserver;
 use App\Observers\KotPlaceObserver;
 use App\Observers\MenuItemObserver;
 use App\Observers\DeliveryPlatformObserver;
@@ -72,12 +75,17 @@ use App\Observers\NotificationSettingObserver;
 
 use App\Observers\OrderTypeObserver;
 use App\Models\OrderType;
+use App\Observers\ItemModifierObserver;
 use App\Observers\KotItemObserver;
+use App\Models\ItemModifier;
 use App\Models\KotItem;
 use App\Observers\PushNotificationObserver;
 use App\Models\PushNotification;
 use App\Observers\RefundReasonObserver;
 use App\Models\RefundReason;
+use App\Events\SendNewOrderReceived;
+use App\Listeners\NewOrderReceivedListener;
+use Illuminate\Support\Facades\Event;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -131,10 +139,14 @@ class AppServiceProvider extends ServiceProvider
         Schema::defaultStringLength(191);
         // Link observers with models
         Area::observe(AreaObserver::class);
-        User::observe(UserObserver::class);
+        User::observe([
+            UserObserver::class,
+            WaiterObserver::class,
+        ]);
         ItemCategory::observe(ItemCategoryObserver::class);
         Kot::observe(KotObserver::class);
         KotItem::observe(KotItemObserver::class);
+        ItemModifier::observe(ItemModifierObserver::class);
         MenuItem::observe(MenuItemObserver::class);
         Menu::observe(MenuObserver::class);
         OrderItem::observe(OrderItemObserver::class);
@@ -154,6 +166,7 @@ class AppServiceProvider extends ServiceProvider
         DeliveryExecutive::observe(DeliveryExecutiveObserver::class);
         RestaurantCharge::observe(RestaurantChargesObserver::class);
         Expenses::observe(ExpensesObserver::class);
+        ExpensesRecurring::observe(ExpensesRecurringObserver::class);
         ExpenseCategory::observe(ExpenseCategoryObserver::class);
         KotPlace::observe(KotPlaceObserver::class);
         Printer::observe(PrinterObserver::class);
@@ -172,6 +185,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Search macro for searching in tables.
         Builder::macro('search', function ($field, $string) {
+            /** @var \Illuminate\Database\Eloquent\Builder $this */
             return $string ? $this->where($field, 'like', '%' . $string . '%') : $this;
         });
 
@@ -181,6 +195,9 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             Log::error('Error in Translatable fallback: ' . $e->getMessage());
         }
+
+        // Event listener registration (Laravel 11 style app without EventServiceProvider).
+        Event::listen(SendNewOrderReceived::class, NewOrderReceivedListener::class);
 
         // Model::preventLazyLoading(app()->environment('development'));
     }

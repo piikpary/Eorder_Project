@@ -72,6 +72,8 @@ class OrderResource extends JsonResource
                 return 'Order Served';
             case OrderStatus::DELIVERED->value:
                 return 'Delivered';
+            case OrderStatus::COMPLETED->value:
+                return 'Order Completed';
             case OrderStatus::CANCELLED->value:
                 return 'Order Cancelled';
         }

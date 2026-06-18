@@ -14,6 +14,7 @@
                     </form>
                 </div>
 
+                <x-menu.copy-to-branches-button scope="modifier_groups" class="shrink-0 me-2" />
                 <x-primary-link href="{{ route('modifier-groups.create') }}" wire:navigate>
                     @lang('modules.modifier.addModifierGroup')
                 </x-primary-link>
@@ -134,4 +135,6 @@
             @endif
         </x-slot>
     </x-confirmation-modal>
+
+    <livewire:menu.copy-menu-to-branches />
 </div>

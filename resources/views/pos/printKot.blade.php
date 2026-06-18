@@ -1,5 +1,24 @@
 <!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}">
+
+@php
+    $appLocale = app()->getLocale();
+
+    if (!function_exists('flipText')) {
+        function flipText($text, $language = null, $printingChoice = 'browserPopupPrint') {
+            if ($printingChoice == 'browserPopupPrint') {
+                return $text;
+            }
+            if ($language && in_array($language, ['ar', 'fa', 'ur', 'he', 'ps', 'ku', 'sd', 'ckb'])) {
+                $arabic = new ArPHP\I18N\Arabic();
+                $text = $arabic->utf8Glyphs($text);
+                return $text;
+            }
+            return $text;
+        }
+    }
+@endphp
+
 <head>
     <meta charset="UTF-8">
     <title>{{ $restaurant->name ?? 'Demo Restaurant' }} - @lang('modules.order.kotTicket')</title>
@@ -10,8 +29,15 @@
             box-sizing: border-box;
             font-family: 'DejaVu Sans', 'Arial', sans-serif;
         }
-        [dir="rtl"] { text-align: right; }
-        [dir="ltr"] { text-align: left; }
+
+        [dir="rtl"] {
+            text-align: right;
+        }
+
+        [dir="ltr"] {
+            text-align: left;
+        }
+
         .receipt {
             width: {{ $width - 10 }}mm;
             padding: {{ $thermal ? '1mm' : '6.35mm' }};
@@ -30,13 +56,16 @@
             margin-bottom: 1mm;
         }
         .order-info {
-            text-align: center;
+            text-align: left;
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
-            padding: 2mm 0;
-            margin-bottom: 3mm;
-            font-size: {{ $width == 56 ? '8pt' : ($width == 80 ? '10pt' : '10pt') }};
+            padding: {{ $width == 56 ? '0.8mm 0' : '1.1mm 0' }};
+            margin-bottom: 2mm;
+            font-size: {{ $width == 56 ? '6.5pt' : ($width == 80 ? '7.5pt' : '8pt') }};
+            line-height: 1.15;
         }
+        [dir="rtl"] .order-info { text-align: right; }
+        [dir="ltr"] .order-info { text-align: left; }
         .kot-title {
             font-size: {{ $width == 56 ? '10pt' : ($width == 80 ? '14pt' : '16pt') }};
             font-weight: bold;
@@ -66,14 +95,22 @@
         .description {
             width: {{ $width == 56 ? '80%' : ($width == 80 ? '85%' : '88%') }};
         }
+        .item-name {
+            font-weight: bold;
+        }
+        .item-variation,
+        .item-modifier,
+        .item-note {
+            font-weight: normal;
+        }
         .modifiers {
-            font-size: {{ $width == 56 ? '6pt' : ($width == 80 ? '8pt' : '9pt') }};
+            font-size: 10pt;
             color: #555;
         }
         .footer {
             text-align: center;
             margin-top: 3mm;
-            font-size: {{ $width == 56 ? '7pt' : ($width == 80 ? '9pt' : '10pt') }};
+            font-size: 12pt;
             padding-top: 2mm;
             border-top: 1px dashed #000;
         }
@@ -82,19 +119,34 @@
         }
         .order-row {
             width: 100%;
-            margin-bottom: {{ $width == 56 ? '3px' : '5px' }};
+            margin-bottom: {{ $width == 56 ? '1px' : '2px' }};
+        }
+        .order-row:last-child {
+            margin-bottom: 0;
         }
         .order-row table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .order-row td {
+            padding: 0.3mm 0;
+            vertical-align: top;
         }
         .order-left {
             text-align: left;
-            width: 50%;
+            width: 56%;
         }
         .order-right {
             text-align: right;
-            width: 50%;
+            width: 44%;
+            padding-left: 2mm;
+        }
+        [dir="rtl"] .order-left { text-align: right; }
+        [dir="rtl"] .order-right {
+            text-align: left;
+            padding-left: 0;
+            padding-right: 2mm;
         }
         .back-button {
             position: fixed;
@@ -127,12 +179,6 @@
     </style>
 </head>
 <body>
-    @if(isset($printingChoice) && $printingChoice === 'browserPopupPrint')
-    <!-- Back button for PWA mode -->
-    <button class="back-button" onclick="goBack()" id="backButton" style="display: none;">
-        ← @lang('app.back')
-    </button>
-    @endif
     <div class="receipt">
         <div class="header">
 
@@ -141,14 +187,14 @@
             @endif
         </div>
         <div class="kot-title">
-            KOT <span class="bold">#{{ $kot->kot_number }}</span>
+            {{ flipText(__('modules.order.kot'), $appLocale, $rtlPrintingChoice) }} <span class="bold">#{{ $kot->kot_number }}</span>
             @if($kot->token_number)
                 <div style="font-size: {{ $width == 56 ? '9pt' : ($width == 80 ? '12pt' : '14pt') }}; margin-top: 1mm;">
-                    @lang('modules.order.tokenNumber'): <span class="bold">{{ $kot->token_number }}</span>
+                    {{ flipText(__('modules.order.tokenNumber'), $appLocale, $rtlPrintingChoice) }}: <span class="bold">{{ $kot->token_number }}</span>
                 </div>
             @endif
         </div>
-        <div class="order-info" style="margin-bottom: 3mm;">
+        <div class="order-info">
             <div class="order-row">
                 <!-- Row 1: Order Number (left), Table (right) -->
                 <table>
@@ -159,7 +205,7 @@
                             </span>
                         </td>
                         <td class="order-right">
-                            <span>@lang('modules.table.table'): <span class="bold">{{ $kot->order->table ? $kot->order->table->table_code : '-' }}</span></span>
+                            <span>{{ flipText(__('modules.table.table'), $appLocale, $rtlPrintingChoice) }}: <span class="bold">{{ $kot->order->table ? $kot->order->table->table_code : '-' }}</span></span>
                         </td>
                     </tr>
                 </table>
@@ -169,10 +215,10 @@
                 <table>
                     <tr>
                         <td class="order-left">
-                            @lang('app.date'): {{ $kot->created_at->timezone($kot->branch->restaurant->timezone)->format(dateFormat()) }}
+                            {{ flipText(__('app.date'), $appLocale, $rtlPrintingChoice) }}: {{ $kot->created_at->timezone($kot->branch->restaurant->timezone)->format(dateFormat()) }}
                         </td>
                         <td class="order-right">
-                            @lang('app.time'): {{ $kot->created_at->timezone($kot->branch->restaurant->timezone)->format(timeFormat()) }}
+                            {{ flipText(__('app.time'), $appLocale, $rtlPrintingChoice) }}: {{ $kot->created_at->timezone($kot->branch->restaurant->timezone)->format(timeFormat()) }}
                         </td>
                     </tr>
                 </table>
@@ -183,7 +229,7 @@
                 <table>
                     <tr>
                         <td class="order-left">
-                            @lang('modules.order.waiter'): <span class="bold">{{ $kot->order->waiter->name }}</span>
+                            {{ flipText(__('modules.order.waiter'), $appLocale, $rtlPrintingChoice) }}: <span class="bold">{{ $kot->order->waiter->name }}</span>
                         </td>
                         <td class="order-right"></td>
                     </tr>
@@ -196,11 +242,19 @@
                 <table>
                     <tr>
                         <td class="order-left">
-                            @lang('modules.settings.orderType'): <span class="bold">{{ Str::title(ucwords(str_replace('_', ' ', $kot->order->order_type))) }}</span>
+                            @php
+                                $kotOrderType = (string) $kot->order->order_type;
+                                $kotOrderTypeKey = 'modules.order.' . $kotOrderType;
+                                $kotOrderTypeLabel = __($kotOrderTypeKey);
+                                if ($kotOrderTypeLabel === $kotOrderTypeKey) {
+                                    $kotOrderTypeLabel = Str::title(str_replace('_', ' ', $kotOrderType));
+                                }
+                            @endphp
+                            {{ flipText(__('modules.settings.orderType'), $appLocale, $rtlPrintingChoice) }}: <span class="bold">{{ $kotOrderTypeLabel }}</span>
                         </td>
                         <td class="order-right">
                             @if($kot->order->order_type === 'pickup' && $kot->order->pickup_date)
-                                @lang('modules.order.pickupAt'): <span class="bold">{{ \Carbon\Carbon::parse($kot->order->pickup_date)->timezone($kot->branch->restaurant->timezone)->format(timeFormat()) }}</span>
+                                {{ flipText(__('modules.order.pickupAt'), $appLocale, $rtlPrintingChoice) }}: <span class="bold">{{ \Carbon\Carbon::parse($kot->order->pickup_date)->timezone($kot->branch->restaurant->timezone)->format(timeFormat()) }}</span>
                             @endif
                         </td>
                     </tr>
@@ -211,8 +265,8 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="description">@lang('modules.menu.itemName')</th>
-                    <th class="qty">@lang('modules.order.qty')</th>
+                    <th class="description">{{ flipText(__('modules.menu.itemName'), $appLocale, $rtlPrintingChoice) }}</th>
+                    <th class="qty">{{ flipText(__('modules.order.qty'), $appLocale, $rtlPrintingChoice) }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -226,15 +280,18 @@
                 @foreach($items as $item)
                     <tr>
                         <td class="description">
-                            {{ $item->menuItem->item_name }}
+                            <span class="item-name">{{ flipText($item->menuItem->item_name, $appLocale, $rtlPrintingChoice) }}</span>
+                            @if (count($receiptLanguages) > 1 && $item->menuItem->translations->count() > 1)
+                            <br>{{ flipText($item->menuItem->getTranslatedValue('item_name', $receiptLanguages[1]), $receiptLanguages[1], $rtlPrintingChoice) }}
+                            @endif
                             @if (isset($item->menuItemVariation))
-                                <br><small>({{ $item->menuItemVariation->variation }})</small>
+                                <br><small class="item-variation">({{ $item->menuItemVariation->variation }})</small>
                             @endif
                             @foreach ($item->modifierOptions as $modifier)
-                                <div class="modifiers">• {{ $modifier->name }}</div>
+                                <div class="modifiers item-modifier">• {{ $modifier->name }}</div>
                             @endforeach
                             @if ($item->note)
-                                <div class="modifiers"><strong>@lang('modules.order.note'):</strong> {{ $item->note }}</div>
+                                <div class="modifiers item-note">{{ flipText(__('modules.order.note'), $appLocale, $rtlPrintingChoice) }}: {{ $item->note }}</div>
                             @endif
                         </td>
                         <td class="qty">{{ $item->quantity }}</td>
@@ -244,7 +301,7 @@
         </table>
         @if ($kot->note)
             <div class="footer">
-                <strong>@lang('modules.order.specialInstructions'):</strong>
+                <strong>{{ flipText(__('modules.order.specialInstructions'), $appLocale, $rtlPrintingChoice) }}:</strong>
                 <div class="italic">{{$kot->note}}</div>
             </div>
         @endif

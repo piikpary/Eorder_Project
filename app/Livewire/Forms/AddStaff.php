@@ -2,11 +2,12 @@
 
 namespace App\Livewire\Forms;
 
-use Log;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Country;
+use App\Services\Pos\PosWaitersCache;
 use Livewire\Component;
+use Illuminate\Support\Facades\Log;
 use App\Notifications\StaffWelcomeEmail;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 
@@ -22,6 +23,7 @@ class AddStaff extends Component
     public $memberPassword;
     public $phoneNumber;
     public $restaurantPhoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -34,9 +36,13 @@ class AddStaff extends Component
         $this->memberRole = $this->roles->first()->name;
 
         // Initialize phone codes
-        $this->restaurantPhoneCode = restaurant()->country->phonecode ?? $this->allPhoneCodes->first();
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->restaurantPhoneCode = $detectedPhoneCode
+            ?? restaurant()->country->phonecode
+            ?? $this->allPhoneCodes->first();
 
     }
 
@@ -96,7 +102,7 @@ class AddStaff extends Component
             cache()->forget('restaurant_' . $user->restaurant_id . '_staff_stats');
         }
 
-        cache()->forget('waiters_' . $user->restaurant_id);
+        PosWaitersCache::forgetForRestaurant((int) $user->restaurant_id);
 
         // Reset the value
         $this->memberName = '';

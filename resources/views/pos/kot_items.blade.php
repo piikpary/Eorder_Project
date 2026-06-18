@@ -1,179 +1,320 @@
-<div
-    class="w-full flex flex-col bg-white dark:border-gray-700 pr-4 px-2 py-4 dark:bg-gray-800 lg:sticky lg:top-0 lg:self-start overflow-hidden rounded-md h-full">
+<div class="pos-kot-cart-panel w-full max-w-full flex flex-1 min-h-0 flex-col overflow-hidden bg-white dark:border-gray-700 px-3 py-3 dark:bg-gray-800 rounded-md lg:rounded-none lg:pr-4">
     <style>
+        @media (max-width: 1023px) {
+            #pos-kot-mobile-action-dock {
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 35;
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                box-sizing: border-box;
+                padding: 0.5rem 0.75rem;
+                padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+                padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+                padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+                background: rgb(255 255 255);
+                border-top: 1px solid rgb(229 231 235);
+                box-shadow: 0 -4px 16px rgb(0 0 0 / 0.08);
+            }
+
+            .dark #pos-kot-mobile-action-dock {
+                background: rgb(31 41 55);
+                border-top-color: rgb(55 65 81);
+            }
+
+            .pos-kot-cart-panel {
+                padding-bottom: calc(7.75rem + env(safe-area-inset-bottom, 0px));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            #pos-kot-mobile-action-dock {
+                position: static;
+                box-shadow: none;
+                border-top: 0;
+                padding: 0;
+                background: transparent;
+            }
+
+            .pos-kot-cart-panel {
+                padding-bottom: 0;
+            }
+        }
+
         .pos-hover-scrollbar {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+            scrollbar-width: thin;
+            -ms-overflow-style: auto;
         }
 
         .pos-hover-scrollbar::-webkit-scrollbar {
-            width: 0;
-            height: 0;
-        }
-
-        .pos-hover-scrollbar:hover {
-            scrollbar-width: thin;
-        }
-
-        .pos-hover-scrollbar:hover::-webkit-scrollbar {
             width: 6px;
             height: 6px;
         }
+
+        .pos-hover-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(107, 114, 128, 0.45);
+            border-radius: 9999px;
+        }
+
+        .pos-hover-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
     </style>
 
-    {{-- Order Type Indicator --}}
-    @if($orderTypeId)
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <span class="text-xs text-gray-500 dark:text-gray-400">@lang('modules.settings.orderType'):</span>
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                {{ \App\Models\OrderType::find($orderTypeId)?->order_type_name ?? ucfirst($orderType) }}
-            </span>
+    @include('pos.partials.running-order-banner')
 
-            @if($orderTypeSlug === 'delivery' && $selectedDeliveryApp)
-                <span class="text-xs text-gray-500 dark:text-gray-400 mx-2">•</span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">Platform:</span>
-                <span class="text-sm font-medium text-gray-900 dark:text-white">
-                    @if($selectedDeliveryApp === 'default')
-                        Default
+    @php
+        $isShowOrderDetail = request()->boolean('show-order-detail');
+        $posCtxOrderIdForCustomerModal = isset($orderDetail) && $orderDetail?->id
+            ? (int) $orderDetail->id
+            : (isset($orderID) && $orderID ? (int) $orderID : null);
+    @endphp
+
+    <div class="shrink-0 pr-1 border-b border-gray-200 dark:border-gray-700 pb-2 mb-1">
+        {{-- Single row: order type + customer (left), receipt + table actions (right) --}}
+        <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
+        {{-- Order type: hidden until set (JS updates labels). --}}
+        <div id="pos-order-type-indicator" class="inline-flex items-center gap-2 min-w-0 {{ $orderTypeId ? '' : 'hidden' }}">
+            <div class="flex items-center gap-1.5 min-w-0 flex-wrap text-xs">
+                
+                @unless($isShowOrderDetail)
+                    @if ($allowOrderTypeChange ?? true)
+                    <button
+                        type="button"
+                        id="pos-order-type-display-name"
+                        onclick="changeOrderType()"
+                        class="cursor-pointer font-semibold underline underline-offset-2 text-gray-900 dark:text-white truncate max-w-[11rem] sm:max-w-none hover:text-skin-base dark:hover:text-skin-base transition-colors"
+                        title="{{ __('app.change') }}"
+                        aria-label="{{ __('app.change') }}"
+                    >
+                        @if($orderTypeId)
+                            {{ \App\Models\OrderType::find($orderTypeId)?->order_type_name ?? ucfirst($orderType) }}
+                        @endif
+                    </button>
                     @else
-                        {{ \App\Models\DeliveryPlatform::find($selectedDeliveryApp)?->name ?? 'Unknown' }}
+                    <span id="pos-order-type-display-name" class="font-semibold text-gray-900 dark:text-white truncate max-w-[11rem] sm:max-w-none">
+                        @if($orderTypeId)
+                            {{ \App\Models\OrderType::find($orderTypeId)?->order_type_name ?? ucfirst($orderType) }}
+                        @endif
+                    </span>
                     @endif
+                @else
+                    <span id="pos-order-type-display-name" class="font-semibold underline underline-offset-2 text-gray-900 dark:text-white truncate max-w-[11rem] sm:max-w-none">
+                        @if($orderTypeId)
+                            {{ \App\Models\OrderType::find($orderTypeId)?->order_type_name ?? ucfirst($orderType) }}
+                        @endif
+                    </span>
+                @endunless
+                @unless($isShowOrderDetail)
+                    @if ($allowOrderTypeChange ?? true)
+                    <button type="button" onclick="changeOrderType()" id="pos-change-order-type-btn"
+                        class="cursor-pointer inline-flex shrink-0 items-center justify-center p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        title="{{ __('app.change') }}" aria-label="{{ __('app.change') }}" data-tooltip-target="tooltip-change-order-type">
+                        <svg width="14" height="14" viewBox="0 0 48 48" fill="none" class="text-gray-700 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M18 31H38V5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <path d="M30 21H10V43" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <path d="M44 11L38 5L32 11" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <path d="M16 37L10 43L4 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
+                    @endif
+                @endunless
+                <span id="pos-delivery-platform-row" class="inline-flex items-center gap-1 min-w-0 {{ ($orderTypeSlug === 'delivery' && $selectedDeliveryApp) ? '' : 'hidden' }}">
+                    <span class="text-gray-400 dark:text-gray-500">·</span>
+                    <span class="text-gray-500 dark:text-gray-400 shrink-0">@lang('modules.order.deliveryPlatformLabel')</span>
+                    <span id="pos-delivery-platform-display-name" class="font-medium text-gray-900 dark:text-white truncate">
+                        @if($orderTypeSlug === 'delivery' && $selectedDeliveryApp)
+                            @if($selectedDeliveryApp === 'default')
+                                @lang('modules.order.defaultDeliveryPlatform')
+                            @else
+                                {{ \App\Models\DeliveryPlatform::find($selectedDeliveryApp)?->name ?? 'Unknown' }}
+                            @endif
+                        @endif
+                    </span>
                 </span>
-            @endif
+            </div>
+            <div id="tooltip-change-order-type" role="tooltip"
+                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                {{ __('app.change') }}
+                <div class="tooltip-arrow" data-popper-arrow></div>
+            </div>
         </div>
 
-        <button type="button" onclick="changeOrderType()" class="text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-full transition-all">
-            @lang('app.change')
-        </button>
-    </div>
-    @endif
-
-    <div class="overflow-y-auto overflow-x-hidden space-y-2 pr-1 pb-36 pos-hover-scrollbar">
-        <div class="mt-2 customer-display-container">
+        <div class="customer-display-container min-w-0 shrink-0">
             {{-- Customer info section (shown when customer exists) --}}
-            <div id="customer-info-section" class="flex items-center gap-2" style="display: {{ $customerId ? 'flex' : 'none' }};">
-                <div id="customer-name" class="font-semibold text-gray-700 dark:text-gray-300">{{ $customer->name ?? '' }}</div>
+            <div id="customer-info-section" class="flex items-center gap-1 min-w-0" style="display: {{ $customerId ? 'flex' : 'none' }};">
+                <div id="customer-name" class="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">{{ $customer->name ?? '' }}</div>
                 @if(user_can('Update Order'))
-                    <button id="edit-customer-btn" onclick="showAddCustomerModal({{ $customerId ?? 'null' }})" title="{{__('modules.order.updateCustomerDetails')}}" class="p-1 text-gray-500 transition-colors bg-gray-100 rounded-md hover:text-gray-700 hover:bg-gray-200 rtl:ml-2 ltr:mr-2 dark:text-gray-300 dark:bg-gray-600 dark:hover:text-gray-200 dark:hover:bg-gray-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16">
+                    <button type="button" id="edit-customer-btn" onclick="window.showAddCustomerModal({{ json_encode($customerId ?? null) }}, @json($posCtxOrderIdForCustomerModal), true)" title="{{ __('modules.order.updateCustomerDetails') }}" aria-label="{{ __('modules.order.updateCustomerDetails') }}" class="shrink-0 p-1 text-gray-500 transition-colors bg-gray-100 rounded-md hover:text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-600 dark:hover:text-gray-200 dark:hover:bg-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16" aria-hidden="true">
                             <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
                             <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
                         </svg>
                     </button>
+                    <button type="button" id="remove-customer-btn" onclick="clearSelectedCustomer()" title="{{ __('app.remove') }}" aria-label="{{ __('app.remove') }}" data-tooltip-target="tooltip-remove-customer-details" class="shrink-0 p-1 text-red-500 transition-colors bg-red-50 rounded-md hover:text-red-700 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/30 dark:hover:text-red-200 dark:hover:bg-red-900/50">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div id="tooltip-remove-customer-details" role="tooltip"
+                        class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                        {{ __('app.remove') }}
+                        <div class="tooltip-arrow" data-popper-arrow></div>
+                    </div>
                 @endif
             </div>
 
             {{-- Add customer section (shown when no customer) --}}
-            <div id="add-customer-section" style="display: {{ $customerId ? 'none' : 'block' }};">
-                <a href="javascript:;"
-                    onclick="showAddCustomerModal()"
-                    class="text-sm underline underline-offset-2 dark:text-gray-300">&plus; @lang('modules.order.addCustomerDetails')</a>
+            <div id="add-customer-section" class="shrink-0" style="display: {{ $customerId ? 'none' : 'flex' }};">
+                <button type="button" onclick="window.showAddCustomerModal(null, @json($posCtxOrderIdForCustomerModal), true)"
+                    class="inline-flex items-center justify-center p-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    title="{{ __('modules.order.addCustomerDetails') }}" aria-label="{{ __('modules.order.addCustomerDetails') }}" data-tooltip-target="tooltip-add-customer-details">
+                    <svg width="16" height="16" viewBox="-2.5 0 32 32" fill="currentColor" class="text-gray-700 dark:text-gray-300" aria-hidden="true">
+                        <path d="M18.723 21.788c-1.15-0.48-3.884-1.423-5.565-1.919-0.143-0.045-0.166-0.052-0.166-0.649 0-0.493 0.203-0.989 0.401-1.409 0.214-0.456 0.468-1.224 0.559-1.912 0.255-0.296 0.602-0.88 0.826-1.993 0.196-0.981 0.104-1.338-0.026-1.673-0.013-0.035-0.028-0.070-0.038-0.105-0.049-0.23 0.018-1.425 0.186-2.352 0.116-0.636-0.030-1.989-0.906-3.108-0.553-0.707-1.611-1.576-3.544-1.696l-1.060 0.001c-1.9 0.12-2.96 0.988-3.513 1.695-0.876 1.119-1.021 2.472-0.906 3.108 0.169 0.928 0.236 2.123 0.187 2.348-0.010 0.039-0.025 0.074-0.039 0.11-0.129 0.335-0.221 0.692-0.025 1.673 0.222 1.113 0.57 1.697 0.826 1.993 0.090 0.688 0.344 1.456 0.559 1.912 0.157 0.334 0.23 0.788 0.23 1.431 0 0.597-0.023 0.604-0.157 0.646-1.738 0.513-4.505 1.513-5.537 1.965-0.818 0.351-1.017 0.98-1.017 1.548s0 2.251 0 2.623c0 0.371 0.22 1.006 1.017 1.006 0.613 0 5.518 0 7.746 0 0.668 0 1.098 0 1.098 0h0.192c0 0 0.437 0 1.115 0 2.237 0 7.135 0 7.747 0 0.796 0 1.017-0.634 1.017-1.006s0-2.055 0-2.623-0.392-1.262-1.209-1.613zM18.876 25.98h-17.827v-2.579c0-0.318 0.092-0.46 0.388-0.587 0.994-0.435 3.741-1.426 5.434-1.926 0.889-0.282 0.889-1.070 0.889-1.646 0-0.801-0.106-1.397-0.331-1.878-0.172-0.366-0.392-1.022-0.468-1.601l-0.041-0.312-0.206-0.238c-0.113-0.13-0.396-0.538-0.59-1.513-0.153-0.759-0.085-0.935-0.031-1.076 0.031-0.076 0.058-0.152 0.081-0.237l0.005-0.022 0.005-0.022c0.105-0.495-0.037-1.962-0.181-2.755-0.067-0.365 0.017-1.401 0.7-2.273 0.418-0.534 1.229-1.19 2.722-1.293l0.992-0.001c1.219 0.083 2.145 0.518 2.752 1.294 0.682 0.872 0.766 1.909 0.7 2.275-0.148 0.814-0.287 2.257-0.18 2.758l0.008 0.039 0.011 0.038c0.016 0.054 0.036 0.108 0.056 0.161l0.009 0.026 0.001 0.002c0.059 0.153 0.127 0.326-0.024 1.087-0.196 0.974-0.479 1.384-0.592 1.515l-0.204 0.237-0.042 0.31c-0.076 0.578-0.296 1.237-0.468 1.603-0.247 0.525-0.5 1.157-0.5 1.856 0 0.577 0 1.367 0.918 1.655 1.641 0.485 4.345 1.416 5.448 1.877 0.418 0.179 0.574 0.493 0.574 0.649l-0.006 2.579z"/>
+                        <path d="M23.078 14.441v-4.185h-1.049v4.185h-4.186v1.049h4.186v4.185h1.049v-4.185h4.185v-1.049z"/>
+                    </svg>
+                </button>
+                <div id="tooltip-add-customer-details" role="tooltip"
+                    class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                    {{ __('modules.order.addCustomerDetails') }}
+                    <div class="tooltip-arrow" data-popper-arrow></div>
+                </div>
             </div>
         </div>
 
-        <div class="flex justify-between my-2 items-center">
-            <div class="font-medium py-2 inline-flex items-center gap-1  dark:text-neutral-200 text-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-receipt w-4 h-4" viewBox="0 0 16 16"><path d="M1.92.506a.5.5 0 0 1 .434.14L3 1.293l.646-.647a.5.5 0 0 1 .708 0L5 1.293l.646-.647a.5.5 0 0 1 .708 0L7 1.293l.646-.647a.5.5 0 0 1 .708 0L9 1.293l.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .801.13l.5 1A.5.5 0 0 1 15 2v12a.5.5 0 0 1-.053.224l-.5 1a.5.5 0 0 1-.8.13L13 14.707l-.646.647a.5.5 0 0 1-.708 0L11 14.707l-.646.647a.5.5 0 0 1-.708 0L9 14.707l-.646.647a.5.5 0 0 1-.708 0L7 14.707l-.646.647a.5.5 0 0 1-.708 0L5 14.707l-.646.647a.5.5 0 0 1-.708 0L3 14.707l-.646.647a.5.5 0 0 1-.801-.13l-.5-1A.5.5 0 0 1 1 14V2a.5.5 0 0 1 .053-.224l.5-1a.5.5 0 0 1 .367-.27m.217 1.338L2 2.118v11.764l.137.274.51-.51a.5.5 0 0 1 .707 0l.646.647.646-.646a.5.5 0 0 1 .708 0l.646.646.646-.646a.5.5 0 0 1 .708 0l.646.646.646-.646a.5.5 0 0 1 .708 0l.509.509.137-.274V2.118l-.137-.274-.51.51a.5.5 0 0 1-.707 0L12 1.707l-.646.647a.5.5 0 0 1-.708 0L10 1.707l-.646.647a.5.5 0 0 1-.708 0L8 1.707l-.646.647a.5.5 0 0 1-.708 0L6 1.707l-.646.647a.5.5 0 0 1-.708 0L4 1.707l-.646.647a.5.5 0 0 1-.708 0z"/><path d="M3 4.5a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m8-6a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5"/></svg>
-
-                @if(!isOrderPrefixEnabled())
-                    @lang('modules.order.orderNumber') #{{ $orderNumber }}
-                @else
-                    {{ $formattedOrderNumber }}
-                @endif
             </div>
 
+            <div class="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 shrink-0">
+            <div data-pos-order-number-badge class="inline-flex items-center gap-1 shrink-0 text-xs text-gray-700 dark:text-gray-200 tabular-nums" title="{{ __('modules.order.orderNumber') }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-receipt shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.92.506a.5.5 0 0 1 .434.14L3 1.293l.646-.647a.5.5 0 0 1 .708 0L5 1.293l.646-.647a.5.5 0 0 1 .708 0L7 1.293l.646-.647a.5.5 0 0 1 .708 0L9 1.293l.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .801.13l.5 1A.5.5 0 0 1 15 2v12a.5.5 0 0 1-.053.224l-.5 1a.5.5 0 0 1-.8.13L13 14.707l-.646.647a.5.5 0 0 1-.708 0L11 14.707l-.646.647a.5.5 0 0 1-.708 0L9 14.707l-.646.647a.5.5 0 0 1-.708 0L7 14.707l-.646.647a.5.5 0 0 1-.708 0L5 14.707l-.646.647a.5.5 0 0 1-.708 0L3 14.707l-.646.647a.5.5 0 0 1-.801-.13l-.5-1A.5.5 0 0 1 1 14V2a.5.5 0 0 1 .053-.224l.5-1a.5.5 0 0 1 .367-.27m.217 1.338L2 2.118v11.764l.137.274.51-.51a.5.5 0 0 1 .707 0l.646.647.646-.646a.5.5 0 0 1 .708 0l.646.646.646-.646a.5.5 0 0 1 .708 0l.646.646.646-.646a.5.5 0 0 1 .708 0l.509.509.137-.274V2.118l-.137-.274-.51.51a.5.5 0 0 1-.707 0L12 1.707l-.646.647a.5.5 0 0 1-.708 0L10 1.707l-.646.647a.5.5 0 0 1-.708 0L8 1.707l-.646.647a.5.5 0 0 1-.708 0L6 1.707l-.646.647a.5.5 0 0 1-.708 0L4 1.707l-.646.647a.5.5 0 0 1-.708 0z"/><path d="M3 4.5a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m8-6a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5"/></svg>
+                <span class="font-semibold whitespace-nowrap">
+                    @if(!isOrderPrefixEnabled())
+                        #<span class="order-number-value">{{ $orderNumber }}</span>
+                    @else
+                        <span class="formatted-order-number-value">{{ $formattedOrderNumber }}</span>
+                    @endif
+                </span>
+            </div>
 
-            @if ($orderType == 'dine_in')
-                <div class="inline-flex items-center gap-2 dark:text-gray-300 table-display-container">
-                    {{-- @if (!auth()->user()->roles->pluck('display_name')->contains('Waiter')) --}}
-                        <div id="table-info-section" style="display: {{ $tableNo ? 'flex' : 'none' }};" class="inline-flex items-center gap-2">
-                            <svg fill="currentColor" class="w-5 h-5 transition duration-75 group-hover:text-gray-900 dark:text-gray-200 dark:group-hover:text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44.999 44.999" xml:space="preserve"><g stroke-width="0"/><g stroke-linecap="round" stroke-linejoin="round"/><path d="m42.558 23.378 2.406-10.92a1.512 1.512 0 0 0-2.954-.652l-2.145 9.733h-9.647a1.512 1.512 0 0 0 0 3.026h.573l-3.258 7.713a1.51 1.51 0 0 0 1.393 2.102c.59 0 1.15-.348 1.394-.925l2.974-7.038 4.717.001 2.971 7.037a1.512 1.512 0 1 0 2.787-1.177l-3.257-7.713h.573a1.51 1.51 0 0 0 1.473-1.187m-28.35 1.186h.573a1.512 1.512 0 0 0 0-3.026H5.134L2.99 11.806a1.511 1.511 0 1 0-2.954.652l2.406 10.92a1.51 1.51 0 0 0 1.477 1.187h.573L1.234 32.28a1.51 1.51 0 0 0 .805 1.98 1.515 1.515 0 0 0 1.982-.805l2.971-7.037 4.717-.001 2.972 7.038a1.514 1.514 0 0 0 1.982.805 1.51 1.51 0 0 0 .805-1.98z"/><path d="M24.862 31.353h-.852V18.308h8.13a1.513 1.513 0 1 0 0-3.025H12.856a1.514 1.514 0 0 0 0 3.025h8.13v13.045h-.852a1.514 1.514 0 0 0 0 3.027h4.728a1.513 1.513 0 1 0 0-3.027"/></svg>
-                            <span id="table-code">{{ $tableNo }}</span>
+            <div data-pos-sidebar-order-type="dine_in" class="{{ ($orderTypeId && $orderType == 'dine_in') ? '' : 'hidden' }} shrink-0">
+                <div class="inline-flex items-center gap-1 dark:text-gray-300 table-display-container">
+                        <div id="table-info-section" style="display: {{ $tableNo ? 'flex' : 'none' }};" class="inline-flex items-center gap-1" title="@lang('modules.table.table')">
+                            <svg fill="currentColor" class="w-4 h-4 shrink-0 text-gray-600 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44.999 44.999" xml:space="preserve" aria-hidden="true"><g stroke-width="0"/><g stroke-linecap="round" stroke-linejoin="round"/><path d="m42.558 23.378 2.406-10.92a1.512 1.512 0 0 0-2.954-.652l-2.145 9.733h-9.647a1.512 1.512 0 0 0 0 3.026h.573l-3.258 7.713a1.51 1.51 0 0 0 1.393 2.102c.59 0 1.15-.348 1.394-.925l2.974-7.038 4.717.001 2.971 7.037a1.512 1.512 0 1 0 2.787-1.177l-3.257-7.713h.573a1.51 1.51 0 0 0 1.473-1.187m-28.35 1.186h.573a1.512 1.512 0 0 0 0-3.026H5.134L2.99 11.806a1.511 1.511 0 1 0-2.954.652l2.406 10.92a1.51 1.51 0 0 0 1.477 1.187h.573L1.234 32.28a1.51 1.51 0 0 0 .805 1.98 1.515 1.515 0 0 0 1.982-.805l2.971-7.037 4.717-.001 2.972 7.038a1.514 1.514 0 0 0 1.982.805 1.51 1.51 0 0 0 .805-1.98z"/><path d="M24.862 31.353h-.852V18.308h8.13a1.513 1.513 0 1 0 0-3.025H12.856a1.514 1.514 0 0 0 0 3.025h8.13v13.045h-.852a1.514 1.514 0 0 0 0 3.027h4.728a1.513 1.513 0 1 0 0-3.027"/></svg>
+                            <span id="table-code" class="text-xs font-semibold tabular-nums">{{ $tableNo }}</span>
 
                             @if (user_can('Update Order'))
-                                <x-secondary-button onclick="showTableChangeConfirmationModal()" class="text-xs">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                        class="bi bi-gear" viewBox="0 0 16 16">
-                                        <path
-                                            d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0" />
-                                        <path
-                                            d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z" />
-                                    </svg>
-                                </x-secondary-button>
+                                <button type="button" onclick="showTableChangeConfirmationModal()"
+                                    class="inline-flex items-center justify-center p-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    title="{{ __('modules.order.changeTable') }}" aria-label="{{ __('modules.order.changeTable') }}" data-tooltip-target="tooltip-change-table">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/></svg>
+                                </button>
+                                <div id="tooltip-change-table" role="tooltip"
+                                    class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                    {{ __('modules.order.changeTable') }}
+                                    <div class="tooltip-arrow" data-popper-arrow></div>
+                                </div>
                             @endif
                         </div>
-                        <div id="set-table-section" style="display: {{ $tableNo ? 'none' : 'block' }};">
-                            <x-secondary-button class="text-xs"
-                                onclick="showTableChangeConfirmationModal()" >@lang('modules.order.setTable')
-                            </x-secondary-button>
+                        <div id="set-table-section" style="display: {{ $tableNo ? 'none' : 'flex' }};" class="inline-flex">
+                            <button type="button" onclick="showTableChangeConfirmationModal()"
+                                class="inline-flex items-center justify-center p-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                title="{{ __('modules.order.setTable') }}" aria-label="{{ __('modules.order.setTable') }}" data-tooltip-target="tooltip-set-table">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-table" viewBox="0 0 16 16" aria-hidden="true"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/></svg>
+                            </button>
+                            <div id="tooltip-set-table" role="tooltip"
+                                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                {{ __('modules.order.setTable') }}
+                                <div class="tooltip-arrow" data-popper-arrow></div>
+                            </div>
                         </div>
-                        <x-secondary-button onclick="showMergeTableModal()" class="ml-2" title="Merge Table">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left-right" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"/>
-                            </svg>
-                            @lang('modules.order.mergeTables')
-                        </x-secondary-button>
-                    {{-- @endif --}}
+                        @unless($isShowOrderDetail)
+                         
+                            <button type="button" onclick="showMergeTableModal()"
+                                class="inline-flex items-center justify-center p-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                title="{{ __('modules.order.mergeTables') }}" aria-label="{{ __('modules.order.mergeTables') }}" data-tooltip-target="tooltip-merge-tables">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-left-right" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"/></svg>
+                                
+                            </button>
+                            <div id="tooltip-merge-tables" role="tooltip"
+                                class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                                {{ __('modules.order.mergeTables') }}
+                                <div class="tooltip-arrow" data-popper-arrow></div>
+                            </div>
+                         
+                        @endunless
                 </div>
+            </div>
 
-            @endif
-
+            </div>
         </div>
 
-        <div class="flex justify-between items-center gap-2">
+        @php
+            $showRoomServicePosSidebar = $orderTypeId
+                && (($orderType ?? '') === 'room_service' || ($orderTypeSlug ?? '') === 'room_service');
+        @endphp
 
-            @if ($orderType == 'dine_in')
-                <div class="inline-flex items-center gap-1 text-xs dark:text-gray-300">
-                    @lang('modules.order.noOfPax') <x-input type="number" step='1' min='1' class="w-16 text-xs"
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 justify-between mt-1.5">
+            {{-- Room service: same row as clear cart (compact one-line layout lives in partial). --}}
+            <div data-pos-sidebar-order-type="room_service"
+                class="flex flex-1 min-w-0 max-w-full items-center overflow-hidden {{ $showRoomServicePosSidebar ? '' : 'hidden' }}">
+                @include('pos.partials.room-service-sidebar-ajax')
+            </div>
+            <div data-pos-sidebar-order-type="dine_in" data-pos-sidebar-use-contents="1" style="display: {{ ($orderTypeId && $orderType == 'dine_in') ? 'contents' : 'none' }}">
+                <div class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300" title="{{ __('modules.order.noOfPax') }}">
+                    <span class="shrink-0">@lang('modules.order.noOfPax')</span>
+                    <x-input type="number" step='1' min='1' class="h-7 w-12 px-1 py-0 text-xs"
                         id="noOfPaxInput" value="{{ $noOfPax }}" onchange="updateNoOfPax(this.value)" />
                 </div>
 
-                <div class="gap-2 inline-flex items-center">
-                    <x-secondary-button class="relative text-xs" onclick="showKotNoteModal()" :title="__('modules.order.addNote')"
-                        data-tooltip-target="tooltip-note">
+                <div class="gap-1.5 inline-flex items-center">
+                    <button type="button" onclick="showKotNoteModal()"
+                        class="relative inline-flex items-center justify-center p-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        title="{{ __('modules.order.addNote') }}" aria-label="{{ __('modules.order.addNote') }}" data-tooltip-target="tooltip-add-note">
                         @if ($orderNote)
-                            <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" fill="currentColor" class="absolute bi bi-circle-fill top-1 right-1 text-skin-base" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" fill="currentColor" class="absolute bi bi-circle-fill top-0.5 right-0.5 text-skin-base" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg>
                         @endif
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                            class="bi bi-pencil-square" viewBox="0 0 16 16">
-                            <path
-                                d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z" />
-                            <path fill-rule="evenodd"
-                                d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z" />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z" />
+                            <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z" />
                         </svg>
-                    </x-secondary-button>
-
-                    <div id="tooltip-note" role="tooltip"
+                    </button>
+                    <div id="tooltip-add-note" role="tooltip"
                         class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
-                        @lang('modules.order.addNote')
+                        {{ __('modules.order.addNote') }}
                         <div class="tooltip-arrow" data-popper-arrow></div>
                     </div>
 
-                    <div class="inline-flex items-center gap-2">
+                    <div class="inline-flex items-center gap-1 min-w-0" title="{{ __('modules.order.selectWaiter') }}">
                         @if ($isWaiterLocked)
                             <span
-                                class="text-xs w-36 px-2 py-1 border border-gray-300 rounded-md bg-gray-100 dark:text-gray-200 dark:bg-gray-600 dark:border-gray-700 truncate"
+                                class="text-xs max-w-[9rem] px-2 py-1 border border-gray-300 rounded-md bg-gray-100 dark:text-gray-200 dark:bg-gray-600 dark:border-gray-700 truncate"
                                 title="{{ $waiterName }}">
                                 {{ $waiterName }}
                             </span>
                         @else
-                            <x-select class="text-xs w-36" id="selectWaiterInput" onchange="updateSelectWaiter(this.value)" :disabled="$isWaiterLocked">
+                            <x-select class="text-xs h-8 w-36 min-w-[9rem] max-w-[11rem] rounded-md border-gray-300 bg-white px-2 pr-7 dark:border-gray-600 dark:bg-gray-800" id="selectWaiterInput" onchange="updateSelectWaiter(this.value)" :disabled="$isWaiterLocked" title="{{ __('modules.order.selectWaiter') }}" aria-label="{{ __('modules.order.selectWaiter') }}">
                                 <option value="">@lang('modules.order.selectWaiter')</option>
                                 @foreach ($users as $item)
-                                    <option value="{{ $item->id }}" {{ ($selectWaiter && $selectWaiter == $item->id) ? 'selected' : '' }}>{{ $item->name }}</option>
+                                    @php $runningCount = (int)($waiterRunningOrdersMap[$item->id] ?? 0); @endphp
+                                    <option value="{{ $item->id }}" {{ ($selectWaiter && $selectWaiter == $item->id) ? 'selected' : '' }}>
+                                        {{ $item->name }} ({{ __('modules.table.running') }}: {{ $runningCount }})
+                                    </option>
                                 @endforeach
                             </x-select>
                         @endif
                     </div>
 
                 </div>
-            @endif
+            </div>
 
-            @if ($orderType == 'delivery')
-                <div class="gap-2 flex justify-between items-center mb-2">
-                    <div class="inline-flex items-center gap-2">
-                        <svg class="w-6 h-6 transition duration-75 text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white"
+            <div data-pos-sidebar-order-type="delivery" class="{{ ($orderTypeId && $orderType == 'delivery') ? '' : 'hidden' }} w-full min-w-0 sm:w-auto">
+                <div class="flex flex-wrap gap-2 items-center justify-between">
+                    <div class="inline-flex items-center gap-1.5 min-w-0 flex-1" title="{{ __('modules.order.selectDeliveryExecutive') }}">
+                        <svg class="w-5 h-5 shrink-0 text-gray-600 dark:text-gray-300"
                             fill="currentColor" version="1.0" viewBox="0 0 512 512"
                             xmlns="http://www.w3.org/2000/svg">
                             <g transform="translate(0 512) scale(.1 -.1)">
@@ -182,63 +323,79 @@
                             </g>
                         </svg>
 
-                        <x-select class="text-sm w-full" id="selectDeliveryExecutiveInput" onchange="updateSelectDeliveryExecutive(this.value)">
+                        <x-select class="text-xs w-full min-w-0 sm:max-w-xs" id="selectDeliveryExecutiveInput" onchange="updateSelectDeliveryExecutive(this.value)">
                             <option value="">@lang('modules.order.selectDeliveryExecutive')</option>
                             @foreach ($deliveryExecutives as $item)
                                 @php
                                     $isBusy = (bool)($deliveryExecutiveBusyMap[$item->id] ?? false);
                                     $isSelected = (int)($selectedDeliveryExecutive ?? 0) === (int)$item->id;
                                 @endphp
-                                @if (!$isBusy || $isSelected)
-                                    <option value="{{ $item->id }}" {{ $isSelected ? 'selected' : '' }}>
-                                        {{ $item->name }}
-                                    </option>
-                                @endif
+                                <option
+                                    value="{{ $item->id }}"
+                                    data-busy="{{ $isBusy ? 1 : 0 }}"
+                                    data-name="{{ $item->name }}"
+                                    {{ $isSelected ? 'selected' : '' }}>
+                                    {{ $item->name }}@if ($isBusy) (Busy)@endif
+                                </option>
                             @endforeach
                         </x-select>
                     </div>
                 </div>
-            @endif
+            </div>
 
-            @if(module_enabled('Hotel')  && in_array('Hotel', restaurant_modules()))
-                @include('hotel::pos.room-service')
-            @endif
-
-            @if ($orderType == 'pickup')
+            <div data-pos-sidebar-order-type="pickup" class="{{ ($orderTypeId && $orderType == 'pickup') ? '' : 'hidden' }} flex-1 min-w-0">
                 @php
                     $timeFormat = restaurant()->time_format ?? 'h:i A';
                     $currentDate = $pickupDate ?? now()->format(restaurant()->date_format);
                     $currentTime = $pickupTime ?? now()->format('H:i');
                 @endphp
 
-                <div class="flex items-end gap-2 pb-2" id="pickup-datetime-container">
-                    <div class="relative flex-1">
+                <div class="flex items-center gap-2 pb-1 w-full" id="pickup-datetime-container">
+                    <div class="relative w-1/2 min-w-0 flex flex-col justify-center">
                         <x-datepicker
                             id="pickupDateInput"
                             value="{{ $currentDate }}"
                             minDate="{{ $minDate }}"
                             maxDate="{{ $maxDate }}"
                             onchange="window.updatePickupDate && window.updatePickupDate(this.value)"
-                            class="pl-4 pr-5 py-2 text-lg text-gray-700 dark:text-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 w-full" />
+                            class="h-8 pl-2.5 pr-8 py-1 box-border text-xs leading-tight text-gray-700 dark:text-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 w-full" />
                         <div class="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                            <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z" />
                             </svg>
                         </div>
                     </div>
 
-                    <div class="relative flex-1" style="overflow: visible;">
+                    <div class="relative w-1/2 min-w-0 flex flex-col justify-center" style="overflow: visible;">
                         <x-time-picker
                             id="pickupTimeInput"
                             value="{{ $currentTime }}"
                             onchange="window.updatePickupTime && window.updatePickupTime(this.value)"
+                            compact
                         />
                     </div>
                 </div>
+            </div>
 
-
-            @endif
+            <div class="shrink-0">
+                <button type="button" onclick="if (typeof window.clearPosCartOnly === 'function') { window.clearPosCartOnly(this); }"
+                    class="inline-flex items-center justify-center p-1.5 rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                    title="{{ __('messages.posClearCart') }}" aria-label="{{ __('messages.posClearCart') }}" data-tooltip-target="tooltip-clear-cart-all-types">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M6.5 1h3a1 1 0 0 1 1 1V3h3a.5.5 0 0 1 0 1h-.538l-.853 9.385A2 2 0 0 1 10.118 15H5.882a2 2 0 0 1-1.99-1.615L3.039 4H2.5a.5.5 0 0 1 0-1h3V2a1 1 0 0 1 1-1m1 2h2V2h-2z"/>
+                        <path d="M6 6.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0V7a.5.5 0 0 1 .5-.5m4 .5a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0z"/>
+                    </svg>
+                </button>
+                <div id="tooltip-clear-cart-all-types" role="tooltip"
+                    class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                    {{ __('messages.posClearCart') }}
+                    <div class="tooltip-arrow" data-popper-arrow></div>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <div class="overflow-y-auto flex-1 min-h-0 overflow-x-hidden space-y-2 pr-1 pb-4 pos-hover-scrollbar">
 
         @php
             // Performance: avoid repeated relation loads + collection scans in each cart row.
@@ -264,6 +421,12 @@
                     $orderItemLookup[(int)$orderItemRow->id] = $orderItemRow;
                 }
             }
+
+            $isKotNewCartBlade = isset($orderDetail) && $orderDetail && (string) $orderDetail->status === 'kot' && ! request()->boolean('show-order-detail');
+            $showFreshNewOrderEmptyHint = (! isset($orderID) || ! $orderID) && ! $isKotNewCartBlade;
+
+            $posEuSelectableKeysCart = restaurant()->selectableEuAllergenKeys();
+            $posEuShowInCartBlade = count($posEuSelectableKeysCart) > 0;
         @endphp
         <div class="flex flex-col rounded gap-1 border-t border-gray-50 dark:border-gray-700 p-2">
             @forelse ($orderItemList as $key => $item)
@@ -423,7 +586,7 @@
                     $isFreeItem = false;
                 }
             @endphp
-            <div class="border border-gray-100 dark:border-gray-700 rounded-md p-2 flex flex-col gap-2 {{ $isFreeItem ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20' : ($hasStampDiscount ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20' : '') }}">
+            <div class="border-bottom border-gray-100 dark:border-gray-700 rounded-md  flex flex-col gap-2 {{ $isFreeItem ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20' : ($hasStampDiscount ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20' : '') }}">
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center justify-between">
                         <div class="flex flex-col gap-1">
@@ -519,14 +682,13 @@
 
                 </div>
 
-                <div class="flex items-center gap-2 justify-between">
+                <div class="flex items-center gap-2 w-full min-h-[2.25rem]">
 
 
                     @if (!$isFreeItem)
-                    <div class="relative inline-flex items-center max-w-[7rem]"
-                        wire:key='orderItemQty-{{ $key }}-counter'>
+                    <div class="relative inline-flex items-center max-w-[7rem] shrink-0"
+                        data-pos-qty-counter="{{ $key }}">
                         <button type="button" onclick="decreaseQty('{{ $key }}')"
-                        wire:loading.attr="disabled" wire:loading.class="opacity-50"
                         class="bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-md p-3 h-8 relative">
                             <svg class="w-2 h-2 text-gray-900 dark:text-white" aria-hidden="true"
                                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
@@ -550,11 +712,12 @@
                         </button>
                     </div>
                     @else
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <div class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
                         @lang('app.qty') {{ $orderItemQty[$key] ?? 1 }}
                     </div>
                     @endif
 
+                    <div class="flex flex-1 min-w-0 justify-center items-center gap-2 flex-wrap px-1">
                     {{-- Item Note Button/Display --}}
                     <div class="flex-shrink-0">
                         @if(isset($itemNotes[$key]) && !empty($itemNotes[$key]))
@@ -591,7 +754,73 @@
                         @endif
                     </div>
 
-                    <div>
+                    @if ($posEuShowInCartBlade)
+                        @php
+                            $storedEuCartRow = [];
+                            if (is_object($item) && isset($item->eu_allergen_keys)) {
+                                $storedEuCartRow = (array) $item->eu_allergen_keys;
+                            } elseif (is_array($item) && isset($item['eu_allergen_keys'])) {
+                                $storedEuCartRow = (array) $item['eu_allergen_keys'];
+                            }
+                            $rowAllergensCartAction = array_values(array_unique(array_intersect(
+                                \App\Support\EuAnnexIiAllergens::keys(),
+                                $posEuSelectableKeysCart,
+                                array_filter($storedEuCartRow, 'is_string')
+                            )));
+                        @endphp
+                        @if (count($rowAllergensCartAction) > 0)
+                            <div class="inline-flex flex-wrap items-center gap-1 shrink-0" role="group"
+                                aria-label="{{ __('modules.settings.euAllergensFicTitle') }}">
+                                @foreach ($rowAllergensCartAction as $allergenKeyCart)
+                                    <span class="group relative inline-flex shrink-0">
+                                        <img src="{{ \App\Support\EuAnnexIiAllergens::defaultIconUrl($allergenKeyCart) }}"
+                                            alt=""
+                                            aria-label="{{ __(\App\Support\EuAnnexIiAllergens::langKey($allergenKeyCart)) }}"
+                                            class="h-5 w-5 object-contain"
+                                            width="20"
+                                            height="20"
+                                            loading="lazy" />
+                                        <span
+                                            class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 invisible group-hover:visible group-hover:opacity-100 dark:bg-gray-700"
+                                            role="tooltip"
+                                            aria-hidden="true">{{ __(\App\Support\EuAnnexIiAllergens::langKey($allergenKeyCart)) }}</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
+                    @endif
+
+                    @php
+                        $storedDietaryCartRow = [];
+                        if (is_object($item) && isset($item->dietary_labels)) {
+                            $storedDietaryCartRow = \App\Support\DietaryLabels::normalize((array) $item->dietary_labels);
+                        } elseif (is_array($item) && isset($item['dietary_labels'])) {
+                            $storedDietaryCartRow = \App\Support\DietaryLabels::normalize((array) $item['dietary_labels']);
+                        }
+                    @endphp
+                    @if (count($storedDietaryCartRow) > 0)
+                        <div class="inline-flex flex-wrap items-center gap-1 shrink-0" role="group"
+                            aria-label="{{ __('modules.menu.dietaryLabelsSectionTitle') }}">
+                            @foreach ($storedDietaryCartRow as $dietaryKeyCart)
+                                <span class="group relative inline-flex shrink-0">
+                                    <img src="{{ \App\Support\DietaryLabels::defaultIconUrl($dietaryKeyCart) }}"
+                                        alt=""
+                                        aria-label="{{ __(\App\Support\DietaryLabels::langKey($dietaryKeyCart)) }}"
+                                        class="h-5 w-5 object-contain"
+                                        width="20"
+                                        height="20"
+                                        loading="lazy" />
+                                    <span
+                                        class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 invisible group-hover:visible group-hover:opacity-100 dark:bg-gray-700"
+                                        role="tooltip"
+                                        aria-hidden="true">{{ __(\App\Support\DietaryLabels::langKey($dietaryKeyCart)) }}</span>
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
+                    </div>
+
+                    <div class="shrink-0">
                         <button
                             class="rounded text-gray-800 dark:text-gray-400 border dark:border-gray-500 hover:bg-gray-200 dark:hover:bg-gray-900/20 p-2 relative"
                             onclick="deleteCartItemHandler('{{ $key }}')">
@@ -607,13 +836,17 @@
 
             </div>
             @empty
-                <div class="text-center text-gray-500 dark:text-gray-400 mt-4">
+                <div class="h-full min-h-[18rem] flex items-center justify-center text-center text-gray-500 dark:text-gray-400">
                     <div class="flex flex-col items-center justify-center">
-                        <svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m-8 2a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/></svg>
+                        <svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m-8 2a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/></svg>
                         <div class="text-gray-500 dark:text-gray-400 text-base">
-                            @lang('messages.noItemAdded')
+                            @lang('messages.posEmptyCartNoItems')
                         </div>
-
+                        @if ($showFreshNewOrderEmptyHint)
+                            <p class="mt-2 max-w-sm mx-auto text-sm leading-snug text-gray-500 dark:text-gray-400 px-2">
+                                @lang('messages.posEmptyCartNewOrderHint')
+                            </p>
+                        @endif
                     </div>
                 </div>
             @endforelse
@@ -621,20 +854,20 @@
         </div>
     </div>
 
-    <div class="border-t border-gray-100 px-2 pt-3 pb-4 space-y-3 shrink-0">
-        <div class="h-auto p-4 select-none text-center bg-gray-50 rounded space-y-2 dark:bg-gray-700">
+    <div class="shrink-0 z-10 border-t border-gray-100 pt-1 pb-2 bg-white shadow-[0_-4px_12px_-2px_rgba(15,23,42,0.06)] dark:bg-gray-800 dark:shadow-none">
+        <div class="h-auto p-1 select-none text-center bg-gray-50 rounded space-y-1 dark:bg-gray-700">
 
             @if (user_can('Add Discount on POS'))
                 <div class="text-left" id="discount-button-container" style="display: {{ count($orderItemList) > 0 ? 'block' : 'none' }};">
-                    <x-secondary-button onclick="showAddDiscountModal()" class="text-xs py-1.5 px-3">
-                        <svg class="h-4 w-4 text-current me-1" width="16" height="16" viewBox="0 0 16 16"
+                    <button onclick="showAddDiscountModal()" class="inline-flex items-center px-1 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg font-semibold text-xs text-gray-700 dark:text-gray-300  shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150 inline-flex items-center gap-1  leading-none">
+                        <svg class="h-4 w-4 text-current me-1"  viewBox="0 0 16 16"
                             xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
                             stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
                             <path d="m7.25 14.25-5.5-5.5 7-7h5.5v5.5z" />
                             <circle cx="11" cy="5" r=".5" fill="#000" />
                         </svg>
                         @lang('modules.order.addDiscount')
-                    </x-secondary-button>
+                    </button>
 
                 </div>
             @endif
@@ -747,9 +980,13 @@
                 </div>
             @endif
 
-            <div wire:key="discountAmount" id="discount-row"
+            @php
+                $_kotDiscDecimals = (int) (optional(currency_format_setting())->no_of_decimal ?? 2);
+                $_kotShowDiscountRow = round((float) ($discountAmount ?? 0), $_kotDiscDecimals) > 0 && (int) ($loyaltyPointsRedeemed ?? 0) === 0;
+            @endphp
+            <div id="discount-row"
             class="flex justify-between text-green-500 text-xs dark:text-green-400"
-            style="display: {{ $discountAmount > 0 && $loyaltyPointsRedeemed == 0 ? 'flex' : 'none' }};">
+            style="display: {{ $_kotShowDiscountRow ? 'flex' : 'none' }};">
                 <div class="inline-flex items-center gap-x-1">@lang('modules.order.discount') <span id="discount-type-display">@if ($discountType == 'percent')
                         ({{ $discountValue }}%)
                     @endif</span>
@@ -769,8 +1006,16 @@
                     -{{ currency_format($discountAmount, $restaurant->currency_id) }}
                 </div>
             </div>
+            <div id="taxable-amount-row"
+                class="flex justify-between text-gray-500 text-xs dark:text-neutral-400"
+                style="{{ count($orderItemList) > 0 ? '' : 'display: none;' }}">
+                <div>{{ __('Taxable Amount') }}</div>
+                <div id="taxable-amount-display">
+                    {{ currency_format(max(0, ($subTotal ?? 0) - ($discountAmount ?? 0)), $restaurant->currency_id) }}
+                </div>
+            </div>
 
-            @if ($orderType === 'delivery')
+            <div data-pos-sidebar-order-type="delivery" id="pos-sidebar-delivery-fee-wrap" class="{{ ($orderTypeId && $orderType === 'delivery') ? '' : 'hidden' }}">
                 <div class="flex justify-between items-center text-gray-500 text-xs dark:text-neutral-400" id="delivery-fee-row">
                     <div>
                         @lang('modules.delivery.deliveryFee')
@@ -782,12 +1027,12 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="relative">
-                            <x-input type="number" step='1' min='0' class="w-16 text-sm"
+                            <x-input type="number" step='1' min='0' class="w-14 h-7 px-2 py-0 text-xs text-right pos-number-no-spinner"
                             id="deliveryFeeInput" value="{{ $deliveryFee }}" onchange="updateDeliveryFee(this.value)" />
                         </div>
                     </div>
                 </div>
-            @endif
+            </div>
 
             <div id="extra-charges-container" style="{{ (count($orderItemList) > 0 && $extraCharges && count($extraCharges) > 0) ? '' : 'display: none;' }}">
                 @if (count($orderItemList) > 0 && $extraCharges)
@@ -816,7 +1061,7 @@
                     @endforeach
                 @elseif($orderID && count($orderItemList) > 0 && $extraCharges)
                     @foreach ($extraCharges as $newKotCharge)
-                        <div wire:key="extraCharge-newKot-{{ $loop->index }}"
+                        <div
                             class="flex justify-between text-gray-500 text-xs dark:text-neutral-400">
                             <div class="inline-flex items-center gap-x-1">{{ $newKotCharge->charge_name }}
                                 @if ($newKotCharge->charge_type == 'percent')
@@ -830,7 +1075,10 @@
                     @endforeach
                 @endif
             </div>
+        </div>
+    </div>
 
+    <div class="shrink-0 bg-white dark:bg-gray-800 pt-1  border-gray-200 dark:border-gray-700">
             <!-- Taxes Section - Always render container -->
             @if ($taxMode == 'order')
                 <div id="order-taxes-container">
@@ -905,13 +1153,14 @@
             </div>
         </div>
 
-        <div class="h-auto pt-3 select-none text-center w-full">
+        <div id="pos-kot-mobile-action-dock" class="shrink-0 w-full">
+        <div class="relative z-20 h-auto pt-3 text-center w-full pointer-events-auto lg:pt-3" data-pos-cart-order-actions>
             @php
                 $isNewKotPage = $orderDetail && $orderDetail->status === 'kot' && !request()->boolean('show-order-detail');
             @endphp
 
             @if ((!$orderID || ($orderID && $orderDetail && $orderDetail->status !== 'draft')) && !$isNewKotPage)
-                <div class="flex gap-3 mb-3">
+                <div class="flex gap-3 mb-2" data-pos-non-kot-cart-actions>
                     <button class="pos-order-action-btn rounded bg-yellow-600 hover:bg-yellow-700 text-white w-full p-2 relative text-sm" onclick="saveOrder('draft')"
                         id="saveDraftBtn">
                         <span id="saveDraftBtnText">@lang('modules.order.saveAsDraft')</span>
@@ -930,8 +1179,8 @@
                 </div>
             @endif
             @if (in_array('KOT', restaurant_modules()))
-                <div class="flex gap-3">
-                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs"
+                <div class="flex gap-3" data-pos-kot-cart-actions>
+                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs hover:bg-gray-800"
                         onclick="saveKotActionOnce('kot')" id="saveKotBtn">
                         <span id="saveKotBtnText">@lang('modules.order.kot')</span>
                         <span id="saveKotBtnLoading" class="hidden">
@@ -946,7 +1195,7 @@
                             @lang('modules.order.kot')
                         </span>
                     </button>
-                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs"
+                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs hover:bg-gray-800"
                         onclick="saveKotActionOnce('kot', 'print')" id="saveKotPrintBtn">
                         <span id="saveKotPrintBtnText">@lang('modules.order.kotAndPrint')</span>
                         <span id="saveKotPrintBtnLoading" class="hidden">
@@ -961,7 +1210,7 @@
                             @lang('modules.order.kotAndPrint')
                         </span>
                     </button>
-                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs"
+                    <button class="pos-order-action-btn rounded bg-gray-700 text-white w-full p-2 relative text-xs hover:bg-gray-800"
                         onclick="saveKotActionOnce('kot','bill','payment', 'print')" id="saveKotBillPaymentBtn">
                         <span id="saveKotBillPaymentBtnText">@lang('modules.order.kotBillAndPayment')</span>
                         <span id="saveKotBillPaymentBtnLoading" class="hidden">
@@ -979,8 +1228,8 @@
                 </div>
             @endif
             @if (!$orderID || ($orderID && $orderDetail && $orderDetail->status == 'draft'))
-                <div class="flex gap-3 mt-3">
-                    <button class="pos-order-action-btn rounded bg-skin-base text-white w-full p-2 relative text-xs"
+                <div class="flex gap-3 mt-2" data-pos-non-kot-cart-actions>
+                    <button class="pos-order-action-btn rounded bg-skin-base text-white w-full p-2 relative text-xs hover:opacity-90"
                         onclick="saveOrder('bill')" id="saveBillBtn">
                         <span id="saveBillBtnText">@lang('modules.order.bill')</span>
                         <span id="saveBillBtnLoading" class="hidden">
@@ -995,7 +1244,7 @@
                             @lang('modules.order.bill')
                         </span>
                     </button>
-                    <button class="pos-order-action-btn rounded bg-green-500 text-white w-full p-2 relative text-xs"
+                    <button class="pos-order-action-btn rounded bg-green-500 text-white w-full p-2 relative text-xs hover:bg-green-600 "
                         onclick="saveOrder('bill', 'payment')" id="saveBillPaymentBtn">
                         <span id="saveBillPaymentBtnText">@lang('modules.order.billAndPayment')</span>
                         <span id="saveBillPaymentBtnLoading" class="hidden">
@@ -1010,7 +1259,7 @@
                             @lang('modules.order.billAndPayment')
                         </span>
                     </button>
-                    <button class="pos-order-action-btn rounded bg-blue-500 text-white w-full p-2 relative text-xs"
+                    <button class="pos-order-action-btn rounded bg-blue-500 text-white w-full p-2 relative text-xs hover:bg-blue-600"
                         onclick="saveOrder('bill', 'print')" id="saveBillPrintBtn">
                         <span id="saveBillPrintBtnText">@lang('modules.order.createBillAndPrintReceipt')</span>
                         <span id="saveBillPrintBtnLoading" class="hidden">
@@ -1027,6 +1276,7 @@
                     </button>
                 </div>
             @endif
+        </div>
         </div>
     </div>
 

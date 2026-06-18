@@ -5,7 +5,6 @@ namespace App\Enums;
 enum OrderStatus: string
 {
     case PLACED = 'placed';
-    // case PENDING = 'pending';
     case CONFIRMED = 'confirmed';
     case PREPARING = 'preparing';
     case FOOD_READY = 'food_ready';
@@ -16,6 +15,7 @@ enum OrderStatus: string
     case SERVED = 'served'; // Order served at table (for dine-in)
     case DELIVERED = 'delivered'; // Order delivered to the customer
     case CANCELLED = 'cancelled'; // Order cancelled
+    case COMPLETED = 'completed'; // Order completed
 
     public function label(): string
     {
@@ -31,6 +31,7 @@ enum OrderStatus: string
             self::SERVED => 'Order Served',
             self::DELIVERED => 'Delivered',
             self::CANCELLED => 'Order Cancelled',
+            self::COMPLETED => 'Order Completed',
         };
     }
 
@@ -51,8 +52,29 @@ enum OrderStatus: string
             self::OUT_FOR_DELIVERY => 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700',
             self::REACHED_DESTINATION => 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700',
             self::DELIVERED => 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700',
+            self::COMPLETED => 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700',
             default => 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600',
         };
+    }
+
+    /**
+     * Fulfilment finished (excluding cancelled).
+     *
+     * @return list<string>
+     */
+    public static function fulfilledProgressValues(): array
+    {
+        return [self::DELIVERED->value, self::SERVED->value, self::COMPLETED->value];
+    }
+
+    /**
+     * Do not overwrite order_status from KOT aggregation when already at a terminal progress state.
+     *
+     * @return list<string>
+     */
+    public static function terminalProgressValues(): array
+    {
+        return [...self::fulfilledProgressValues(), self::CANCELLED->value];
     }
 
     /**
@@ -81,27 +103,11 @@ enum OrderStatus: string
 
             self::CANCELLED => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>',
 
+            self::COMPLETED => '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+
             default => '<svg width="20" height="20" viewBox="0 0 1024 1024" class="w-4 h-4 icon" fill="currentColor" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M128 352.576V352a288 288 0 0 1 491.072-204.224 192 192 0 0 1 274.24 204.48 64 64 0 0 1 57.216 74.24C921.6 600.512 850.048 710.656 736 756.992V800a96 96 0 0 1-96 96H384a96 96 0 0 1-96-96v-43.008c-114.048-46.336-185.6-156.48-214.528-330.496A64 64 0 0 1 128 352.64zm64-.576h64a160 160 0 0 1 320 0h64a224 224 0 0 0-448 0m128 0h192a96 96 0 0 0-192 0m439.424 0h68.544A128.256 128.256 0 0 0 704 192c-15.36 0-29.952 2.688-43.52 7.616 11.328 18.176 20.672 37.76 27.84 58.304A64.128 64.128 0 0 1 759.424 352M672 768H352v32a32 32 0 0 0 32 32h256a32 32 0 0 0 32-32zm-342.528-64h365.056c101.504-32.64 165.76-124.928 192.896-288H136.576c27.136 163.072 91.392 255.36 192.896 288"/></svg>',
         };
     }
 
-    /**
-     * Check if the package type is editable.
-     *
-     * @return bool
-     */
-    // public function isEditable(): bool
-    // {
-    //     return !in_array($this, [self::DELIVERED], true);
-    // }
-
-    /**
-     * Check if the package type is deletable.
-     *
-     * @return bool
-     */
-    // public function isDeletable(): bool
-    // {
-    //     return !in_array($this, [self::DELIVERED], true);
-    // }
+    
 }

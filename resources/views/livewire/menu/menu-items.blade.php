@@ -19,6 +19,8 @@
                         </svg> @lang('app.showFilter')
                     </x-secondary-button>
                 
+                    <x-menu.copy-to-branches-button scope="menu_items" class="shrink-0" />
+
                     <x-secondary-link href="{{ route('menu-items.entities.sort') }}" class="shrink-0">
                         @lang('modules.menu.sortMenuItems')
                     </x-secondary-link>
@@ -231,5 +233,6 @@
         </x-slot>
     </x-confirmation-modal>
 
+    <livewire:menu.copy-menu-to-branches />
 
 </div>

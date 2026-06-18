@@ -9,6 +9,8 @@ use App\Models\MenuItem;
 use App\Models\MenuItemVariation;
 use App\Models\KotPlace;
 use App\Models\Tax;
+use App\Services\Pos\PosBranchCacheInvalidation;
+use App\Support\DietaryLabels;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -52,6 +54,12 @@ class AddMenuItem extends Component
     public $taxInclusivePriceDetails = null;
     public $isTaxModeItem = false;
     public $variationBreakdowns = [];
+
+    /** @var array<int, string> */
+    public array $selectedEuAllergens = [];
+
+    /** @var array<int, string> */
+    public array $selectedDietaryLabels = [];
 
     public function mount()
     {
@@ -148,18 +156,18 @@ class AddMenuItem extends Component
             $this->validateImage();
         }
 
-        $this->validate([
+        $this->validate(array_merge([
             'translationNames.' . $this->globalLocale => 'required',
             'itemPrice' => 'required_if:hasVariations,false',
             'itemCategory' => 'required',
             'menu' => 'required',
             'isAvailable' => 'required|boolean',
-        ], [
+        ], $this->euAllergenValidationRules(), $this->dietaryValidationRules()), [
             'translationNames.' . $this->globalLocale . '.required' => __('validation.itemNameRequired', ['language' => $this->languages[$this->globalLocale]]),
         ]);
 
 
-        $menuItem = MenuItem::create([
+        $menuItem = MenuItem::create(array_merge([
             'item_name' => $this->translationNames[$this->globalLocale],
             'price' => (!$this->hasVariations) ? $this->itemPrice : 0,
             'item_category_id' => $this->itemCategory,
@@ -170,7 +178,7 @@ class AddMenuItem extends Component
             'preparation_time' => $this->preparationTime,
             'kot_place_id' => $this->kitchenType,
             'tax_inclusive' => ($this->isTaxModeItem) ? $this->taxInclusive : false,
-        ]);
+        ], $this->euAllergenAttributesForCreate(), $this->dietaryAttributesForCreate()));
 
         $translations = collect($this->translationNames)
             ->filter(fn($name, $locale) => !empty($name) || !empty($this->translationDescriptions[$locale]))
@@ -186,6 +194,10 @@ class AddMenuItem extends Component
             $menuItem->update([
                 'image' => Files::uploadLocalOrS3($this->itemImageTemp, 'item', width: 350),
             ]);
+
+            if ($menuItem->branch_id) {
+                PosBranchCacheInvalidation::invalidateForBranch((int) $menuItem->branch_id);
+            }
         }
 
         if ($this->hasVariations) {
@@ -216,11 +228,20 @@ class AddMenuItem extends Component
         }
 
         // Attach taxes if tax_mode is 'item'
-        if ($this->isTaxModeItem && !empty($this->selectedTaxes)) {
-            $menuItem->taxes()->sync($this->selectedTaxes);
+        if ($this->isTaxModeItem) {
+            $menuItem->taxes()->sync($this->selectedTaxes ?: []);
+            if (function_exists('restaurant') && restaurant()) {
+                PosBranchCacheInvalidation::invalidateForRestaurant(restaurant());
+            } else {
+                PosBranchCacheInvalidation::invalidateForBranch(function_exists('branch') && branch() ? (int) branch()->id : null);
+            }
         }
 
         cache()->forget('restaurant_' . restaurant()->id . '_menu_item_stats');
+
+        if ($menuItem->branch_id) {
+            PosBranchCacheInvalidation::invalidateForBranch((int) $menuItem->branch_id);
+        }
 
         $this->resetForm();
         $this->dispatch('hideAddMenuItem');
@@ -257,6 +278,8 @@ class AddMenuItem extends Component
         $this->showItemPrice = true;
         $this->hasVariations = false;
         $this->selectedTaxes = [];
+        $this->selectedEuAllergens = [];
+        $this->selectedDietaryLabels = [];
     }
 
     public function updateTranslation()
@@ -314,11 +337,11 @@ class AddMenuItem extends Component
     {
         if ($this->itemImageTemp) {
             $this->validate([
-                'itemImageTemp' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+                'itemImageTemp' => \App\Support\ImageUpload::IMAGE_MIMES_MAX_2048,
             ]);
 
             // Check image dimensions
-            $imageInfo = getimagesize($this->itemImageTemp->getRealPath());
+            $imageInfo = @getimagesize($this->itemImageTemp->getRealPath());
             if ($imageInfo) {
                 $width = $imageInfo[0];
                 $height = $imageInfo[1];
@@ -390,6 +413,63 @@ class AddMenuItem extends Component
             }
         }
         return $breakdowns;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function euAllergenValidationRules(): array
+    {
+        $euSelectable = restaurant() ? restaurant()->selectableEuAllergenKeys() : [];
+        if ($euSelectable === []) {
+            return [];
+        }
+
+        return [
+            'selectedEuAllergens' => 'nullable|array',
+            'selectedEuAllergens.*' => 'string|in:' . implode(',', $euSelectable),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function dietaryValidationRules(): array
+    {
+        return [
+            'selectedDietaryLabels' => 'nullable|array',
+            'selectedDietaryLabels.*' => 'string|in:' . implode(',', DietaryLabels::keys()),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function euAllergenAttributesForCreate(): array
+    {
+        $r = restaurant();
+        if (!$r) {
+            return [];
+        }
+
+        $allowed = $r->selectableEuAllergenKeys();
+        if ($allowed === []) {
+            return [];
+        }
+
+        return [
+            'eu_allergen_keys' => array_values(array_unique(array_intersect($this->selectedEuAllergens, $allowed))),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dietaryAttributesForCreate(): array
+    {
+        return [
+            'dietary_labels' => DietaryLabels::normalize($this->selectedDietaryLabels),
+        ];
     }
 
     public function render()

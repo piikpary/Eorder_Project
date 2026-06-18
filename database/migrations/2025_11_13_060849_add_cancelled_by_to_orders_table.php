@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('orders', function (Blueprint $table) {
-            $table->unsignedBigInteger('cancelled_by')->nullable()->after('added_by');
-            $table->foreign('cancelled_by')->references('id')->on('users')->onDelete('set null')->onUpdate('cascade');
-        });
+        if (!Schema::hasColumn('orders', 'cancelled_by')) {
+            Schema::table('orders', function (Blueprint $table) {
+                    $table->unsignedBigInteger('cancelled_by')->nullable()->after('added_by');
+                    $table->foreign('cancelled_by')->references('id')->on('users')->onDelete('set null')->onUpdate('cascade');
+                });
+        }
+
     }
 
     /**

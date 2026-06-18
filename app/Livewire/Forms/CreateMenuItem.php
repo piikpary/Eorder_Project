@@ -18,6 +18,8 @@ use App\Models\MenuItemVariation;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Validate;
 use Illuminate\Support\Facades\DB;
+use App\Services\Pos\PosBranchCacheInvalidation;
+use App\Support\DietaryLabels;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 
 class CreateMenuItem extends Component
@@ -26,8 +28,8 @@ class CreateMenuItem extends Component
 
     protected $listeners = ['refreshCategories'];
 
-    // Core Properties
-    #[Validate('required')]
+    // Core Properties (name validated with translations: at least one locale required)
+    #[Validate('nullable|string|max:255')]
     public string $itemName = '';
 
     #[Validate('required')]
@@ -54,7 +56,7 @@ class CreateMenuItem extends Component
     #[Validate('nullable|string')]
     public ?string $kitchenType = null;
 
-    #[Validate('nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048')]
+    #[Validate(\App\Support\ImageUpload::NULLABLE_MIMES_MAX_2048)]
     public $itemImageTemp;
 
     public ?string $itemImage = null;
@@ -83,6 +85,12 @@ class CreateMenuItem extends Component
     public array $variationPlatformAvailability = []; // Structure: [index => [appId => bool]]
     public array $variationBaseDeliveryPrice = []; // Structure: [index => price]
     public array $variationDeliveryPrices = []; // Structure: [index => [appId => calculated_price]]
+    // Linked Price Tracking
+    public array $linkedOrderTypePrices = [];
+    public bool $linkedDeliveryPrice = true;
+    public array $variationLinkedOrderTypePrices = [];
+    public array $variationLinkedDeliveryPrice = [];
+
     // Tax Properties
     public array $selectedTaxes = [];
     public bool $taxInclusive = false;
@@ -90,7 +98,11 @@ class CreateMenuItem extends Component
     public bool $isTaxModeItem = false;
     public array $variationBreakdowns = [];
 
-    // Modal Properties
+    /** @var array<int, string> */
+    public array $selectedEuAllergens = [];
+
+    /** @var array<int, string> */
+    public array $selectedDietaryLabels = [];
     public bool $showMenuCategoryModal = false;
 
     // Collections (computed properties to avoid N+1 queries)
@@ -141,16 +153,17 @@ class CreateMenuItem extends Component
      */
     private function initializePricing(): void
     {
-        // Initialize order type prices
         foreach ($this->orderTypes as $orderType) {
             $this->orderTypePrices[$orderType->id] = '';
+            $this->linkedOrderTypePrices[$orderType->id] = true;
         }
 
-        // Initialize delivery prices and availability - DEFAULT TO TRUE
         foreach ($this->deliveryApps as $app) {
             $this->deliveryPrices[$app->id] = '';
-            $this->platformAvailability[$app->id] = true; // Default checked
+            $this->platformAvailability[$app->id] = true;
         }
+
+        $this->linkedDeliveryPrice = true;
     }
 
     /**
@@ -215,16 +228,16 @@ class CreateMenuItem extends Component
 
     private function initializeVariationPricing(int $index): void
     {
-        // Initialize order type prices for this variation
         if (!isset($this->variationOrderTypePrices[$index])) {
             $this->variationOrderTypePrices[$index] = [];
         }
 
+        $this->variationLinkedOrderTypePrices[$index] = [];
         foreach ($this->orderTypes as $orderType) {
             $this->variationOrderTypePrices[$index][$orderType->id] = '';
+            $this->variationLinkedOrderTypePrices[$index][$orderType->id] = true;
         }
 
-        // Initialize platform availability and delivery prices - DEFAULT TO TRUE
         if (!isset($this->variationPlatformAvailability[$index])) {
             $this->variationPlatformAvailability[$index] = [];
         }
@@ -238,10 +251,11 @@ class CreateMenuItem extends Component
             $this->variationDeliveryPrices[$index][$app->id] = '0.00';
         }
 
-        // Initialize base delivery price
         if (!isset($this->variationBaseDeliveryPrice[$index])) {
             $this->variationBaseDeliveryPrice[$index] = '';
         }
+
+        $this->variationLinkedDeliveryPrice[$index] = true;
     }
 
     /**
@@ -269,26 +283,35 @@ class CreateMenuItem extends Component
 
     public function updatedVariationPrice($value, $key): void
     {
-        // Initialize arrays for the given key if not already set
         $this->variationOrderTypePrices[$key] ??= [];
         $this->variationBaseDeliveryPrice[$key] ??= '';
+        $this->variationLinkedOrderTypePrices[$key] ??= [];
 
-        if (
-            empty(array_filter($this->variationOrderTypePrices[$key])) &&
-            empty($this->variationBaseDeliveryPrice[$key])
-        ) {
-            foreach ($this->orderTypes as $orderType) {
+        if (!isset($this->variationLinkedDeliveryPrice[$key])) {
+            $this->variationLinkedDeliveryPrice[$key] = true;
+        }
+
+        foreach ($this->orderTypes as $orderType) {
+            if ($this->variationLinkedOrderTypePrices[$key][$orderType->id] ?? true) {
                 $this->variationOrderTypePrices[$key][$orderType->id] = $value;
             }
-            $this->variationBaseDeliveryPrice[$key] = $value;
-            $this->calculateVariationDeliveryPrices($key);
         }
-        
+
+        if ($this->variationLinkedDeliveryPrice[$key] ?? true) {
+            $this->variationBaseDeliveryPrice[$key] = $value;
+        }
+
+        $this->calculateVariationDeliveryPrices($key);
         $this->updateVariationBreakdowns();
     }
 
     public function updatedVariationBaseDeliveryPrice($value, $key): void
     {
+        $varPrice = $this->variationPrice[$key] ?? '';
+        if ((string)$value !== (string)$varPrice) {
+            $this->variationLinkedDeliveryPrice[$key] = false;
+        }
+
         $this->calculateVariationDeliveryPrices((int)$key);
     }
 
@@ -374,6 +397,8 @@ class CreateMenuItem extends Component
         $this->variationPlatformAvailability = [];
         $this->variationBaseDeliveryPrice = [];
         $this->variationDeliveryPrices = [];
+        $this->variationLinkedOrderTypePrices = [];
+        $this->variationLinkedDeliveryPrice = [];
         $this->inputs = [];
         $this->i = 0;
     }
@@ -407,10 +432,21 @@ class CreateMenuItem extends Component
 
     private function validateForm(): void
     {
+        $this->updateTranslation();
+
         $this->cleanupEmptyVariations();
 
         if ($this->hasVariations && empty($this->variationName)) {
             $this->addError('variationName.0', __('validation.atLeastOneVariationRequired'));
+            return;
+        }
+
+        $filledNameLocales = collect($this->translationNames)
+            ->map(fn($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn($v) => !empty($v));
+
+        if ($filledNameLocales->isEmpty()) {
+            $this->addError('translationNames', __('validation.itemNameRequiredAnyLanguage'));
             return;
         }
 
@@ -420,7 +456,6 @@ class CreateMenuItem extends Component
         }
 
         $rules = [
-            'translationNames.' . $this->globalLocale => 'required',
             'baseDeliveryPrice' => 'nullable|numeric|min:0',
             'itemCategory' => 'required',
             'menu' => 'required',
@@ -442,7 +477,14 @@ class CreateMenuItem extends Component
             $rules['itemPrice'] = 'required|numeric|min:0';
         }
 
-        $this->validate($rules, $this->getValidationMessages());
+        $euSelectable = restaurant() ? restaurant()->selectableEuAllergenKeys() : [];
+        if ($euSelectable !== []) {
+            $rules['selectedEuAllergens'] = 'nullable|array';
+            $rules['selectedEuAllergens.*'] = 'string|in:' . implode(',', $euSelectable);
+        }
+
+        $rules['selectedDietaryLabels'] = 'nullable|array';
+        $rules['selectedDietaryLabels.*'] = 'string|in:' . implode(',', DietaryLabels::keys());
     }
 
     private function getValidationMessages(): array
@@ -450,28 +492,67 @@ class CreateMenuItem extends Component
         return [
             'baseDeliveryPrice.numeric' => __('validation.baseDeliveryPriceMustBeNumeric'),
             'baseDeliveryPrice.min' => __('validation.baseDeliveryPriceMustBePositive'),
-            'translationNames.' . $this->globalLocale . '.required' =>
-                __('validation.itemNameRequired', ['language' => $this->languages[$this->globalLocale]]),
             'itemPrice.required_if' => __('validation.itemPriceRequired'),
             'itemPrice.numeric' => __('validation.itemPriceMustBeNumeric'),
             'itemPrice.min' => __('validation.itemPriceMustBePositive'),
         ];
     }
 
+    private function getPrimaryItemNameLocale(): string
+    {
+        $filled = collect($this->translationNames)
+            ->map(fn($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn($v) => !empty($v));
+
+        return $filled->has($this->currentLanguage)
+            ? $this->currentLanguage
+            : (string) $filled->keys()->first();
+    }
+
     private function createMenuItem(): MenuItem
     {
-        return MenuItem::create([
-            'item_name' => $this->translationNames[$this->globalLocale],
-            'price' => $this->hasVariations ? 0 : (float)$this->itemPrice,
+        $primaryLocale = $this->getPrimaryItemNameLocale();
+
+        $data = [
+            'item_name' => is_string($this->translationNames[$primaryLocale] ?? null)
+                ? trim($this->translationNames[$primaryLocale])
+                : ($this->translationNames[$primaryLocale] ?? ''),
+            'price' => $this->hasVariations ? 0 : (float) $this->itemPrice,
             'item_category_id' => $this->itemCategory,
-            'description' => $this->translationDescriptions[$this->globalLocale],
+            'description' => $this->translationDescriptions[$primaryLocale] ?? null,
             'is_available' => $this->isAvailable,
             'type' => $this->itemType,
             'menu_id' => $this->menu,
             'preparation_time' => $this->preparationTime,
             'kot_place_id' => $this->kitchenType,
             'tax_inclusive' => $this->isTaxModeItem ? $this->taxInclusive : false,
-        ]);
+            'dietary_labels' => DietaryLabels::normalize($this->selectedDietaryLabels),
+        ];
+
+        $eu = $this->euAllergenKeysForPersist();
+        if ($eu !== null) {
+            $data['eu_allergen_keys'] = $eu;
+        }
+
+        return MenuItem::create($data);
+    }
+
+    /**
+     * @return list<string>|null null when EU allergen UI is off for this restaurant
+     */
+    private function euAllergenKeysForPersist(): ?array
+    {
+        $r = restaurant();
+        if (!$r) {
+            return null;
+        }
+
+        $allowed = $r->selectableEuAllergenKeys();
+        if ($allowed === []) {
+            return null;
+        }
+
+        return array_values(array_unique(array_intersect($this->selectedEuAllergens, $allowed)));
     }
 
     private function handleTranslations(MenuItem $menuItem): void
@@ -495,6 +576,10 @@ class CreateMenuItem extends Component
             $menuItem->update([
                 'image' => Files::uploadLocalOrS3($this->itemImageTemp, 'item', width: 350),
             ]);
+
+            if ($menuItem->branch_id) {
+                PosBranchCacheInvalidation::invalidateForBranch((int) $menuItem->branch_id);
+            }
         }
     }
 
@@ -540,21 +625,27 @@ class CreateMenuItem extends Component
 
     private function handleTaxes(MenuItem $menuItem): void
     {
-        if ($this->isTaxModeItem && !empty($this->selectedTaxes)) {
-            $menuItem->taxes()->sync($this->selectedTaxes);
+        if ($this->isTaxModeItem) {
+            $menuItem->taxes()->sync($this->selectedTaxes ?: []);
+            if (function_exists('restaurant') && restaurant()) {
+                PosBranchCacheInvalidation::invalidateForRestaurant(restaurant());
+            } else {
+                PosBranchCacheInvalidation::invalidateForBranch(function_exists('branch') && branch() ? (int) branch()->id : null);
+            }
         }
     }
 
     private function handleSuccessfulSubmission(): void
     {
         cache()->forget('restaurant_' . restaurant()->id . '_menu_item_stats');
+        if (function_exists('branch') && branch()) {
+            PosBranchCacheInvalidation::invalidateForBranch((int) branch()->id);
+        }
         $this->resetForm();
 
         $this->dispatch('hideAddMenuItem');
         $this->dispatch('menuItemAdded');
         $this->dispatch('refreshCategories');
-
-        cache()->flush();
 
         $this->redirect(route('menu-items.index'), true);
 
@@ -592,15 +683,20 @@ class CreateMenuItem extends Component
         $this->showItemPrice = true;
         $this->hasVariations = false;
         $this->selectedTaxes = [];
-
-        // Reset pricing properties
+        $this->selectedEuAllergens = [];
+        $this->selectedDietaryLabels = [];
         $this->baseDeliveryPrice = '';
         $this->deliveryPrices = [];
         $this->orderTypePrices = [];
         $this->platformAvailability = [];
+        $this->linkedOrderTypePrices = [];
+        $this->linkedDeliveryPrice = true;
+        $this->variationLinkedOrderTypePrices = [];
+        $this->variationLinkedDeliveryPrice = [];
 
         foreach ($this->orderTypes as $orderType) {
             $this->orderTypePrices[$orderType->id] = '';
+            $this->linkedOrderTypePrices[$orderType->id] = true;
         }
         foreach ($this->deliveryApps as $app) {
             $this->deliveryPrices[$app->id] = '';
@@ -633,15 +729,80 @@ class CreateMenuItem extends Component
     public function updatedItemPrice($value): void
     {
         if (!$this->hasVariations) {
-            // Set as default only if not already set
-            if (empty($this->baseDeliveryPrice) && count(array_filter($this->orderTypePrices)) === 0) {
-                $this->baseDeliveryPrice = $value;
-                $this->orderTypePrices = array_fill_keys(array_keys($this->orderTypePrices), $value);
-                $this->calculateDeliveryPrices();
+            foreach ($this->orderTypes as $orderType) {
+                if ($this->linkedOrderTypePrices[$orderType->id] ?? true) {
+                    $this->orderTypePrices[$orderType->id] = $value;
+                }
             }
+
+            if ($this->linkedDeliveryPrice) {
+                $this->baseDeliveryPrice = $value;
+            }
+
+            $this->calculateDeliveryPrices();
         }
 
         $this->recalculateTaxBreakdowns();
+    }
+
+    public function updatedOrderTypePrices($value, $key): void
+    {
+        if ((string)$value !== (string)$this->itemPrice) {
+            $this->linkedOrderTypePrices[$key] = false;
+        }
+    }
+
+    public function toggleOrderTypePriceLink($orderTypeId): void
+    {
+        $linked = !($this->linkedOrderTypePrices[$orderTypeId] ?? true);
+        $this->linkedOrderTypePrices[$orderTypeId] = $linked;
+
+        if ($linked) {
+            $this->orderTypePrices[$orderTypeId] = $this->itemPrice;
+        }
+    }
+
+    public function toggleDeliveryPriceLink(): void
+    {
+        $this->linkedDeliveryPrice = !$this->linkedDeliveryPrice;
+
+        if ($this->linkedDeliveryPrice) {
+            $this->baseDeliveryPrice = $this->itemPrice;
+            $this->calculateDeliveryPrices();
+        }
+    }
+
+    public function updatedVariationOrderTypePrices($value, $key): void
+    {
+        $parts = explode('.', $key);
+        if (count($parts) === 2) {
+            [$varKey, $orderTypeId] = $parts;
+            $varPrice = $this->variationPrice[$varKey] ?? '';
+            if ((string)$value !== (string)$varPrice) {
+                $this->variationLinkedOrderTypePrices[$varKey][$orderTypeId] = false;
+            }
+        }
+    }
+
+    public function toggleVariationOrderTypePriceLink($variationKey, $orderTypeId): void
+    {
+        $linked = !($this->variationLinkedOrderTypePrices[$variationKey][$orderTypeId] ?? true);
+        $this->variationLinkedOrderTypePrices[$variationKey][$orderTypeId] = $linked;
+
+        if ($linked) {
+            $this->variationOrderTypePrices[$variationKey][$orderTypeId] = $this->variationPrice[$variationKey] ?? '';
+        }
+    }
+
+    public function toggleVariationDeliveryPriceLink($variationKey): void
+    {
+        $linked = !($this->variationLinkedDeliveryPrice[$variationKey] ?? true);
+        $this->variationLinkedDeliveryPrice[$variationKey] = $linked;
+
+        if ($linked) {
+            $this->variationBaseDeliveryPrice[$variationKey] = $this->variationPrice[$variationKey] ?? '';
+            $this->calculateVariationDeliveryPrices((int)$variationKey);
+        }
     }
 
     public function updatedSelectedTaxes(): void
@@ -677,11 +838,11 @@ class CreateMenuItem extends Component
         if (!$this->itemImageTemp) return;
 
         $this->validate([
-            'itemImageTemp' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'itemImageTemp' => \App\Support\ImageUpload::IMAGE_MIMES_MAX_2048,
         ]);
 
         // Check image dimensions
-        $imageInfo = getimagesize($this->itemImageTemp->getRealPath());
+        $imageInfo = @getimagesize($this->itemImageTemp->getRealPath());
         if ($imageInfo) {
             $width = $imageInfo[0];
             $height = $imageInfo[1];
@@ -751,6 +912,10 @@ class CreateMenuItem extends Component
     // PRICING MANAGEMENT
     public function updatedBaseDeliveryPrice(): void
     {
+        if ((string)$this->baseDeliveryPrice !== (string)$this->itemPrice) {
+            $this->linkedDeliveryPrice = false;
+        }
+
         $this->calculateDeliveryPrices();
     }
 
@@ -900,7 +1065,7 @@ class CreateMenuItem extends Component
             'bg-indigo-500',
             'bg-teal-500',
             'bg-lime-500',
-            'bg-fuchsia-500',
+            'bg-orange-500',
             'bg-cyan-500',
             'bg-sky-500',
             'bg-amber-500',

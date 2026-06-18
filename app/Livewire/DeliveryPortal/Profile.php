@@ -5,6 +5,7 @@ namespace App\Livewire\DeliveryPortal;
 use App\Models\Country;
 use App\Models\DeliveryExecutive;
 use App\Models\OrderCashCollection;
+use App\Models\User;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
@@ -17,6 +18,7 @@ class Profile extends Component
     public $email;
     public $phone;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $availabilityStatus = 1;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
@@ -35,6 +37,12 @@ class Profile extends Component
 
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->phoneCode) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->phoneCode = $detectedPhoneCode;
+        }
     }
 
     public function updatedPhoneCodeIsOpen($value)

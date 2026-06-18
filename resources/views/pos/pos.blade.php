@@ -1,6 +1,21 @@
-<div class="relative overflow-x-hidden" id="pos-container">
+<div class="relative overflow-x-hidden flex flex-col h-full min-h-0" id="pos-container">
 
-    {{-- Include MultiPOS registration and status handling --}}
+    @if(config('app.debug') && app()->environment('development'))
+        <div id="pos-offline-test-toolbar" class="print:hidden pointer-events-auto fixed top-2 right-2 z-[10003] w-[min(13rem,calc(100vw-0.75rem))] max-lg:top-auto max-lg:right-auto max-lg:bottom-[5.25rem] max-lg:left-2 max-lg:w-[min(10.5rem,calc(100vw-4.5rem))] rounded-lg border border-amber-700/40 bg-amber-500/95 p-1.5 shadow-lg backdrop-blur-sm dark:bg-amber-900/90 dark:border-amber-600/50" role="region" aria-label="{{ __('messages.posOfflineDebugHint') }}">
+            <div class="mb-1 flex items-center justify-between gap-1 max-lg:hidden">
+                <p class="text-[9px] font-medium leading-tight text-amber-950 dark:text-amber-100">{{ __('messages.posOfflineDebugHint') }}</p>
+                <button type="button" id="pos-offline-test-drag" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-amber-900/25 bg-amber-100/70 text-amber-900 hover:bg-amber-100 cursor-move dark:bg-amber-800/60 dark:text-amber-100 dark:border-amber-200/30" aria-label="Move debug panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M7 4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m-1.5 7.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M14.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m1.5 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m-1.5 7.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="mb-1 hidden max-lg:block text-[9px] font-medium leading-tight text-amber-950 dark:text-amber-100">{{ __('messages.posOfflineDebugHint') }}</p>
+            <button type="button" id="pos-offline-test-toggle" class="w-full rounded-md bg-amber-950 px-2 py-1.5 text-xs max-lg:text-[10px] max-lg:py-1 font-semibold text-amber-50 hover:bg-black dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-white">{{ __('messages.posOfflineDebugSimulate') }}</button>
+        </div>
+    @endif
+
+    {{-- MultiPOS: registration modals / pending & declined overlays (active device label is in navigation-menu by stop impersonate) --}}
     @if(module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules()))
         @include('multipos::partials.pos-registration', [
             'hasPosMachine' => $hasPosMachine,
@@ -23,17 +38,37 @@
             </div>
         @endif
 
-        {{-- Order Type Selection Modal - Using Livewire Component --}}
-        @if(!$orderTypeId)
-            @livewire('forms.order-type-selection')
-        @endif
-
-
-        <div class="flex flex-col lg:flex-row flex-1 gap-x-2 min-h-0 h-full w-full">
-            <div class="w-full lg:w-8/12 flex-shrink-0">
-                @include('pos.menu')
+        {{-- Offline: order queued on device (replaces success toast) --}}
+        <div id="pos-offline-queued-banner-wrap"
+            class="fixed inset-0 z-[9990] flex items-center justify-center px-2 transition-all duration-500 ease-out opacity-0 pointer-events-none -translate-y-2"
+            role="status"
+            aria-live="polite"
+            aria-hidden="true">
+            <div class="flex w-[min(36rem,calc(100vw-1rem))] items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 shadow-md dark:border-sky-700/50 dark:bg-sky-950/90">
+                <span class="mt-0.5 inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-500 shadow-sm shadow-sky-500/40" aria-hidden="true"></span>
+                <p id="pos-offline-queued-banner-text" class="min-w-0 flex-1 text-xs leading-snug text-sky-950 dark:text-sky-100 sm:text-sm"></p>
             </div>
-            <div id="order-items-container" class="w-full lg:w-4/12 flex-shrink-0 flex flex-col">
+        </div>
+
+        {{-- Order type modal: pure Blade + JS (prices prefetched in window.posOrderTypePriceMaps) --}}
+        @include('pos.partials.order-type-modal', [
+            'orderTypes' => $orderTypes ?? [],
+            'deliveryPlatforms' => $deliveryPlatforms ?? collect(),
+            'posDeliveryPlatformsForModal' => $posDeliveryPlatformsForModal ?? [],
+        ])
+
+
+        {{-- Below lg: pad whole stack; lg+: outer pt-0 so fixed cart stays full viewport — menu column adds lg:pt-16 to clear fixed nav (same as app main pt-16). --}}
+        <div class="relative flex flex-col lg:flex-row flex-1 min-h-0 gap-x-2 w-full overflow-hidden pt-16 lg:pt-0">
+
+            <div class="w-full lg:w-8/12 flex-shrink-0 min-h-0 lg:min-h-0 lg:pt-16">
+       
+                @include('pos.menu', ['posMenuFiltersInline' => true])
+            </div>
+            {{-- Keeps menu width when cart is position:fixed (out of flex flow). --}}
+            <div class="hidden lg:block lg:w-4/12 shrink-0" aria-hidden="true"></div>
+            {{-- lg+: fixed cart flush to top; clicks over the right column pass through POS nav (navigation-menu pointer-events) so the cart header stays usable under z-50 nav. --}}
+            <div id="order-items-container" class="w-full max-w-full lg:w-4/12 flex flex-1 min-h-0 flex-col overflow-hidden border-s border-gray-200 dark:border-gray-700 lg:flex-none lg:flex-shrink-0 max-lg:sticky max-lg:top-16 max-lg:z-20 max-lg:self-start max-lg:bg-white max-lg:dark:bg-gray-800 max-lg:px-0 max-lg:pb-0 sm:max-lg:px-0 lg:px-0 lg:pb-0 lg:fixed lg:inset-y-0 lg:right-0 rtl:lg:left-0 rtl:lg:right-auto lg:z-40 lg:bg-white lg:dark:bg-gray-800 lg:pt-0">
                 @php
                     $showOrderDetail = request()->boolean('show-order-detail');
                 @endphp
@@ -163,12 +198,52 @@
                             </svg>
                         </button>
                     </div>
-                    <div class="mt-4 flex">
-                        <input id="discountValue" type="number" step="0.01" class="block w-2/3 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400" placeholder="{{ __('modules.order.enterDiscountValue') }}" min="0" />
-                        <select id="discountType" class="block ml-2 w-1/3 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                            <option value="fixed">@lang('modules.order.fixed')</option>
-                            <option value="percent">@lang('modules.order.percent')</option>
-                        </select>
+                    <div class="mt-4">
+                        <div class="mb-3">
+                            <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">@lang('modules.order.percent')</p>
+                            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2" id="discountPresetOptions">
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="5">5%</button>
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="10">10%</button>
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="20">20%</button>
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="30">30%</button>
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="40">40%</button>
+                                <button type="button" class="discount-preset-btn px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" data-discount-percent="50">50%</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                            <label for="discountValue" class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Value</label>
+                            <input id="discountValue" type="number" step="0.01" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400" placeholder="{{ __('modules.order.enterDiscountValue') }}" min="0" />
+                        </div>
+                        <div>
+                            <label for="discountType" class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Type</label>
+                            <select id="discountType" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                <option value="fixed">@lang('modules.order.fixed')</option>
+                                <option value="percent">@lang('modules.order.percent')</option>
+                            </select>
+                        </div>
+                        <div id="discountApplyOnWrapper">
+                            <label for="discountApplyOn" class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Apply On</label>
+                            <select id="discountApplyOn" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                <option value="sub_total">@lang('modules.order.subTotal')</option>
+                                <option value="total" selected>@lang('modules.order.total')</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 text-sm">
+                        <div class="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>@lang('modules.order.subTotal')</span>
+                            <span id="discountPreviewSubTotal">$0.00</span>
+                        </div>
+                        <div class="mt-1 flex justify-between text-green-600 dark:text-green-400">
+                            <span>Discount</span>
+                            <span id="discountPreviewAmount">-$0.00</span>
+                        </div>
+                        <div class="mt-1 flex justify-between font-semibold text-gray-800 dark:text-gray-100">
+                            <span>@lang('modules.order.total')</span>
+                            <span id="discountPreviewTotal">$0.00</span>
+                        </div>
                     </div>
                     <div id="discountValueError" class="mt-2 text-red-600 text-sm" style="display: none;"></div>
                     <div class="mt-4 flex justify-end gap-2">
@@ -176,6 +251,66 @@
                         <x-button type="button" onclick="saveDiscount()">@lang('app.save')</x-button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        {{-- Offline payment (queued to localStorage; syncs via ajax.pos.sync-offline-payment) --}}
+        <div id="pos-offline-payment-modal" class="fixed inset-0 z-[10018] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" aria-hidden="true">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start gap-2">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">@lang('modules.order.payment')</h3>
+                        <p id="pos-offline-payment-order-label" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5"></p>
+                    </div>
+                    <button type="button" id="pos-offline-payment-close" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 shrink-0 p-1" aria-label="@lang('app.close')">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="px-5 py-4 space-y-4">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">@lang('modules.order.total')</span>
+                        <span id="pos-offline-payment-due-display" class="font-semibold text-gray-900 dark:text-white"></span>
+                    </div>
+                    <div>
+                        <label for="pos-offline-payment-method" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">@lang('modules.order.paymentMethod')</label>
+                        <select id="pos-offline-payment-method" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
+                            <option value="cash">@lang('modules.order.cash')</option>
+                            <option value="card">@lang('modules.order.card')</option>
+                            <option value="upi">@lang('modules.order.upi')</option>
+                            <option value="bank_transfer">@lang('modules.order.bank_transfer')</option>
+                            <option value="due">@lang('modules.order.due')</option>
+                        </select>
+                    </div>
+                    <div id="pos-offline-payment-tendered-wrap">
+                        <label for="pos-offline-payment-tendered" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">@lang('modules.order.amountPaid')</label>
+                        <input type="number" step="0.01" min="0" id="pos-offline-payment-tendered" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400"><span id="pos-offline-payment-change-label">@lang('modules.order.change')</span>: <span id="pos-offline-payment-change-display">—</span></p>
+                    </div>
+                    <p id="pos-offline-payment-error" class="text-sm text-red-600 dark:text-red-400 hidden"></p>
+                </div>
+                <div class="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-2">
+                    <button type="button" id="pos-offline-payment-cancel" class="px-4 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">@lang('app.cancel')</button>
+                    <button type="button" id="pos-offline-payment-confirm" class="px-4 py-2 text-sm rounded-md bg-skin-base text-white hover:opacity-90">@lang('app.confirm')</button>
+                </div>
+            </div>
+        </div>
+
+        {{-- Inline Tailwind Confirm Popover (anchored near clicked button) --}}
+        <div id="posSimpleConfirmBackdrop" class="fixed inset-0 z-[10019] hidden bg-black/45 backdrop-blur-[1px]"></div>
+        <div id="posSimpleConfirmModal" class="fixed z-[10020] hidden w-[18rem] max-w-[calc(100vw-1rem)] rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+            <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">@lang('app.confirm')</h3>
+            </div>
+            <div class="px-3 py-2">
+                <p id="posSimpleConfirmMessage" class="text-xs text-gray-700 dark:text-gray-200 leading-relaxed"></p>
+            </div>
+            <div class="px-3 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end gap-2">
+                <button type="button" id="posSimpleConfirmCancel" class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    @lang('app.cancel')
+                </button>
+                <button type="button" id="posSimpleConfirmOk" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs hover:bg-red-700">
+                    @lang('app.ok')
+                </button>
             </div>
         </div>
 
@@ -422,21 +557,19 @@
             </div>
         </div>
 
-        {{-- Modifiers Modal --}}
-        <div id="modifiersModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center">
-                            <svg viewBox="0 0 32 32" width="24" height="24" fill="currentColor" class="inline mr-1.5 h-6 w-6 text-skin-base" xmlns="http://www.w3.org/2000/svg"><path d="M1 14h13V1C6.82 1 1 6.82 1 14m5-7a1 1 0 1 1 2 0 1 1 0 0 1-2 0m1.4 4.25a.751.751 0 0 1-.586-1.219l3.199-4a.751.751 0 0 1 1.172.938l-3.199 4a.75.75 0 0 1-.586.281M11 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2m4.5-6.725v-2.25C22.446 2.29 28 7.989 28 15c-.873 0-1.65.357-2.297.926.026-.306.047-.614.047-.926 0-5.759-4.555-10.461-10.25-10.725m3.097 23.21A13 13 0 0 1 15 28C7.989 28 2.29 22.446 2.025 15.5h2.25C4.539 21.195 9.241 25.75 15 25.75c1.288 0 2.518-.239 3.663-.656z"/><path d="M16.25 17.3v4.2c0 .97.43 1.838 1.107 2.434A9.2 9.2 0 0 1 15 24.25c-4.932 0-8.963-3.882-9.225-8.75H14.5a1 1 0 0 0 1-1V5.775c4.868.262 8.75 4.293 8.75 9.225 0 .178-.017.352-.027.528-.09-.014-.18-.028-.273-.028h-5.9c-.992 0-1.8.808-1.8 1.8m12.538 6.084L28.972 30a.972.972 0 1 1-1.944 0l.184-6.617c-1.132-.312-1.962-1.302-1.962-2.884 0-1.933 1.231-4 2.75-4s2.75 2.067 2.75 4c0 1.583-.83 2.573-1.962 2.885"/><path d="M24.25 17.3v4.2a1.75 1.75 0 0 1-1.75 1.75h-.715l.187 6.75a.972.972 0 1 1-1.944 0l.188-6.75H19.5a1.75 1.75 0 0 1-1.75-1.75v-4.2a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3v4.2c0 .138.112.25.25.25h.75V17.3a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3v4.45h.75a.25.25 0 0 0 .25-.25v-4.2a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3"/></svg>
-                            <h3 class="text-lg font-semibold dark:text-white">@lang('modules.modifier.itemModifiers')</h3>
-                        </div>
-                        <button type="button" onclick="closeModifiersModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
-                        </button>
+        {{-- Modifiers Modal: compact width, scroll body, pinned actions --}}
+        <div id="modifiersModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" style="display: none;">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[min(92vh,640px)] flex flex-col overflow-hidden border border-gray-200/80 dark:border-gray-700">
+                <div class="shrink-0 flex justify-between items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <svg viewBox="0 0 32 32" width="22" height="22" fill="currentColor" class="shrink-0 text-skin-base" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1 14h13V1C6.82 1 1 6.82 1 14m5-7a1 1 0 1 1 2 0 1 1 0 0 1-2 0m1.4 4.25a.751.751 0 0 1-.586-1.219l3.199-4a.751.751 0 0 1 1.172.938l-3.199 4a.75.75 0 0 1-.586.281M11 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2m4.5-6.725v-2.25C22.446 2.29 28 7.989 28 15c-.873 0-1.65.357-2.297.926.026-.306.047-.614.047-.926 0-5.759-4.555-10.461-10.25-10.725m3.097 23.21A13 13 0 0 1 15 28C7.989 28 2.29 22.446 2.025 15.5h2.25C4.539 21.195 9.241 25.75 15 25.75c1.288 0 2.518-.239 3.663-.656z"/><path d="M16.25 17.3v4.2c0 .97.43 1.838 1.107 2.434A9.2 9.2 0 0 1 15 24.25c-4.932 0-8.963-3.882-9.225-8.75H14.5a1 1 0 0 0 1-1V5.775c4.868.262 8.75 4.293 8.75 9.225 0 .178-.017.352-.027.528-.09-.014-.18-.028-.273-.028h-5.9c-.992 0-1.8.808-1.8 1.8m12.538 6.084L28.972 30a.972.972 0 1 1-1.944 0l.184-6.617c-1.132-.312-1.962-1.302-1.962-2.884 0-1.933 1.231-4 2.75-4s2.75 2.067 2.75 4c0 1.583-.83 2.573-1.962 2.885"/><path d="M24.25 17.3v4.2a1.75 1.75 0 0 1-1.75 1.75h-.715l.187 6.75a.972.972 0 1 1-1.944 0l.188-6.75H19.5a1.75 1.75 0 0 1-1.75-1.75v-4.2a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3v4.2c0 .138.112.25.25.25h.75V17.3a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3v4.45h.75a.25.25 0 0 0 .25-.25v-4.2a.3.3 0 0 1 .3-.3h.9a.3.3 0 0 1 .3.3"/></svg>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white truncate">@lang('modules.modifier.itemModifiers')</h3>
                     </div>
-                    <div id="modifiersModalContent"></div>
+                    <button type="button" onclick="closeModifiersModal()" class="shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100" aria-label="@lang('app.close')">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
+                    </button>
                 </div>
+                <div id="modifiersModalContent" class="flex-1 min-h-0 overflow-hidden flex flex-col"></div>
             </div>
         </div>
 
@@ -473,6 +606,7 @@
 @push('scripts')
 <script src="{{ asset('vendor/jquery.min.js') }}"></script>
 <script src="{{ asset('vendor/froiden-helper/helper.js') }}"></script>
+@vite(['resources/js/pos-offline.js'])
 <script>
 // Setup CSRF token for all AJAX requests
 $.ajaxSetup({
@@ -481,15 +615,52 @@ $.ajaxSetup({
     }
 });
 
+/**
+ * Use Froiden easyAjax when loaded. After Livewire wire:navigate, helper.js may not attach again,
+ * so $.easyAjax can be undefined — fall back to jQuery.ajax (same as runPosAjax for save-order).
+ */
+window.__posRunAjax = function(options) {
+    if (typeof $ === 'undefined') {
+        return;
+    }
+    if (typeof $.easyAjax === 'function') {
+        return $.easyAjax(options);
+    }
+    return $.ajax({
+        url: options.url,
+        type: options.type || 'GET',
+        data: options.data || {},
+        dataType: options.dataType || 'json',
+        success: options.success,
+        error: options.error
+    });
+};
+
+/**
+ * Same rules as resources/js/pos-offline.js (navigator + window.__posForceOfflineTest).
+ * Used for catalog/tax refresh and anywhere else POS should mirror offline simulation.
+ */
+window.__posIsEffectiveOnline = function() {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return false;
+    }
+    if (window.__posForceOfflineTest) {
+        return false;
+    }
+    return true;
+};
+
 // POS State Management
 window.posState = {
     orderTypeId: {{ $orderTypeId ?? 'null' }},
-    orderTypeSlug: '{{ $orderTypeSlug ?? "" }}',
-    orderType: '{{ $orderType ?? "" }}',
-    orderNumber: '{{ $orderNumber ?? "" }}',
-    formattedOrderNumber: '{{ $formattedOrderNumber ?? "" }}',
+    orderTypeSlug: @json($orderTypeSlug ?? ''),
+    orderType: @json($orderType ?? ''),
+    orderNumber: @json($orderNumber ?? ''),
+    formattedOrderNumber: @json($formattedOrderNumber ?? ''),
     tableId: {{ $tableId ?? 'null' }},
-    tableNo: '{{ $tableNo ?? "" }}',
+    tableNo: @json($tableNo ?? ''),
+    tableSeatingCapacity: @json($tableSeatingCapacity ?? null),
+    tableRemainingSeats: null,
     customerId: {{ $customerId ?? 'null' }},
     customer: @json($customer ?? null),
     orderItemList: @json($orderItemList ?? []),
@@ -502,9 +673,10 @@ window.posState = {
     modifierOptions: @json($modifierOptions ?? []),
     subTotal: {{ $subTotal ?? 0 }},
     total: {{ $total ?? 0 }},
-    discountType: '{{ $discountType ?? "" }}',
+    discountType: @json($discountType ?? ''),
     discountValue: {{ $discountValue ?? 0 }},
     discountAmount: {{ $discountAmount ?? 0 }},
+    discountApplyOn: @json(optional($orderDetail)->discount_apply_on ?? (($restaurant->tax_inclusive ?? 0) ? 'total' : 'sub_total')),
     discountedTotal: {{ $discountedTotal ?? 0 }},
     loyaltyPointsRedeemed: {{ optional($orderDetail)->loyalty_points_redeemed ?? 0 }},
     loyaltyDiscountAmount: {{ optional($orderDetail)->loyalty_discount_amount ?? 0 }},
@@ -542,13 +714,18 @@ window.posState = {
         ?? now(restaurant()->timezone)->format('H:i')
     ),
     noOfPax: {{ $noOfPax ?? 1 }},
-    selectWaiter: {{ $selectWaiter ?? user()->id }},
+    selectWaiter: {{ $selectWaiter ?? 'null' }},
     selectedDeliveryExecutive: {{ $selectDeliveryExecutive ?? 'null' }},
     selectedDeliveryApp: {{ $selectedDeliveryApp ?? 'null' }},
+    // Hotel room service (AJAX POS) — keep keys present so Hotel partials / Alpine never read undefined.
+    selectedStayId: @json(isset($selectedStayId) ? (int) $selectedStayId : null),
+    selectedStayRoomNumber: @json($orderDetail->context_room_number ?? null),
+    selectedStayNumber: @json($orderDetail->context_stay_number ?? null),
+    billTo: @json($billTo ?? 'POST_TO_ROOM'),
     orderID: {{ $orderID ?? 'null' }},
-    orderStatus: '{{ $orderStatus ?? "confirmed" }}',
-    deliveryDateTime: '{{ $deliveryDateTime ?? "" }}',
-    orderNote: '{{ $orderNote ?? "" }}',
+    orderStatus: @json($orderStatus ?? 'confirmed'),
+    deliveryDateTime: @json($deliveryDateTime ?? ''),
+    orderNote: @json($orderNote ?? ''),
     orderDetail: @json($orderDetail ?? null),
     menuItem: null,
     selectedModifierItem: null,
@@ -560,6 +737,279 @@ window.posState = {
     isWaiterLocked: {{ $isWaiterLocked ? 'true' : 'false' }},
     loyaltyEnabled: {{ ($posLoyaltyEnabled ?? false) ? 'true' : 'false' }}
 };
+
+/** Toast message when pax exceeds assigned table remaining seats (placeholders :pax :table :remaining). */
+window.__posPaxExceedsTableMsgTpl = @json(':pax pax exceeds remaining seats (:remaining) for table :table.');
+
+/** True when MultiPOS requires registration / pending / declined — block cart actions even if menu is reachable (e.g. z-index overlap). */
+window.__multiposBlocksPosInteraction = {{ !empty($shouldBlockPos) ? 'true' : 'false' }};
+
+/** Server-rendered order context — used to drop stale Livewire/SPA posState after navigating to bare /pos. */
+window.__posBootstrapHasServerOrder = {{ ($orderID || (isset($orderDetail) && $orderDetail)) ? 'true' : 'false' }};
+
+/**
+ * Align client posState with this page load so leftover orderDetail/showOrderDetail cannot block adds on a fresh POS.
+ */
+window.__posNormalizeClientOrderContext = function() {
+    if (!window.posState) {
+        return;
+    }
+    try {
+        var sp = new URLSearchParams(window.location.search || '');
+        var urlShowDetail = sp.get('show-order-detail') === 'true';
+        if (!window.__posBootstrapHasServerOrder) {
+            window.posState.orderID = null;
+            window.posState.orderDetail = null;
+            window.posState.showOrderDetail = false;
+            return;
+        }
+        if (!urlShowDetail) {
+            window.posState.showOrderDetail = false;
+        }
+    } catch (e) {
+        /* ignore */
+    }
+};
+window.__posNormalizeClientOrderContext();
+
+// Persist in-progress POS draft cart across page reloads (new draft only).
+window.__posDraftStorage = (function() {
+    const branchId = {{ (int) branch()->id }};
+    const key = 'pos_draft_cart_v1_' + branchId;
+    let saveTimer = null;
+
+    function canUseStorage() {
+        try {
+            return typeof window.localStorage !== 'undefined';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function shouldRestoreDraft() {
+        const isTruthyFlag = function(v) {
+            return v === true || v === 1 || v === '1' || v === 'true';
+        };
+        const hasServerOrder = !!(
+            window.posState &&
+            (
+                window.posState.orderID ||
+                (window.posState.orderDetail && window.posState.orderDetail.id)
+            )
+        );
+        const inOrderDetailMode = !!(window.posState && isTruthyFlag(window.posState.showOrderDetail));
+        return !hasServerOrder && !inOrderDetailMode;
+    }
+
+    function snapshot() {
+        const s = window.posState || {};
+        const toPlainObjectMap = function(source) {
+            const obj = {};
+            const src = source || {};
+            Object.keys(src).forEach(function(k) {
+                obj[k] = src[k];
+            });
+            return obj;
+        };
+
+        const list = toPlainObjectMap(s.orderItemList);
+        const keyOrder = Object.keys(list);
+        return {
+            saved_at: Date.now(),
+            orderTypeId: s.orderTypeId || null,
+            orderTypeSlug: s.orderTypeSlug || '',
+            orderType: s.orderType || '',
+            tableId: s.tableId || null,
+            tableNo: s.tableNo || '',
+            customerId: s.customerId || null,
+            customer: s.customer || null,
+            selectWaiter: s.selectWaiter || null,
+            orderItemList: list,
+            orderItemOrder: keyOrder,
+            orderItemVariation: toPlainObjectMap(s.orderItemVariation),
+            orderItemQty: toPlainObjectMap(s.orderItemQty),
+            orderItemAmount: toPlainObjectMap(s.orderItemAmount),
+            itemModifiersSelected: toPlainObjectMap(s.itemModifiersSelected),
+            orderItemModifiersPrice: toPlainObjectMap(s.orderItemModifiersPrice),
+            itemNotes: toPlainObjectMap(s.itemNotes),
+            modifierOptions: toPlainObjectMap(s.modifierOptions),
+            orderItemTaxDetails: toPlainObjectMap(s.orderItemTaxDetails),
+            discountType: s.discountType || '',
+            discountValue: s.discountValue || 0,
+            discountAmount: s.discountAmount || 0,
+            discountApplyOn: s.discountApplyOn || ((window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }}) ? 'total' : 'sub_total'),
+            deliveryFee: s.deliveryFee || 0,
+            tipAmount: s.tipAmount || 0,
+            orderNote: s.orderNote || ''
+        };
+    }
+
+    function saveNow() {
+        if (window.__posDraftRestoreCompleted !== true) {
+            return;
+        }
+        if (!canUseStorage() || !shouldRestoreDraft()) {
+            return;
+        }
+        try {
+            const cartSize = Object.keys(window.posState?.orderItemList || {}).length;
+            if (!cartSize) {
+                // Do not auto-wipe persisted draft on transient empty states during boot/render.
+                // Draft is explicitly cleared via reset/submit/manual clear flows.
+                return;
+            }
+            window.localStorage.setItem(key, JSON.stringify(snapshot()));
+        } catch (e) {
+            // Ignore storage quota/private mode errors.
+        }
+    }
+
+    function saveDebounced() {
+        if (saveTimer) {
+            clearTimeout(saveTimer);
+        }
+        saveTimer = setTimeout(saveNow, 150);
+    }
+
+    function restore() {
+        if (!canUseStorage() || !shouldRestoreDraft()) {
+            return false;
+        }
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) {
+                return false;
+            }
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') {
+                return false;
+            }
+            if (!data.orderItemList || !Object.keys(data.orderItemList).length) {
+                return false;
+            }
+
+            const rawOrderItemList = data.orderItemList || {};
+            const rawOrderItemOrder = Array.isArray(data.orderItemOrder) ? data.orderItemOrder : [];
+            const reorderedOrderItemList = {};
+
+            if (rawOrderItemOrder.length) {
+                rawOrderItemOrder.forEach(function(k) {
+                    if (Object.prototype.hasOwnProperty.call(rawOrderItemList, k)) {
+                        reorderedOrderItemList[k] = rawOrderItemList[k];
+                    }
+                });
+                Object.keys(rawOrderItemList).forEach(function(k) {
+                    if (!Object.prototype.hasOwnProperty.call(reorderedOrderItemList, k)) {
+                        reorderedOrderItemList[k] = rawOrderItemList[k];
+                    }
+                });
+            } else {
+                Object.keys(rawOrderItemList).forEach(function(k) {
+                    reorderedOrderItemList[k] = rawOrderItemList[k];
+                });
+            }
+
+            Object.assign(window.posState, {
+                orderTypeId: data.orderTypeId ?? window.posState.orderTypeId,
+                orderTypeSlug: data.orderTypeSlug ?? window.posState.orderTypeSlug,
+                orderType: data.orderType ?? window.posState.orderType,
+                tableId: data.tableId ?? window.posState.tableId,
+                tableNo: data.tableNo ?? window.posState.tableNo,
+                customerId: data.customerId ?? window.posState.customerId,
+                customer: data.customer ?? window.posState.customer,
+                selectWaiter: data.selectWaiter ?? window.posState.selectWaiter,
+                orderItemList: reorderedOrderItemList,
+                orderItemVariation: data.orderItemVariation || {},
+                orderItemQty: data.orderItemQty || {},
+                orderItemAmount: data.orderItemAmount || {},
+                itemModifiersSelected: data.itemModifiersSelected || {},
+                orderItemModifiersPrice: data.orderItemModifiersPrice || {},
+                itemNotes: data.itemNotes || {},
+                modifierOptions: data.modifierOptions || {},
+                orderItemTaxDetails: data.orderItemTaxDetails || {},
+                discountType: data.discountType || '',
+                discountValue: Number(data.discountValue || 0),
+                discountAmount: Number(data.discountAmount || 0),
+                discountApplyOn: data.discountApplyOn || ((window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }}) ? 'total' : 'sub_total'),
+                deliveryFee: Number(data.deliveryFee || 0),
+                tipAmount: Number(data.tipAmount || 0),
+                orderNote: data.orderNote || ''
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function clear() {
+        if (!canUseStorage()) {
+            return;
+        }
+        try {
+            window.localStorage.removeItem(key);
+        } catch (e) {
+            // Ignore
+        }
+    }
+
+    return {
+        saveNow,
+        saveDebounced,
+        restore,
+        clear
+    };
+})();
+
+window.persistPosDraftCart = function() {
+    if (window.__posDraftStorage && typeof window.__posDraftStorage.saveDebounced === 'function') {
+        window.__posDraftStorage.saveDebounced();
+    }
+};
+
+window.clearPersistedPosDraftCart = function() {
+    if (window.__posDraftStorage && typeof window.__posDraftStorage.clear === 'function') {
+        window.__posDraftStorage.clear();
+    }
+};
+
+function restorePosDraftCartOnLoad() {
+    window.__posDraftRestoreCompleted = false;
+    const restored = window.__posDraftStorage?.restore?.();
+    if (restored) {
+        if (typeof window.updateOrderItemsContainer === 'function') {
+            window.updateOrderItemsContainer();
+        }
+        if (typeof window.calculateTotal === 'function') {
+            window.calculateTotal();
+        }
+        if (typeof window.updateCustomerDisplay === 'function') {
+            window.updateCustomerDisplay(window.posState.customer || null);
+        }
+        if (typeof window.updateTableDisplay === 'function' && window.posState.tableId && window.posState.tableNo) {
+            window.updateTableDisplay({ id: window.posState.tableId, table_code: window.posState.tableNo });
+        }
+    }
+    // Enable persistence only after restore attempt to prevent empty-boot overwrite.
+    window.__posDraftRestoreCompleted = true;
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof window.__posNormalizeClientOrderContext === 'function') {
+            window.__posNormalizeClientOrderContext();
+        }
+        restorePosDraftCartOnLoad();
+    });
+} else {
+    if (typeof window.__posNormalizeClientOrderContext === 'function') {
+        window.__posNormalizeClientOrderContext();
+    }
+    restorePosDraftCartOnLoad();
+}
+
+window.addEventListener('beforeunload', function() {
+    window.__posDraftStorage?.saveNow?.();
+});
 
 /**
  * Current order id for POS AJAX (parity with Livewire: orderID || orderDetail.id || server-rendered order).
@@ -581,7 +1031,13 @@ window.getCurrentPosOrderId = function() {
     if (id) {
         return id;
     }
-    return toPositiveInt(@json(optional($orderDetail)->id ?? null));
+    if (window.__posForceFreshOrder === true) {
+        return null;
+    }
+    if (typeof window.__posInitialServerOrderId === 'undefined') {
+        window.__posInitialServerOrderId = toPositiveInt(@json(optional($orderDetail)->id ?? null));
+    }
+    return toPositiveInt(window.__posInitialServerOrderId);
 };
 
 // Unified free-stamp detector (tt parity + robust note fallback).
@@ -824,18 +1280,336 @@ window.getNonFreeCartSummary = function() {
     }
 @endphp
 
+@php
+    $posTaxRevision = \Illuminate\Support\Facades\Cache::get('pos.tax.rev.branch.' . (int) branch()->id, 0);
+    $posOnSetting = getOrderNumberSetting(branch()->id);
+    $posOrderNumberFormat = [
+        'enable' => (bool) ($posOnSetting->enable_feature ?? false),
+        'prefix' => (string) ($posOnSetting->prefix ?? ''),
+        'separator' => (string) ($posOnSetting->separator ?? '-'),
+        'digits' => (int) ($posOnSetting->digits ?? 4),
+        'includeDate' => (bool) ($posOnSetting->include_date ?? false),
+        'showYear' => (bool) ($posOnSetting->show_year ?? false),
+        'showMonth' => (bool) ($posOnSetting->show_month ?? false),
+        'showDay' => (bool) ($posOnSetting->show_day ?? false),
+        'showTime' => (bool) ($posOnSetting->show_time ?? false),
+        'resetDaily' => (bool) ($posOnSetting->reset_daily ?? false),
+    ];
+    $posBusinessDayUtc = null;
+    try {
+        $bd = getBusinessDayBoundaries(branch(), now(restaurant()->timezone ?? 'UTC'));
+        $posBusinessDayUtc = [
+            'start' => $bd['start']->copy()->utc()->toIso8601String(),
+            'end' => $bd['end']->copy()->utc()->toIso8601String(),
+        ];
+    } catch (\Throwable $e) {
+        $posBusinessDayUtc = null;
+    }
+
+    $posEuSelectable = restaurant()->selectableEuAllergenKeys();
+    $posEuAllergensEnabled = count($posEuSelectable) > 0;
+    $posEuKeyOrder = array_values(array_intersect(
+        \App\Support\EuAnnexIiAllergens::keys(),
+        $posEuSelectable
+    ));
+    $posEuIconUrls = [];
+    $posEuLabels = [];
+    foreach ($posEuSelectable as $k) {
+        $posEuIconUrls[$k] = \App\Support\EuAnnexIiAllergens::defaultIconUrl($k);
+        $posEuLabels[$k] = __(\App\Support\EuAnnexIiAllergens::langKey($k));
+    }
+    $posDietaryLabelOrder = \App\Support\DietaryLabels::keys();
+    $posDietaryLabelText = [];
+    $posDietaryLabelIconUrls = [];
+    foreach ($posDietaryLabelOrder as $k) {
+        $posDietaryLabelText[$k] = __(\App\Support\DietaryLabels::langKey($k));
+        $posDietaryLabelIconUrls[$k] = \App\Support\DietaryLabels::defaultIconUrl($k);
+    }
+@endphp
+
 window.posConfig = {
-    taxMode: '{{ $taxMode ?? "order" }}',
+    branchId: {{ (int) branch()->id }},
+    locale: @json(app()->getLocale()),
+    taxRevision: {{ (int) $posTaxRevision }},
+    taxMode: @json($taxMode ?? 'order'),
     taxInclusive: {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }},
+    orderPrefixEnabled: {{ isOrderPrefixEnabled() ? 'true' : 'false' }},
+    restaurantTimezone: @json($restaurant->timezone ?? 'UTC'),
+    orderNumberFormat: @json($posOrderNumberFormat),
+    posBusinessDayUtc: @json($posBusinessDayUtc),
     includeChargesInTaxBase: {{ $includeChargesInTaxBase ?? true ? 'true' : 'false' }},
     taxes: @json($posTaxes),
     extraCharges: @json($extraCharges ?? []),
     currencyId: {{ $restaurant->currency_id ?? 1 }},
-    currencyCode: '{{ $restaurant->currency->currency_code ?? "USD" }}',
-    currencySymbol: '{{ $restaurant->currency->currency_symbol ?? "$" }}',
-    moveToLabel: '{{ __('modules.order.moveTo') }}',
-    stampDiscountLabel: {!! json_encode(__('app.stampDiscount')) !!}
+    currencyCode: @json($restaurant->currency->currency_code ?? 'USD'),
+    currencySymbol: @json($restaurant->currency->currency_symbol ?? '$'),
+    moveToLabel: @json(__('modules.order.moveTo')),
+    stampDiscountLabel: @json(__('app.stampDiscount')),
+    hideMenuItemImageOnPos: {{ (restaurant() && restaurant()->hide_menu_item_image_on_pos) ? 'true' : 'false' }},
+    posEuAllergensEnabled: {{ $posEuAllergensEnabled ? 'true' : 'false' }},
+    posEuAllergenKeyOrder: @json($posEuKeyOrder),
+    posEuAllergenIconUrls: @json($posEuIconUrls),
+    posEuAllergenLabels: @json($posEuLabels),
+    posEuAllergenGroupAriaLabel: @json(__('modules.settings.euAllergensFicTitle')),
+    posDietaryLabelOrder: @json($posDietaryLabelOrder),
+    posDietaryLabelText: @json($posDietaryLabelText),
+    posDietaryLabelIconUrls: @json($posDietaryLabelIconUrls),
+    posDietaryLabelsAria: @json(__('modules.menu.dietaryLabelsSectionTitle'))
 };
+
+window.__posEscapeHtmlAttr = function(s) {
+    if (s == null || s === '') {
+        return '';
+    }
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+};
+
+window.__posBuildAllergenIconsHtml = function(storedKeys, opts) {
+    opts = opts || {};
+    var inActionRow = !!opts.inActionRow;
+    if (!window.posConfig || !window.posConfig.posEuAllergensEnabled) {
+        return '';
+    }
+    if (!Array.isArray(storedKeys) || !storedKeys.length) {
+        return '';
+    }
+    var order = window.posConfig.posEuAllergenKeyOrder || [];
+    var urls = window.posConfig.posEuAllergenIconUrls || {};
+    var labels = window.posConfig.posEuAllergenLabels || {};
+    var ordered = [];
+    for (var i = 0; i < order.length; i++) {
+        if (storedKeys.indexOf(order[i]) !== -1) {
+            ordered.push(order[i]);
+        }
+    }
+    if (!ordered.length) {
+        return '';
+    }
+    var parts = [];
+    for (var j = 0; j < ordered.length; j++) {
+        var k = ordered[j];
+        var u = urls[k];
+        if (!u) {
+            continue;
+        }
+        var t = labels[k] || k;
+        var tipClasses =
+            'pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 invisible group-hover:opacity-100 group-hover:visible dark:bg-gray-700';
+        parts.push(
+            '<span class="group relative inline-flex shrink-0">' +
+                '<img src="' +
+                window.__posEscapeHtmlAttr(u) +
+                '" alt="" aria-label="' +
+                window.__posEscapeHtmlAttr(t) +
+                '" class="h-5 w-5 object-contain" width="20" height="20" loading="lazy" />' +
+                '<span class="' +
+                tipClasses +
+                '" role="tooltip" aria-hidden="true">' +
+                window.__posEscapeHtmlAttr(t) +
+                '</span>' +
+                '</span>'
+        );
+    }
+    if (!parts.length) {
+        return '';
+    }
+    var wrapClass = inActionRow
+        ? 'inline-flex flex-wrap items-center gap-1 shrink-0'
+        : 'inline-flex flex-wrap items-center gap-1 mt-0.5';
+    var aria = window.posConfig.posEuAllergenGroupAriaLabel || 'Allergens';
+    return (
+        '<div class="' +
+        wrapClass +
+        '" role="group" aria-label="' +
+        window.__posEscapeHtmlAttr(aria) +
+        '">' +
+        parts.join('') +
+        '</div>'
+    );
+};
+
+window.__posGetEuAllergenKeysFromMenuInput = function($input) {
+    if (!$input || !$input.length) {
+        return [];
+    }
+    var raw = $input.attr('data-item-eu-allergens');
+    if (!raw || typeof raw !== 'string') {
+        return [];
+    }
+    try {
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(function(k) {
+            return typeof k === 'string';
+        }) : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+window.__posGetDietaryLabelsFromMenuInput = function($input) {
+    if (!$input || !$input.length) {
+        return [];
+    }
+    var raw = $input.attr('data-item-dietary-labels');
+    if (!raw || typeof raw !== 'string') {
+        return [];
+    }
+    try {
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(function(k) {
+            return typeof k === 'string';
+        }) : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+window.__posBuildDietaryLabelsHtml = function(storedKeys, opts) {
+    opts = opts || {};
+    var inActionRow = !!opts.inActionRow;
+    if (!window.posConfig) {
+        return '';
+    }
+    if (!Array.isArray(storedKeys) || !storedKeys.length) {
+        return '';
+    }
+    var order = window.posConfig.posDietaryLabelOrder || [];
+    var labels = window.posConfig.posDietaryLabelText || {};
+    var iconUrls = window.posConfig.posDietaryLabelIconUrls || {};
+    if (!order.length) {
+        return '';
+    }
+    var allowed = {};
+    for (var i = 0; i < order.length; i++) {
+        allowed[order[i]] = true;
+    }
+    var tipClasses =
+        'pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 invisible group-hover:opacity-100 group-hover:visible dark:bg-gray-700';
+    var parts = [];
+    for (var j = 0; j < order.length; j++) {
+        var k = order[j];
+        if (storedKeys.indexOf(k) !== -1 && allowed[k]) {
+            var t = labels[k] || k;
+            var u = iconUrls[k] || '';
+            if (!u) {
+                continue;
+            }
+            parts.push(
+                '<span class="group relative inline-flex shrink-0">' +
+                    '<img src="' +
+                    window.__posEscapeHtmlAttr(u) +
+                    '" alt="" aria-label="' +
+                    window.__posEscapeHtmlAttr(t) +
+                    '" class="h-5 w-5 object-contain" width="20" height="20" loading="lazy" />' +
+                    '<span class="' +
+                    tipClasses +
+                    '" role="tooltip" aria-hidden="true">' +
+                    window.__posEscapeHtmlAttr(t) +
+                    '</span>' +
+                    '</span>'
+            );
+        }
+    }
+    if (!parts.length) {
+        return '';
+    }
+    var wrapClass = inActionRow
+        ? 'inline-flex flex-wrap items-center gap-1 shrink-0'
+        : 'inline-flex flex-wrap items-center gap-1 mt-0.5';
+    var aria = window.posConfig.posDietaryLabelsAria || 'Additional options';
+    return (
+        '<div class="' +
+        wrapClass +
+        '" role="group" aria-label="' +
+        window.__posEscapeHtmlAttr(aria) +
+        '">' +
+        parts.join('') +
+        '</div>'
+    );
+};
+
+window.syncPosTaxRevisionCache = function() {
+    if (!window.posConfig || typeof window.localStorage === 'undefined') {
+        return;
+    }
+
+    const branchId = window.posConfig.branchId;
+    const currentRevision = String(window.posConfig.taxRevision ?? 0);
+    const markerKey = `pos_tax_revision_branch_${branchId}`;
+
+    let previousRevision = null;
+    try {
+        previousRevision = window.localStorage.getItem(markerKey);
+    } catch (e) {
+        return;
+    }
+
+    if (previousRevision === currentRevision) {
+        return;
+    }
+
+    try {
+        // POS menu catalog cache used by Blade POS menu (order-type scoped keys).
+        const catalogPrefix = `pos_menu_catalog_v4_${branchId}_`;
+        const keysToRemove = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+            const key = window.localStorage.key(i);
+            if (!key) continue;
+            if (key.indexOf(catalogPrefix) === 0) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(function(key) {
+            window.localStorage.removeItem(key);
+        });
+
+        window.posMenuClientCatalog = null;
+        window.posMenuClientCatalogLoading = false;
+
+        // Vue POS cache keys (used by PosApp.vue build).
+        [
+            'pos_menus',
+            'pos_categories',
+            'pos_menu_items',
+            'pos_waiters',
+            'pos_cache_timestamp',
+            'pos_menus_timestamp',
+            'pos_categories_timestamp',
+            'pos_menu_items_timestamp',
+            'pos_waiters_timestamp',
+        ].forEach(function(key) {
+            window.localStorage.removeItem(key);
+        });
+
+        window.localStorage.setItem(markerKey, currentRevision);
+    } catch (e) {
+        // ignore localStorage failures
+    }
+};
+window.syncPosTaxRevisionCache();
+
+window.__posModifiersModalI18n = {
+    optionName: @json(__('modules.modifier.optionName')),
+    setPrice: @json(__('modules.menu.setPrice')),
+    select: @json(__('app.select')),
+    save: @json(__('app.save')),
+    cancel: @json(__('app.cancel')),
+    notAvailable: @json(__('modules.menu.notAvailable')),
+    requiredGroupTpl: @json(__('validation.requiredModifierGroup', ['name' => ':name']))
+};
+
+window.posOrderTypePriceMaps = @json($posOrderTypePriceMaps ?? (object) []);
+window.posExtraChargesBySlug = @json($posExtraChargesBySlug ?? (object) []);
+window.posDeliveryDefaultFee = {{ json_encode((float) ($posDeliveryDefaultFee ?? 0)) }};
+window.posOrderTypesForModal = @json($posOrderTypesForModal ?? []);
+window.posDeliveryPlatformsForModal = @json($posDeliveryPlatformsForModal ?? []);
+window.posOrderTypeSelectionPolicy = @json($posOrderTypeSelectionPolicy ?? ['mode' => 'choose', 'shouldPromptModalOnLoad' => true, 'allowOrderTypeChange' => true]);
+window.allowOrderTypeChange = @json($allowOrderTypeChange ?? true);
+window.posOrderTypeDefaultSaveUrl = @json(route('ajax.pos.order-type-default'));
 
 // Fresh-order tax reliability: keep a backend-derived tax index by menu item id.
 // This avoids item-wise tax loss when DOM data attributes are malformed/partial.
@@ -863,19 +1637,100 @@ window.menuItemTaxesIndex = Object.assign(
     @json($menuItemTaxesIndexData)
 );
 
+@include('pos.partials.pos-sidebar-order-type-sync')
+
+// Lightweight tooltip initializer for POS icon buttons.
+// Works without depending on Flowbite initialization on this page.
+window.initPosIconTooltips = function(root = document) {
+    try {
+        const triggers = root.querySelectorAll('[data-tooltip-target]');
+        triggers.forEach((trigger) => {
+            const tooltipId = trigger.getAttribute('data-tooltip-target');
+            if (!tooltipId) return;
+            const tooltip = document.getElementById(tooltipId);
+            if (!tooltip) return;
+            if (trigger.dataset.posTooltipBound === '1') return;
+
+            const show = () => {
+                const rect = trigger.getBoundingClientRect();
+                tooltip.style.position = 'fixed';
+                tooltip.style.top = `${Math.max(8, rect.top - 10)}px`;
+                tooltip.style.left = `${Math.max(8, rect.left + (rect.width / 2))}px`;
+                tooltip.style.transform = 'translate(-50%, -100%)';
+                tooltip.classList.remove('invisible', 'opacity-0');
+                tooltip.classList.add('opacity-100');
+            };
+
+            const hide = () => {
+                tooltip.classList.add('invisible', 'opacity-0');
+                tooltip.classList.remove('opacity-100');
+            };
+
+            trigger.addEventListener('mouseenter', show);
+            trigger.addEventListener('mouseleave', hide);
+            trigger.addEventListener('focus', show);
+            trigger.addEventListener('blur', hide);
+            trigger.dataset.posTooltipBound = '1';
+        });
+    } catch (e) {
+        console.warn('Tooltip init failed:', e);
+    }
+};
+
 // Wait for jQuery to be available
 (function() {
+    let jqueryWaitAttempts = 0;
+    const MAX_JQUERY_WAIT_ATTEMPTS = 150; // ~15s at 100ms, then stop (avoids endless timers)
+
     function initPosScripts() {
         if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+            jqueryWaitAttempts++;
+            if (jqueryWaitAttempts >= MAX_JQUERY_WAIT_ATTEMPTS) {
+                console.error('POS: jQuery did not load in time; initialization aborted.');
+                return;
+            }
             setTimeout(initPosScripts, 100);
             return;
         }
 
         // Initialize POS
         $(document).ready(function() {
-            // Load order type selection if needed
-            if (!window.posState.orderTypeId) {
-                $('#orderTypeSelectionModal').show();
+            if (typeof window.initPosIconTooltips === 'function') {
+                window.initPosIconTooltips(document);
+            }
+
+            const isOrderDetailView = !!(
+                window.posState && (
+                    window.posState.showOrderDetail === true
+                    || window.posState.showOrderDetail === 'true'
+                )
+            );
+            const hasExistingOrderContext = !!(
+                window.posState && (
+                    window.posState.orderID
+                    || (window.posState.orderDetail && window.posState.orderDetail.id)
+                )
+            );
+            if (typeof window.posInitOrderTypeOnLoad === 'function') {
+                window.posInitOrderTypeOnLoad({
+                    isOrderDetailView: isOrderDetailView,
+                    hasExistingOrderContext: hasExistingOrderContext,
+                });
+            }
+            if (typeof window.syncPosSidebarOrderTypeSections === 'function') {
+                window.syncPosSidebarOrderTypeSections();
+            }
+            if (typeof window.syncPosRoomServiceBillToSelect === 'function') {
+                window.syncPosRoomServiceBillToSelect();
+            }
+            if (typeof window.prefetchPosHotelRoomPickerIfRoomService === 'function') {
+                window.prefetchPosHotelRoomPickerIfRoomService();
+            }
+            if (typeof window.ensurePosNumberInputNoSpinnerCss === 'function') {
+                window.ensurePosNumberInputNoSpinnerCss();
+            }
+            if (typeof window.initPosAssigneeSearchableSelects === 'function') {
+                window.initPosAssigneeSearchableSelects();
             }
 
             // Initialize totals display if there are items in cart.
@@ -943,6 +1798,18 @@ window.menuItemTaxesIndex = Object.assign(
                 new Audio("{{ asset('sound/sound_beep-29.mp3') }}").play();
             };
 
+            // Keep cart list pinned to latest added item.
+            window.scrollPosCartToLatest = function() {
+                if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+                    return;
+                }
+                setTimeout(function() {
+                    $('#order-items-container .pos-hover-scrollbar').each(function() {
+                        this.scrollTop = this.scrollHeight;
+                    });
+                }, 30);
+            };
+
             // Print location function
             window.printLocation = function(url) {
                 if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
@@ -986,6 +1853,11 @@ window.menuItemTaxesIndex = Object.assign(
             bindBackdropClose('#variationModal', window.closeVariationModal);
             bindBackdropClose('#tableChangeModal', window.closeTableChangeModal);
             bindBackdropClose('#loyaltyRedemptionModal', window.closeLoyaltyRedemptionModal);
+            bindBackdropClose('#pos-order-type-modal', function() {
+                if (window.posState && window.posState.orderTypeId) {
+                    window.hidePosOrderTypeModal();
+                }
+            });
         });
 
         window.toggleSingleActionButton = function(button, isLoading) {
@@ -999,8 +1871,22 @@ window.menuItemTaxesIndex = Object.assign(
         };
         window.setGlobalOrderActionLock = function(isLocked) {
             if (typeof jQuery === 'undefined' || typeof $ === 'undefined') return;
-            $('.pos-order-action-btn').prop('disabled', !!isLocked).toggleClass('opacity-50', !!isLocked);
+            $('.pos-order-action-btn')
+                .prop('disabled', !!isLocked)
+                .toggleClass('opacity-50 pointer-events-none', !!isLocked);
+            $('.pos-new-kot-link').each(function() {
+                var $link = $(this);
+                $link.toggleClass('opacity-50', !!isLocked);
+                if (isLocked) {
+                    $link.addClass('pointer-events-none').attr('aria-disabled', 'true');
+                } else {
+                    $link.removeClass('pointer-events-none').removeAttr('aria-disabled');
+                }
+            });
         };
+
+        window.__posOrderActionInProgress = false;
+        window.setGlobalOrderActionLock(false);
 
         // Helper function to wait for Livewire and dispatch payment modal
         window.showPaymentModalForOrder = function(orderId, triggerButton = null) {
@@ -1010,6 +1896,32 @@ window.menuItemTaxesIndex = Object.assign(
             }
             window.setGlobalOrderActionLock(true);
             window.toggleSingleActionButton(triggerButton, true);
+
+            if (window.PosOffline && typeof window.PosOffline.shouldQueueNow === 'function' && window.PosOffline.shouldQueueNow()) {
+                var due = 0;
+                if (window.posState) {
+                    due = parseFloat(window.posState.total);
+                    if (!Number.isFinite(due) && window.posState.orderDetail) {
+                        due = parseFloat(window.posState.orderDetail.total);
+                    }
+                }
+                if (!Number.isFinite(due)) {
+                    due = 0;
+                }
+                if (typeof window.openPosOfflinePaymentModal === 'function') {
+                    window.openPosOfflinePaymentModal({
+                        order_id: orderId,
+                        offline_queue_group_key: null,
+                        due_amount: due,
+                        formatted_order_number: (window.posState && (window.posState.formattedOrderNumber || window.posState.orderNumber)) ? String(window.posState.formattedOrderNumber || window.posState.orderNumber) : ''
+                    });
+                }
+                setTimeout(function() {
+                    window.setGlobalOrderActionLock(false);
+                    window.toggleSingleActionButton(triggerButton, false);
+                }, 350);
+                return true;
+            }
 
             // Check if Livewire is available
             if (typeof Livewire !== 'undefined' && typeof Livewire.dispatch === 'function') {
@@ -1062,133 +1974,558 @@ window.menuItemTaxesIndex = Object.assign(
     });
 })();
 
-// Order Type Selection
-let selectedOrderTypeId = null;
-let selectedOrderTypeSlug = null;
+(function($) {
+    window.__posOfflinePaymentCtx = null;
 
-window.selectOrderType = function(orderTypeId, slug) {
-    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-        console.error('jQuery is not loaded');
-        return;
+    function closePosOfflinePaymentModal() {
+        var m = document.getElementById('pos-offline-payment-modal');
+        if (m) {
+            m.classList.add('hidden');
+            m.setAttribute('aria-hidden', 'true');
+        }
+        window.__posOfflinePaymentCtx = null;
     }
 
-    selectedOrderTypeId = orderTypeId;
-    selectedOrderTypeSlug = slug;
-
-    // If it's delivery, show delivery platform selection
-    if (slug === 'delivery') {
-        // Show delivery platforms section using jQuery
-        $('#orderTypesSection').addClass('hidden');
-        $('#deliveryPlatformsSection').removeClass('hidden');
-        $('#backToOrderTypesBtn').removeClass('hidden');
-        $('#modalTitle').text('@lang("modules.order.selectDeliveryPlatform")');
-        $('#modalDescription').text('@lang("modules.order.selectDeliveryPlatformDescription")');
-    } else {
-        // For non-delivery types, proceed directly
-        proceedToPOS(orderTypeId, slug, null);
-    }
-};
-
-window.selectDeliveryPlatform = function(platformId) {
-    proceedToPOS(selectedOrderTypeId, selectedOrderTypeSlug, platformId);
-};
-
-window.goBackToOrderTypes = function() {
-    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-        console.error('jQuery is not loaded');
-        return;
-    }
-
-    // Show order types section using jQuery
-    $('#orderTypesSection').removeClass('hidden');
-    $('#deliveryPlatformsSection').addClass('hidden');
-    $('#backToOrderTypesBtn').addClass('hidden');
-    $('#modalTitle').text('@lang("modules.order.selectOrderType")');
-    $('#modalDescription').text('@lang("modules.order.selectOrderTypeDescription")');
-    selectedOrderTypeId = null;
-    selectedOrderTypeSlug = null;
-};
-
-function proceedToPOS(orderTypeId, slug, deliveryPlatform) {
-    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-        console.error('jQuery is not loaded');
-        return;
-    }
-
-    // Check if set as default using jQuery
-    const setAsDefault = $('#setAsDefault').length > 0 ? $('#setAsDefault').is(':checked') : false;
-
-    redirectToPOS(orderTypeId, slug, deliveryPlatform);
-}
-
-function redirectToPOS(orderTypeId, slug, deliveryPlatform) {
-    // Update state
-
-    window.posState.isWaiterLocked = {{ $isWaiterLocked ? 'true' : 'false' }};
-
-    // Reload page with order type to get updated prices
-    const url = new URL(window.location.href);
-    url.searchParams.set('orderType', slug);
-    url.searchParams.set('orderTypeId', orderTypeId);
-
-    // Remove changeOrderType parameter when order type is selected
-    url.searchParams.delete('changeOrderType');
-    url.searchParams.delete('allowOrderTypeSelection');
-
-    if (deliveryPlatform && deliveryPlatform !== 'default' && deliveryPlatform !== null) {
-        url.searchParams.set('deliveryPlatform', deliveryPlatform);
-    } else {
-        url.searchParams.delete('deliveryPlatform');
-    }
-
-    // Reload page to apply Blade conditions with new order type
-    window.location.href = url.toString();
-}
-
-// Update order type display (not needed since we reload the page, but kept for compatibility)
-window.updateOrderTypeDisplay = function() {
-    // When order type changes, the page reloads automatically
-    // This function is kept for compatibility but does nothing
-    // since prices are updated via page reload
-};
-
-/**
- * Change order type with confirmation if items exist in cart
- */
-window.changeOrderType = function() {
-    const hasItems = window.posState.orderItemList && Object.keys(window.posState.orderItemList).length > 0;
-
-    if (hasItems) {
-        // Show confirmation dialog if items exist
-        Swal.fire({
-            title: '@lang('modules.order.changeOrderType')',
-            text: '@lang('modules.order.changeOrderTypeConfirmation')',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: '@lang('app.yes'), @lang('app.change')',
-            cancelButtonText: '@lang('app.cancel')',
-            timer: 4000,
-            position: 'center'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                resetOrderTypeSelection();
+    function updateOfflinePaymentChangeDisplay() {
+        var ctx = window.__posOfflinePaymentCtx;
+        var methodEl = document.getElementById('pos-offline-payment-method');
+        var tenderWrap = document.getElementById('pos-offline-payment-tendered-wrap');
+        var tenderInput = document.getElementById('pos-offline-payment-tendered');
+        var changeEl = document.getElementById('pos-offline-payment-change-display');
+        if (!ctx || !methodEl || !tenderWrap || !tenderInput || !changeEl) {
+            return;
+        }
+        var due = parseFloat(ctx.due_amount) || 0;
+        var method = methodEl.value || 'cash';
+        if (method === 'cash') {
+            tenderWrap.classList.remove('hidden');
+            var t = parseFloat(tenderInput.value);
+            if (!Number.isFinite(t)) {
+                t = 0;
             }
-        });
-    } else {
-        // No items in cart, safe to change directly
-        resetOrderTypeSelection();
+            var ch = Math.max(0, Math.round((t - due) * 100) / 100);
+            changeEl.textContent = typeof window.formatCurrency === 'function'
+                ? window.formatCurrency(ch)
+                : ch.toFixed(2);
+        } else {
+            tenderWrap.classList.add('hidden');
+            changeEl.textContent = '—';
+        }
+    }
+
+    window.openPosOfflinePaymentModal = function(opts) {
+        opts = opts || {};
+        var due = parseFloat(opts.due_amount);
+        if (!Number.isFinite(due)) {
+            due = 0;
+        }
+        var rawOid = opts.order_id;
+        var oid = rawOid != null && rawOid !== '' ? parseInt(String(rawOid), 10) : null;
+        if (!Number.isFinite(oid) || oid <= 0) {
+            oid = null;
+        }
+        window.__posOfflinePaymentCtx = {
+            order_id: oid,
+            offline_queue_group_key: opts.offline_queue_group_key || null,
+            due_amount: due,
+            formatted_order_number: opts.formatted_order_number ? String(opts.formatted_order_number) : ''
+        };
+        var m = document.getElementById('pos-offline-payment-modal');
+        var labelEl = document.getElementById('pos-offline-payment-order-label');
+        var dueEl = document.getElementById('pos-offline-payment-due-display');
+        var tenderInput = document.getElementById('pos-offline-payment-tendered');
+        var methodEl = document.getElementById('pos-offline-payment-method');
+        var errEl = document.getElementById('pos-offline-payment-error');
+        if (!m || !labelEl || !dueEl || !tenderInput || !methodEl) {
+            return;
+        }
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        labelEl.textContent = window.__posOfflinePaymentCtx.formatted_order_number || '';
+        dueEl.textContent = typeof window.formatCurrency === 'function'
+            ? window.formatCurrency(due)
+            : due.toFixed(2);
+        methodEl.value = 'cash';
+        tenderInput.value = String(Math.max(0, due).toFixed(2));
+        m.classList.remove('hidden');
+        m.setAttribute('aria-hidden', 'false');
+        updateOfflinePaymentChangeDisplay();
+    };
+
+    $(document).on('change', '#pos-offline-payment-method', updateOfflinePaymentChangeDisplay);
+    $(document).on('input', '#pos-offline-payment-tendered', updateOfflinePaymentChangeDisplay);
+    $(document).on('click', '#pos-offline-payment-close, #pos-offline-payment-cancel', function(e) {
+        e.preventDefault();
+        closePosOfflinePaymentModal();
+    });
+    $(document).on('click', '#pos-offline-payment-modal', function(e) {
+        if (e.target.id === 'pos-offline-payment-modal') {
+            closePosOfflinePaymentModal();
+        }
+    });
+    $(document).on('click', '#pos-offline-payment-confirm', function(e) {
+        e.preventDefault();
+        var ctx = window.__posOfflinePaymentCtx;
+        var errEl = document.getElementById('pos-offline-payment-error');
+        if (!ctx || !window.PosOffline || typeof window.PosOffline.queueRecordPayment !== 'function') {
+            closePosOfflinePaymentModal();
+            return;
+        }
+        var methodEl = document.getElementById('pos-offline-payment-method');
+        var tenderInput = document.getElementById('pos-offline-payment-tendered');
+        var method = methodEl ? methodEl.value : 'cash';
+        var due = parseFloat(ctx.due_amount) || 0;
+        var tendered = 0;
+        if (method === 'cash') {
+            tendered = parseFloat(tenderInput ? tenderInput.value : '0');
+            if (!Number.isFinite(tendered) || tendered < 0) {
+                tendered = 0;
+            }
+        } else if (method === 'due') {
+            tendered = 0;
+        } else {
+            tendered = due;
+        }
+        var change = Math.max(0, Math.round((tendered - due) * 100) / 100);
+        if (method === 'cash' && tendered + 1e-9 < due) {
+            if (errEl) {
+                errEl.textContent = @json(__('messages.posOfflineCashMustCoverDue'));
+                errEl.classList.remove('hidden');
+            }
+            return;
+        }
+        var payload = {
+            order_id: ctx.order_id || null,
+            offline_queue_group_key: ctx.offline_queue_group_key || null,
+            payment_method: method,
+            payment_amount: tendered,
+            return_amount: change
+        };
+        var summary = {
+            payment_method: method,
+            tendered: tendered,
+            change: change,
+            due_amount: due,
+            order_number_label: ctx.formatted_order_number || null
+        };
+        window.PosOffline.queueRecordPayment(payload, summary);
+        closePosOfflinePaymentModal();
+        var msg = @json(__('messages.posOfflinePaymentQueued'));
+        if (typeof window.__posShowOfflineQueuedBanner === 'function') {
+            window.__posShowOfflineQueuedBanner(msg);
+        } else if (typeof window.showToast === 'function') {
+            window.showToast('success', msg);
+        }
+    });
+})(jQuery);
+
+window.__posOrderTypeModalPending = { orderTypeId: null, slug: null };
+
+window.posNormalizedDeliveryAppId = function(v) {
+    if (v === undefined || v === null || v === '' || v === 'default') {
+        return null;
+    }
+    const n = parseInt(String(v), 10);
+    return Number.isNaN(n) ? null : n;
+};
+
+window.posOrderTypePriceLookupKey = function(orderTypeId, deliveryAppIdNormalized) {
+    return String(orderTypeId) + '__' + (deliveryAppIdNormalized === null || deliveryAppIdNormalized === undefined ? 'none' : String(deliveryAppIdNormalized));
+};
+
+window.applyPosMenuPricesForCurrentOrderContext = function() {
+    if (!window.__posMenuClientSideCatalog || !Array.isArray(window.posMenuClientCatalog)) {
+        return;
+    }
+    const oid = window.posState && window.posState.orderTypeId;
+    if (!oid) {
+        return;
+    }
+    const app = window.posNormalizedDeliveryAppId(window.posState && window.posState.selectedDeliveryApp);
+    const key = window.posOrderTypePriceLookupKey(oid, app);
+    const map = window.posOrderTypePriceMaps && window.posOrderTypePriceMaps[key];
+    if (!map) {
+        return;
+    }
+    window.posMenuClientCatalog.forEach(function(item) {
+        const pid = map[String(item.id)];
+        if (pid !== undefined && pid !== null) {
+            item.price = parseFloat(pid);
+        }
+    });
+    if (typeof window.applyClientMenuFilter === 'function') {
+        window.applyClientMenuFilter();
+    }
+    if (typeof window.updateCategoryCounts === 'function') {
+        window.updateCategoryCounts();
     }
 };
 
-/**
- * Reset order type selection and show OrderTypeSelection component
- */
+window.updatePosOrderTypeUiLabels = function() {
+    const oid = window.posState && window.posState.orderTypeId;
+    const meta = (window.posOrderTypesForModal || []).find(function(t) {
+        return String(t.id) === String(oid);
+    });
+    const ind = document.getElementById('pos-order-type-indicator');
+    if (ind) {
+        if (oid) {
+            ind.classList.remove('hidden');
+        } else {
+            ind.classList.add('hidden');
+        }
+    }
+    const nameEl = document.getElementById('pos-order-type-display-name');
+    if (nameEl) {
+        if (meta) {
+            nameEl.textContent = meta.order_type_name || meta.slug || '';
+        } else if (window.posState && window.posState.orderType) {
+            nameEl.textContent = String(window.posState.orderType);
+        } else {
+            nameEl.textContent = '';
+        }
+    }
+    const platRow = document.getElementById('pos-delivery-platform-row');
+    const platEl = document.getElementById('pos-delivery-platform-display-name');
+    const slug = window.posState && window.posState.orderTypeSlug;
+    const app = window.posState && window.posState.selectedDeliveryApp;
+    if (platRow && platEl) {
+        if (slug === 'delivery') {
+            platRow.classList.remove('hidden');
+            if (app === null || app === undefined || app === '' || app === 'default') {
+                platEl.textContent = @json(__('modules.order.defaultDeliveryPlatform'));
+            } else {
+                const pmeta = (window.posDeliveryPlatformsForModal || []).find(function(p) {
+                    return String(p.id) === String(app);
+                });
+                platEl.textContent = pmeta && pmeta.name ? pmeta.name : '';
+            }
+        } else {
+            platRow.classList.add('hidden');
+        }
+    }
+    if (typeof window.syncPosSidebarOrderTypeSections === 'function') {
+        window.syncPosSidebarOrderTypeSections();
+    }
+    if (typeof window.syncPosRoomServiceBillToSelect === 'function') {
+        window.syncPosRoomServiceBillToSelect();
+    }
+    if (typeof window.syncSelectedHotelStaySummaryFromState === 'function') {
+        window.syncSelectedHotelStaySummaryFromState();
+    }
+    if (typeof window.prefetchPosHotelRoomPickerIfRoomService === 'function') {
+        window.prefetchPosHotelRoomPickerIfRoomService();
+    }
+};
+
+window.applyPosOrderTypeSelection = function(orderTypeId, slug, deliveryPlatform) {
+    const appNorm = window.posNormalizedDeliveryAppId(deliveryPlatform === 'default' ? null : deliveryPlatform);
+    window.posState.orderTypeId = orderTypeId;
+    window.posState.orderTypeSlug = slug;
+    const meta = (window.posOrderTypesForModal || []).find(function(t) {
+        return String(t.id) === String(orderTypeId);
+    });
+    window.posState.orderType = (meta && meta.type) ? meta.type : slug;
+    if (deliveryPlatform === undefined || deliveryPlatform === null || deliveryPlatform === 'default') {
+        window.posState.selectedDeliveryApp = null;
+    } else {
+        window.posState.selectedDeliveryApp = deliveryPlatform;
+    }
+
+    const rawCharges = window.posExtraChargesBySlug && window.posExtraChargesBySlug[slug];
+    window.posConfig.extraCharges = rawCharges ? JSON.parse(JSON.stringify(rawCharges)) : [];
+
+    if (slug === 'delivery') {
+        window.posState.deliveryFee = parseFloat(window.posDeliveryDefaultFee || 0) || 0;
+    } else {
+        window.posState.deliveryFee = 0;
+    }
+
+    window.applyPosMenuPricesForCurrentOrderContext();
+    window.updatePosOrderTypeUiLabels();
+
+    // Keep the address bar on /pos (or current path) without order-type query params — selection lives in posState only.
+    const url = new URL(window.location.href);
+    ['orderType', 'orderTypeId', 'deliveryPlatform', 'changeOrderType', 'allowOrderTypeSelection'].forEach(function(key) {
+        url.searchParams.delete(key);
+    });
+    const qs = url.searchParams.toString();
+    const nextPath = qs ? (url.pathname + '?' + qs) : url.pathname;
+    window.history.replaceState({}, '', nextPath);
+
+    window.hidePosOrderTypeModal();
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+
+    // Base item prices for every order type (and each delivery platform) are prefetched in
+    // window.posOrderTypePriceMaps; applyPosMenuPricesForCurrentOrderContext() already ran above.
+    // Re-render filters/counts locally — do not refetch the whole catalog on order-type change.
+    if (window.__posMenuClientSideCatalog) {
+        if (typeof window.applyClientMenuFilter === 'function') {
+            window.applyClientMenuFilter();
+        }
+        if (typeof window.updateCategoryCounts === 'function') {
+            window.updateCategoryCounts();
+        }
+    }
+};
+
+window.posOrderTypeModalPickDelivery = function(orderTypeId, platform) {
+    window.posFinalizeOrderTypeSelection(orderTypeId, 'delivery', platform);
+};
+
+window.posOrderTypeModalPickType = function(orderTypeId, slug) {
+    window.__posOrderTypeModalPending = { orderTypeId: orderTypeId, slug: slug };
+    if (slug === 'delivery') {
+        window.posOrderTypeModalPickDelivery(orderTypeId, 'default');
+        return;
+    }
+    window.posFinalizeOrderTypeSelection(orderTypeId, slug, null);
+};
+
+window.posOrderTypeModalPickPlatform = function(platform) {
+    const p = window.__posOrderTypeModalPending;
+    if (!p || !p.orderTypeId || !p.slug) {
+        return;
+    }
+    window.posFinalizeOrderTypeSelection(p.orderTypeId, p.slug, platform);
+};
+
+window.posOrderTypeModalResetView = function() {
+    if (typeof jQuery !== 'undefined') {
+        $('#pos-otm-stage-types').removeClass('hidden');
+        $('#pos-otm-stage-platforms').addClass('hidden');
+        $('#pos-otm-back-btn').addClass('hidden');
+        $('#pos-otm-order-types-section').removeClass('hidden');
+        $('#pos-otm-delivery-section').removeClass('hidden');
+        $('#pos-otm-title').text(@json(__('modules.order.selectOrderType')));
+        const hasDeliveryTiles = $('#pos-otm-delivery-section').length > 0;
+        $('#pos-otm-description').text(hasDeliveryTiles
+            ? @json(__('modules.order.selectOrderTypeWithDeliveryDescription'))
+            : @json(__('modules.order.selectOrderTypeDescription')));
+    }
+    window.__posOrderTypeModalPending = { orderTypeId: null, slug: null };
+};
+
+window.posOrderTypeModalGoBack = function() {
+    window.posOrderTypeModalResetView();
+};
+
+window.showPosOrderTypeModal = function() {
+    window.posOrderTypeModalResetView();
+    if (typeof jQuery !== 'undefined') {
+        $('#pos-set-order-type-default').prop('checked', false);
+        $('#pos-order-type-modal').css('display', 'flex');
+    }
+};
+
+window.showPosOrderTypeModalDeliveryPlatformsOnly = function() {
+    window.posOrderTypeModalResetView();
+    if (typeof jQuery !== 'undefined') {
+        $('#pos-otm-order-types-section').addClass('hidden');
+        $('#pos-otm-delivery-section').removeClass('hidden');
+        $('#pos-otm-stage-types').removeClass('hidden');
+        $('#pos-otm-stage-platforms').addClass('hidden');
+        $('#pos-otm-back-btn').addClass('hidden');
+        $('#pos-otm-title').text(@json(__('modules.order.selectDeliveryPlatform')));
+        $('#pos-otm-description').text(@json(__('modules.order.selectDeliveryPlatformDescription')));
+        $('#pos-set-order-type-default').prop('checked', false);
+        $('#pos-order-type-modal').css('display', 'flex');
+    }
+};
+
+window.posInitOrderTypeOnLoad = function(ctx) {
+    ctx = ctx || {};
+    const policy = window.posOrderTypeSelectionPolicy || { mode: 'choose', shouldPromptModalOnLoad: true };
+    if (ctx.isOrderDetailView || ctx.hasExistingOrderContext) {
+        return;
+    }
+
+    const platforms = window.posDeliveryPlatformsForModal || [];
+    const hasPlatform = window.posState && window.posState.selectedDeliveryApp !== null
+        && window.posState.selectedDeliveryApp !== undefined
+        && window.posState.selectedDeliveryApp !== '';
+
+    if (policy.mode === 'locked_single' && policy.autoOrderTypeId) {
+        if (!window.posState.orderTypeId && typeof window.posFinalizeOrderTypeSelection === 'function') {
+            window.posFinalizeOrderTypeSelection(policy.autoOrderTypeId, policy.autoSlug, null);
+        }
+        return;
+    }
+
+    if (policy.mode === 'delivery_only' && policy.autoOrderTypeId) {
+        if (!hasPlatform) {
+            if (platforms.length === 0) {
+                if (typeof window.posFinalizeOrderTypeSelection === 'function') {
+                    window.posFinalizeOrderTypeSelection(policy.autoOrderTypeId, 'delivery', 'default');
+                }
+            } else if (platforms.length === 1) {
+                if (typeof window.posFinalizeOrderTypeSelection === 'function') {
+                    window.posFinalizeOrderTypeSelection(policy.autoOrderTypeId, 'delivery', platforms[0].id);
+                }
+            } else if (typeof window.showPosOrderTypeModalDeliveryPlatformsOnly === 'function') {
+                window.showPosOrderTypeModalDeliveryPlatformsOnly();
+            }
+        }
+        return;
+    }
+
+    const shouldPromptOrderType = !window.posState.orderTypeId && policy.shouldPromptModalOnLoad !== false;
+    if (shouldPromptOrderType && typeof window.showPosOrderTypeModal === 'function') {
+        window.showPosOrderTypeModal();
+    }
+};
+
+window.hidePosOrderTypeModal = function() {
+    if (typeof jQuery !== 'undefined') {
+        $('#pos-order-type-modal').hide();
+    }
+    window.posOrderTypeModalGoBack();
+};
+
+window.posFinalizeOrderTypeSelection = function(orderTypeId, slug, deliveryPlatform) {
+    window.applyPosOrderTypeSelection(orderTypeId, slug, deliveryPlatform);
+    window.repricePosCartForOrderTypeChange();
+    if (typeof jQuery !== 'undefined' && $('#pos-set-order-type-default').is(':checked')) {
+        $.easyAjax({
+            url: window.posOrderTypeDefaultSaveUrl,
+            type: 'POST',
+            data: {
+                order_type_id: orderTypeId,
+                _token: '{{ csrf_token() }}'
+            },
+            success: function() {},
+            error: function() {}
+        });
+    }
+    if (typeof jQuery !== 'undefined') {
+        $('#pos-set-order-type-default').prop('checked', false);
+    }
+};
+
+window.clearPosCartForOrderTypeChange = function() {
+    window.posState.orderItemList = {};
+    window.posState.orderItemQty = {};
+    window.posState.orderItemAmount = {};
+    window.posState.orderItemVariation = {};
+    window.posState.itemModifiersSelected = {};
+    window.posState.orderItemModifiersPrice = {};
+    window.posState.itemNotes = {};
+    window.posState.orderItemTaxDetails = {};
+    window.posState.subTotal = 0;
+    window.posState.total = 0;
+    window.posState.discountAmount = 0;
+    window.posState.discountType = null;
+    window.posState.discountValue = null;
+    window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+        ? 'total'
+        : 'sub_total';
+    window.posState.discountedTotal = 0;
+    window.posState.totalTaxAmount = 0;
+    window.posState.taxBase = 0;
+    window.posState.tipAmount = 0;
+    window.posState.totalsPreCalculated = false;
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
+    }
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+
+    if (typeof window.flushCustomerDisplayUpdate === 'function') {
+        window.flushCustomerDisplayUpdate();
+    }
+};
+
+window.repricePosCartForOrderTypeChange = function() {
+    const oid = window.posState && window.posState.orderTypeId;
+    if (!oid || !window.posState || !window.posState.orderItemList) {
+        return;
+    }
+
+    const app = window.posNormalizedDeliveryAppId(window.posState && window.posState.selectedDeliveryApp);
+    const lookupKey = window.posOrderTypePriceLookupKey(oid, app);
+    const map = window.posOrderTypePriceMaps && window.posOrderTypePriceMaps[lookupKey];
+    if (!map) {
+        return;
+    }
+
+    Object.keys(window.posState.orderItemList).forEach(function(itemKey) {
+        if (/^kot_\d+_\d+$/.test(itemKey)) {
+            return;
+        }
+        const item = window.posState.orderItemList[itemKey];
+        if (!item || !item.id) {
+            return;
+        }
+
+        const hasVariation = !!(window.posState.orderItemVariation && window.posState.orderItemVariation[itemKey]);
+        const mapped = parseFloat(map[String(item.id)]);
+        const isStampLine = typeof window.isFreeStampItemByMeta === 'function'
+            ? window.isFreeStampItemByMeta(itemKey, item, window.posState.itemNotes && window.posState.itemNotes[itemKey])
+            : false;
+
+        if (!hasVariation && Number.isFinite(mapped)) {
+            item.price = mapped;
+        }
+
+        if (isStampLine) {
+            return;
+        }
+
+        const qty = parseFloat((window.posState.orderItemQty && window.posState.orderItemQty[itemKey]) || 1) || 1;
+        const variation = window.posState.orderItemVariation && window.posState.orderItemVariation[itemKey];
+        const basePrice = variation ? parseFloat(variation.price || item.price || 0) : parseFloat(item.price || 0);
+        const modifierPrice = parseFloat((window.posState.orderItemModifiersPrice && window.posState.orderItemModifiersPrice[itemKey]) || 0) || 0;
+        window.posState.orderItemAmount[itemKey] = qty * (basePrice + modifierPrice);
+    });
+
+    window.posState.totalsPreCalculated = false;
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
+    }
+};
+
+window.updateOrderTypeDisplay = function() {
+    window.updatePosOrderTypeUiLabels();
+};
+
+window.changeOrderType = function() {
+    if (window.allowOrderTypeChange === false) {
+        return;
+    }
+    const policy = window.posOrderTypeSelectionPolicy || {};
+    if (policy.mode === 'delivery_only' && typeof window.showPosOrderTypeModalDeliveryPlatformsOnly === 'function') {
+        window.showPosOrderTypeModalDeliveryPlatformsOnly();
+        return;
+    }
+    if (typeof window.showPosOrderTypeModal === 'function') {
+        window.showPosOrderTypeModal();
+    }
+};
+
 function resetOrderTypeSelection() {
-    // Create a clean URL with only the changeOrderType parameter
-    // This ensures orderTypeId is null and the OrderTypeSelection component shows
-    const baseUrl = "{{ route('pos.index') }}";
-    window.location.href = baseUrl + "?changeOrderType=1";
+    window.showPosOrderTypeModal();
 }
+
+// Backwards-compatible name used by menu / other scripts
+window.redirectToPOS = function(orderTypeId, slug, deliveryPlatform) {
+    window.posFinalizeOrderTypeSelection(orderTypeId, slug, deliveryPlatform);
+};
 
 // Modal Functions
 window.closeVariationModal = function() {
@@ -1229,7 +2566,7 @@ window.posLoyaltyApi = {
     redeemUrl: "{{ route('ajax.pos.loyalty.redeem') }}",
     stampPreviewUrl: "{{ route('ajax.pos.loyalty.stamp-auto-preview') }}",
     token: '{{ csrf_token() }}',
-    _defaultErrorMsg: {!! json_encode(__('messages.somethingWentWrong')) !!},
+    _defaultErrorMsg: @json(__('messages.somethingWentWrong')),
     getSummary: function(successCb, errorCb) {
         if (typeof jQuery === 'undefined' || typeof $ === 'undefined') return;
         var api = window.posLoyaltyApi;
@@ -1365,7 +2702,184 @@ window.applyLoyaltyRedemptionMax = function() {
 
 // -------------------------------------------------------------
 // Hotel room-service stay selection modal for AJAX POS
+// Full room list + localStorage cache + client-side search
 // -------------------------------------------------------------
+window.__posHotelRoomPickerItems = window.__posHotelRoomPickerItems || null;
+
+window.__posHotelRoomPickerStorageKey = function() {
+    var bid = window.posConfig && window.posConfig.branchId ? window.posConfig.branchId : '0';
+    return 'pos_hotel_room_picker_v1_' + bid;
+};
+
+window.readPosHotelRoomPickerCache = function() {
+    try {
+        if (typeof localStorage === 'undefined') {
+            return null;
+        }
+        var raw = localStorage.getItem(window.__posHotelRoomPickerStorageKey());
+        if (!raw) {
+            return null;
+        }
+        return JSON.parse(raw);
+    } catch (e) {
+        return null;
+    }
+};
+
+window.writePosHotelRoomPickerCache = function(payload) {
+    try {
+        if (typeof localStorage === 'undefined') {
+            return;
+        }
+        localStorage.setItem(window.__posHotelRoomPickerStorageKey(), JSON.stringify(payload));
+    } catch (e) {
+        // ignore quota / private mode
+    }
+};
+
+window.filterPosHotelRoomPickerItems = function(items, term) {
+    if (!term) {
+        return items || [];
+    }
+    var t = String(term).toLowerCase();
+    return (items || []).filter(function(it) {
+        return (String(it.room_number || '').toLowerCase().indexOf(t) !== -1)
+            || (String(it.stay_number || '').toLowerCase().indexOf(t) !== -1)
+            || (String(it.guest_name || '').toLowerCase().indexOf(t) !== -1)
+            || (String(it.room_type_name || '').toLowerCase().indexOf(t) !== -1);
+    });
+};
+
+window.escapeHtmlPos = function(s) {
+    if (s === undefined || s === null) {
+        return '';
+    }
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+};
+
+window.renderHotelRoomPickerListAjax = function(searchTerm) {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        return;
+    }
+    var items = window.__posHotelRoomPickerItems || [];
+    var filtered = window.filterPosHotelRoomPickerItems(items, searchTerm);
+    var $list = $('#hotel-room-stay-list-ajax');
+    var $empty = $('#hotel-room-stay-empty-ajax');
+    $list.empty();
+    if (!filtered.length) {
+        $empty.removeClass('hidden');
+        return;
+    }
+    $empty.addClass('hidden');
+    var selectedId = parseInt(window.posState && window.posState.selectedStayId || 0, 10);
+    var noStayMsg = @json(__('modules.order.roomServiceNoActiveStay'));
+    filtered.forEach(function(it) {
+        var guest = it.guest_name
+            ? '<div class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">' + window.escapeHtmlPos(it.guest_name) + '</div>'
+            : '';
+        var typeLine = it.room_type_name
+            ? '<div class="text-[10px] text-gray-400 dark:text-gray-400 mt-0.5 truncate">' + window.escapeHtmlPos(it.room_type_name) + '</div>'
+            : '';
+        var stayLine = it.stay_number
+            ? '<div class="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">' + window.escapeHtmlPos(it.stay_number) + '</div>'
+            : '';
+        var unavail = (!it.selectable || !it.stay_id)
+            ? '<div class="text-[10px] text-amber-700 dark:text-amber-400 mt-1 leading-tight">' + window.escapeHtmlPos(noStayMsg) + '</div>'
+            : '';
+        var isSelected = it.stay_id && selectedId && parseInt(it.stay_id, 10) === selectedId;
+        var cardClasses = (!it.selectable || !it.stay_id)
+            ? 'opacity-70 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 cursor-not-allowed'
+            : (isSelected
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm cursor-pointer'
+                : 'border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:shadow-sm cursor-pointer');
+        var roomLabel = window.escapeHtmlPos(it.room_number || 'N/A');
+        var inputHtml = '';
+        var optionAttrs = '';
+        if (it.selectable && it.stay_id) {
+            var checkedAttr = isSelected ? 'checked' : '';
+            optionAttrs = ' data-stay-id="' + it.stay_id + '"'
+                + ' data-room-number="' + window.escapeHtmlPos(String(it.room_number || 'N/A')) + '"'
+                + ' data-stay-number="' + window.escapeHtmlPos(String(it.stay_number || '')) + '"';
+            inputHtml = '<input type="radio" name="hotel_room_stay_radio" value="' + it.stay_id + '" class="w-4 h-4 mt-0.5 text-blue-600 bg-white border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 focus:ring-2 dark:bg-gray-800 dark:border-gray-600 shrink-0" '
+                + checkedAttr + '>';
+        } else {
+            inputHtml = '<span class="w-4 h-4 mt-0.5 shrink-0 inline-block rounded-full border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800" title=""> </span>';
+        }
+        var html = ''
+            + '<label class="block js-hotel-stay-option ' + ((!it.selectable || !it.stay_id) ? 'cursor-not-allowed' : 'cursor-pointer') + '" ' + optionAttrs + '>'
+            + '<div class="border rounded-lg p-2.5 transition-all duration-200 bg-white dark:bg-gray-800 ' + cardClasses + '">'
+            + '<div class="flex items-start gap-2">'
+            + inputHtml
+            + '<div class="flex-1 min-w-0">'
+            + '<div class="font-semibold text-sm text-gray-900 dark:text-white truncate">' + roomLabel + '</div>'
+            + typeLine + stayLine + guest + unavail
+            + '</div></div></div></label>';
+        $list.append(html);
+    });
+};
+
+window.refreshHotelRoomPickerFromServer = function(done) {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        if (typeof done === 'function') {
+            done();
+        }
+        return;
+    }
+    $.easyAjax({
+        url: "{{ route('ajax.pos.hotel.room-picker') }}",
+        type: 'GET',
+        success: function(response) {
+            if (response && response.success && Array.isArray(response.items)) {
+                window.__posHotelRoomPickerItems = response.items;
+                window.writePosHotelRoomPickerCache({
+                    fetched_at: response.fetched_at || null,
+                    items: response.items
+                });
+            }
+            if (typeof done === 'function') {
+                done();
+            }
+        },
+        error: function() {
+            if (typeof done === 'function') {
+                done();
+            }
+        }
+    });
+};
+
+window.prefetchPosHotelRoomPickerIfRoomService = function() {
+    if (!window.posState || !window.posConfig) {
+        return;
+    }
+    var slug = window.posState.orderTypeSlug;
+    var typeF = window.posState.orderType;
+    var isRoom = false;
+    if (typeof window.posNormalizeSidebarOrderTypeKey === 'function') {
+        isRoom = window.posNormalizeSidebarOrderTypeKey(slug) === 'room_service'
+            || window.posNormalizeSidebarOrderTypeKey(typeF) === 'room_service';
+    } else {
+        isRoom = String(slug || '') === 'room_service' || String(typeF || '') === 'room_service';
+    }
+    if (!isRoom) {
+        return;
+    }
+    if (typeof window.__posIsEffectiveOnline === 'function' && !window.__posIsEffectiveOnline()) {
+        return;
+    }
+    if (window.__posHotelRoomPickerPrefetching) {
+        return;
+    }
+    window.__posHotelRoomPickerPrefetching = true;
+    window.refreshHotelRoomPickerFromServer(function() {
+        window.__posHotelRoomPickerPrefetching = false;
+    });
+};
+
 window.openHotelRoomModalAjax = function() {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
@@ -1373,28 +2887,31 @@ window.openHotelRoomModalAjax = function() {
     }
 
     let $modal = $('#hotel-room-modal-ajax');
-    // Fallback: if modal container is missing (e.g. in kot_items view),
-    // create a minimal version on the fly so the UX still works.
     if (!$modal.length) {
         $('body').append(`
             <div id="hotel-room-modal-ajax"
                  class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40"
                  onclick="if (event.target === this) { window.closeHotelRoomModalAjax && window.closeHotelRoomModalAjax(); }">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col"
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[85vh] flex flex-col"
                      onclick="event.stopPropagation();">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                            {{ __('hotel::modules.roomService.selectRoom') }}
-                        </h3>
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                {{ __('hotel::modules.roomService.selectRoom') }}
+                            </h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                                @lang('modules.order.roomServicePickerHint')
+                            </p>
+                        </div>
                         <button type="button"
-                                class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 shrink-0"
                                 onclick="window.closeHotelRoomModalAjax && window.closeHotelRoomModalAjax()">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="px-6 py-3 border-b border-gray-200 dark:border-gray-700">
                         <div class="relative">
                             <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1404,12 +2921,13 @@ window.openHotelRoomModalAjax = function() {
                             </div>
                             <input id="hotel-room-search-ajax"
                                    type="text"
+                                   autocomplete="off"
                                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
                                    placeholder="{{ __('hotel::modules.roomService.searchByRoomOrStay') }}">
                         </div>
                     </div>
-                    <div class="px-6 py-3 flex-1 overflow-y-auto">
-                        <div id="hotel-room-stay-list-ajax" class="grid grid-cols-2 gap-3 text-sm text-gray-800 dark:text-gray-100"></div>
+                    <div class="px-6 py-3 flex-1 min-h-0 overflow-y-auto">
+                        <div id="hotel-room-stay-list-ajax" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 text-sm text-gray-800 dark:text-gray-100"></div>
                         <div id="hotel-room-stay-empty-ajax" class="hidden text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
                             {{ __('messages.noRecordFound') }}
                         </div>
@@ -1429,81 +2947,66 @@ window.openHotelRoomModalAjax = function() {
 
     $modal.removeClass('hidden').addClass('flex');
 
-    const loadStays = function(searchTerm) {
-        $.easyAjax({
-            url: "{{ route('ajax.pos.hotel.stays') }}",
-            type: "GET",
-            data: {
-                search: searchTerm || '',
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                const $list = $('#hotel-room-stay-list-ajax');
-                const $empty = $('#hotel-room-stay-empty-ajax');
-                $list.empty();
+    if (!window.__posHotelRoomPickerItems || !window.__posHotelRoomPickerItems.length) {
+        var cached = window.readPosHotelRoomPickerCache();
+        if (cached && Array.isArray(cached.items) && cached.items.length) {
+            window.__posHotelRoomPickerItems = cached.items;
+        }
+    }
 
-                if (!response || !response.success || !response.stays || response.stays.length === 0) {
-                    $empty.removeClass('hidden');
-                    return;
-                }
-
-                $empty.addClass('hidden');
-
-                const selectedId = parseInt(window.posState?.selectedStayId || 0, 10);
-
-                response.stays.forEach(function(stay) {
-                    const guest = stay.guest_name ? `<div class="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">${stay.guest_name}</div>` : '';
-                    const isSelected = selectedId && parseInt(stay.id || 0, 10) === selectedId;
-                    const cardClasses = isSelected
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:shadow-sm';
-                    const checkedAttr = isSelected ? 'checked' : '';
-
-                    const html = `
-                        <label class="block cursor-pointer">
-                            <div class="border rounded-lg p-3 transition-all duration-200 bg-white dark:bg-gray-800 ${cardClasses}">
-                                <div class="flex items-start gap-2">
-                                    <input type="radio"
-                                           name="hotel_room_stay_radio"
-                                           value="${stay.id}"
-                                           class="w-4 h-4 mt-0.5 text-blue-600 bg-white border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 focus:ring-2 dark:bg-gray-800 dark:border-gray-600"
-                                           ${checkedAttr}
-                                           onclick="window.selectHotelStayAjax && window.selectHotelStayAjax(${stay.id}, '${(stay.room_number || '').toString().replace(/'/g, '\\\'')}', '${(stay.stay_number || '').toString().replace(/'/g, '\\\'')}')"
-                                    >
-                                    <div class="flex-1 min-w-0">
-                                        <div class="font-semibold text-sm text-gray-900 dark:text-white truncate">
-                                            ${stay.room_number || 'N/A'}
-                                        </div>
-                                        <div class="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
-                                            ${stay.stay_number || ''}
-                                        </div>
-                                        ${guest}
-                                    </div>
-                                </div>
-                            </div>
-                        </label>
-                    `;
-                    $list.append(html);
-                });
-            }
-        });
-    };
-
-    // Attach search handler once
-    const $search = $('#hotel-room-search-ajax');
+    var $search = $('#hotel-room-search-ajax');
     if ($search.length && !$search.data('hotel-search-bound')) {
-        let timer = null;
+        var timer = null;
         $search.on('input', function() {
             clearTimeout(timer);
-            const term = $(this).val();
+            var term = $(this).val();
             timer = setTimeout(function() {
-                loadStays(term);
-            }, 300);
+                window.renderHotelRoomPickerListAjax(term);
+            }, 200);
         });
         $search.data('hotel-search-bound', '1');
     }
 
-    loadStays('');
+    var $list = $('#hotel-room-stay-list-ajax');
+    if ($list.length && !$list.data('hotel-list-bound')) {
+        $list.on('click', '.js-hotel-stay-option', function() {
+            var $opt = $(this);
+            var stayId = parseInt($opt.attr('data-stay-id') || 0, 10);
+            if (!stayId) {
+                return;
+            }
+            var roomNumber = $opt.attr('data-room-number') || '';
+            var stayNumber = $opt.attr('data-stay-number') || '';
+            var $radio = $opt.find('input[type="radio"][name="hotel_room_stay_radio"]');
+            if ($radio.length) {
+                $radio.prop('checked', true);
+            }
+            if (typeof window.selectHotelStayAjax === 'function') {
+                window.selectHotelStayAjax(stayId, roomNumber, stayNumber);
+            }
+        });
+        $list.on('change', 'input[type="radio"][name="hotel_room_stay_radio"]', function() {
+            var stayId = parseInt($(this).val() || 0, 10);
+            if (!stayId) {
+                return;
+            }
+            var $opt = $(this).closest('.js-hotel-stay-option');
+            var roomNumber = $opt.attr('data-room-number') || '';
+            var stayNumber = $opt.attr('data-stay-number') || '';
+            if (typeof window.selectHotelStayAjax === 'function') {
+                window.selectHotelStayAjax(stayId, roomNumber, stayNumber);
+            }
+        });
+        $list.data('hotel-list-bound', '1');
+    }
+
+    var currentTerm = $search.length ? String($search.val() || '') : '';
+    window.renderHotelRoomPickerListAjax(currentTerm);
+
+    window.refreshHotelRoomPickerFromServer(function() {
+        var t = $('#hotel-room-search-ajax').length ? String($('#hotel-room-search-ajax').val() || '') : '';
+        window.renderHotelRoomPickerListAjax(t);
+    });
 };
 
 window.closeHotelRoomModalAjax = function() {
@@ -1518,6 +3021,8 @@ window.selectHotelStayAjax = function(id, roomNumber, stayNumber) {
         window.posState = {};
     }
     window.posState.selectedStayId = id;
+    window.posState.selectedStayRoomNumber = roomNumber || null;
+    window.posState.selectedStayNumber = stayNumber || null;
     window.posState.billTo = window.posState.billTo || 'POST_TO_ROOM';
 
     if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
@@ -1532,12 +3037,44 @@ window.selectHotelStayAjax = function(id, roomNumber, stayNumber) {
     window.closeHotelRoomModalAjax();
 };
 
+window.syncSelectedHotelStaySummaryFromState = function() {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined' || !window.posState) {
+        return;
+    }
+    var room = window.posState.selectedStayRoomNumber;
+    var stay = window.posState.selectedStayNumber;
+    if (room) {
+        $('#ajax-room-stay-summary-room').text(String(room));
+    }
+    if (stay) {
+        $('#ajax-room-stay-summary-stay').text(String(stay)).removeClass('hidden');
+    } else {
+        $('#ajax-room-stay-summary-stay').addClass('hidden').text('');
+    }
+};
+
 // Update room-service bill_to from AJAX POS select
 window.setRoomServiceBillTo = function(value) {
     if (!window.posState) {
         window.posState = {};
     }
     window.posState.billTo = value || 'POST_TO_ROOM';
+};
+
+// Keep Pay type <select> in sync with posState (order load + order-type changes).
+window.syncPosRoomServiceBillToSelect = function() {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        return;
+    }
+    var $el = $('#pos-room-service-bill-to');
+    if (!$el.length) {
+        return;
+    }
+    var v = (window.posState && window.posState.billTo) ? String(window.posState.billTo) : 'POST_TO_ROOM';
+    if (v !== 'POST_TO_ROOM' && v !== 'PAY_NOW') {
+        v = 'POST_TO_ROOM';
+    }
+    $el.val(v);
 };
 
 window.applyLoyaltyRedemption = function() {
@@ -1553,13 +3090,16 @@ window.applyLoyaltyRedemption = function() {
         window.posState.discountType = '';
         window.posState.discountValue = 0;
         window.posState.discountAmount = 0;
+        window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+            ? 'total'
+            : 'sub_total';
         if (typeof window.calculateTotal === 'function') {
             window.calculateTotal();
         }
         window.closeLoyaltyRedemptionModal();
         window.showToast?.('success', {!! json_encode(__('loyalty::app.loyaltyPointsRedeemedSuccessfully')) !!});
     }, function(xhr) {
-        var msg = xhr.responseJSON?.message || {!! json_encode(__('messages.somethingWentWrong')) !!};
+        var msg = xhr.responseJSON?.message || @json(__('messages.somethingWentWrong'));
         $('#loyaltyError').show().text(msg);
     });
 };
@@ -1593,7 +3133,7 @@ window.closePrintOptionsModal = function() {
 window.handlePrintOption = function(mode) {
     const orderId = window.posState ? (window.posState.orderID || (window.posState.orderDetail?.id || null)) : null;
     if (!orderId) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
 
@@ -1922,10 +3462,1260 @@ window.closeModifiersModal = function() {
     }
 };
 
+// While the item modifiers modal is open, Enter confirms the same as the Save button.
+(function() {
+    function posModifiersModalEnterToSave(e) {
+        if (e.key !== 'Enter' || e.repeat) {
+            return;
+        }
+        if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+            return;
+        }
+        var $modal = $('#modifiersModal');
+        if (!$modal.length || !$modal.is(':visible')) {
+            return;
+        }
+        var st = window.posState;
+        if (!st || st.pendingMenuItemId == null) {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (typeof window.saveModifiers === 'function') {
+            window.saveModifiers(st.pendingMenuItemId, st.pendingVariationId || null);
+        }
+    }
+    document.addEventListener('keydown', posModifiersModalEnterToSave, true);
+})();
+
 // KOT-only click guard to block rapid duplicate clicks without changing saveOrder flow.
+/** Labels for client-side KOT HTML (offline / blob print); refreshed on each page load. */
+window.__posResolveWaiterNameForPrint = function(orderData) {
+    const wid =
+        orderData && orderData.waiter_id != null ? String(orderData.waiter_id) : '';
+    if (!wid || typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        return null;
+    }
+    const opt = $('#waiter-select option').filter(function() {
+        return String($(this).val()) === wid;
+    }).first();
+    if (!opt.length) {
+        return null;
+    }
+    const t = (opt.text() || '').trim();
+    return t || null;
+};
+
+window.__posOfflineKotLabels = {
+    pageTitleSuffix: @json(__('modules.order.kotTicket')),
+    table: @json(__('modules.table.table')),
+    date: @json(__('app.date')),
+    time: @json(__('app.time')),
+    waiter: @json(__('modules.order.waiter')),
+    orderType: @json(__('modules.settings.orderType')),
+    pickupAt: @json(__('modules.order.pickupAt')),
+    itemName: @json(__('modules.menu.itemName')),
+    qty: @json(__('modules.order.qty')),
+    note: @json(__('modules.order.note')),
+    specialInstructions: @json(__('modules.order.specialInstructions')),
+    tokenNumber: @json(__('modules.order.tokenNumber')),
+    back: @json(__('app.back')),
+};
+
+/** Slug -> translated label for offline KOT/bill blob prints (matches POS offline modal). */
+@php
+    $__posPrintOrderTypeMap = [
+        'dine_in' => __('modules.order.dine_in'),
+        'delivery' => __('modules.order.delivery'),
+        'pickup' => __('modules.order.pickup'),
+        'room_service' => __('modules.order.room_service'),
+    ];
+@endphp
+window.__posPrintOrderTypeMap = @json($__posPrintOrderTypeMap);
+
+window.__posFormatOrderTypeLabelForPrint = function(rawDisplay, slugHint) {
+    const map = window.__posPrintOrderTypeMap || {};
+    const slug = (slugHint || '').toString().trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (slug && Object.prototype.hasOwnProperty.call(map, slug)) {
+        return String(map[slug]);
+    }
+    const raw = (rawDisplay || '').toString().trim();
+    if (!raw) {
+        return '';
+    }
+    const key = raw.toLowerCase().replace(/[\s-]+/g, '_');
+    if (Object.prototype.hasOwnProperty.call(map, key)) {
+        return String(map[key]);
+    }
+    return raw
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, function(m) {
+            return m.toUpperCase();
+        });
+};
+
+/**
+ * Snapshot for printing a KOT without a server-side Kot id (offline queue).
+ * Omits i18n strings; use window.__posOfflineKotLabels at print time.
+ */
+window.buildPosOfflineKotPrintContext = function(orderData, orderItems) {
+    const actions = Array.isArray(orderData && orderData.actions) ? orderData.actions : [];
+    if (actions[0] !== 'kot') {
+        return null;
+    }
+    const st = window.posState || {};
+    const now = new Date();
+    const waiterName =
+        typeof window.__posResolveWaiterNameForPrint === 'function'
+            ? window.__posResolveWaiterNameForPrint(orderData)
+            : null;
+    const orderTypeSlug = (st.orderTypeSlug || orderData.order_type || '').toString();
+    let pickupLine = null;
+    if (orderTypeSlug === 'pickup' && st.pickupDate && st.pickupTime) {
+        pickupLine = (st.pickupDate + ' ' + st.pickupTime).trim();
+    }
+    const modMap = st.modifierOptions || {};
+    const items = (orderItems || []).map(function(row) {
+        const item = st.orderItemList && st.orderItemList[row.key];
+        const nm = item ? (item.item_name || item.name || ('#' + row.id)) : ('#' + row.id);
+        const variation = st.orderItemVariation && st.orderItemVariation[row.key];
+        const variationLabel = variation
+            ? (variation.variation || variation.name || null)
+            : null;
+        const modIds = (st.itemModifiersSelected && st.itemModifiersSelected[row.key]) || [];
+        const modifiers = [];
+        (Array.isArray(modIds) ? modIds : []).forEach(function(mid) {
+            const key = String(mid);
+            const mo = modMap[key] || modMap[mid];
+            const label = mo
+                ? (mo.name || mo.option_name || mo.modifier_name || null)
+                : null;
+            if (label) {
+                modifiers.push(label);
+            }
+        });
+        const note = row.note != null && row.note !== ''
+            ? row.note
+            : (st.itemNotes && st.itemNotes[row.key]) || null;
+        return {
+            name: nm,
+            quantity: row.quantity,
+            variation_label: variationLabel,
+            modifiers: modifiers,
+            note: note,
+        };
+    });
+    return {
+        dir: @json(isRtl() ? 'rtl' : 'ltr'),
+        restaurant_name: @json($restaurant->name ?? 'Restaurant'),
+        kot_number_label: @json(__('messages.posOfflineKotNumberPending')),
+        token_number: null,
+        order_number_label: (st.formattedOrderNumber || st.orderNumber || '').toString().trim() || '—',
+        table_code: (st.tableNo || '').toString().trim() || '—',
+        printed_at_iso: now.toISOString(),
+        waiter_name: waiterName,
+        order_type_display: (function() {
+            const raw = (orderData.order_type_display || orderData.order_type || '').toString();
+            return typeof window.__posFormatOrderTypeLabelForPrint === 'function'
+                ? window.__posFormatOrderTypeLabelForPrint(raw, orderTypeSlug)
+                : raw;
+        })(),
+        pickup_line: pickupLine,
+        order_note: orderData.order_note || null,
+        items: items,
+    };
+};
+
+window.__posEscHtml = function(s) {
+    if (s == null || s === '') {
+        return '';
+    }
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+};
+
+window.__buildOfflineKotPrintHtml = function(ctx) {
+    // helpers and config
+    const labels = window.__posOfflineKotLabels || {};
+    const dir = (ctx && ctx.dir) || 'ltr';
+    const esc = window.__posEscHtml;
+    const widthMm = 80;
+    const baseFont = '9pt', smallFont = '8pt', titleFont = '14pt';
+    let dateStr = '', timeStr = '';
+
+    // Format date/time when possible
+    try {
+        const d = ctx.printed_at_iso ? new Date(ctx.printed_at_iso) : new Date();
+        const loc = (window.posConfig && window.posConfig.locale) || undefined;
+        dateStr = d.toLocaleDateString(loc, { year: 'numeric', month: 'short', day: 'numeric' });
+        timeStr = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        // fallback: leave date/time empty
+    }
+
+    // Table rows for each item
+    const itemsHtml = (ctx.items || []).map(it => {
+        const modLines = (it.modifiers || [])
+            .map(m => `<div class="modifiers">• ${esc(m)}</div>`)
+            .join('');
+        const varLine = it.variation_label
+            ? `<br><small>(${esc(it.variation_label)})</small>`
+            : '';
+        const noteLine = it.note
+            ? `<div class="modifiers"><strong>${esc(labels.note)}:</strong> ${esc(it.note)}</div>`
+            : '';
+        return `
+            <tr>
+                <td class="description">
+                    ${esc(it.name)}
+                    ${varLine}
+                    ${modLines}
+                    ${noteLine}
+                </td>
+                <td class="qty">${esc(it.quantity)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Rows for waiter, order type etc
+    const waiterRow = ctx.waiter_name
+        ? `
+            <div class="order-row">
+                <table>
+                    <tr>
+                        <td class="order-left">${esc(labels.waiter)}: <span class="bold">${esc(ctx.waiter_name)}</span></td>
+                        <td class="order-right"></td>
+                    </tr>
+                </table>
+            </div>
+        `
+        : '';
+
+    const orderTypeRow = ctx.order_type_display
+        ? `
+            <div class="order-row">
+                <table>
+                    <tr>
+                        <td class="order-left">${esc(labels.orderType)}: <span class="bold">${esc(ctx.order_type_display)}</span></td>
+                        <td class="order-right">
+                            ${ctx.pickup_line
+                                ? `${esc(labels.pickupAt)}: <span class="bold">${esc(ctx.pickup_line)}</span>`
+                                : ''}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        `
+        : '';
+
+    const kotNoteBlock = ctx.order_note
+        ? `
+            <div class="footer">
+                <strong>${esc(labels.specialInstructions)}:</strong>
+                <div class="italic">${esc(ctx.order_note)}</div>
+            </div>
+        `
+        : '';
+
+    // Title for document
+    const title = `${esc(ctx.restaurant_name)} - ${esc(labels.pageTitleSuffix)}`;
+
+    // Compose full HTML (split blocks for legibility)
+    const html = `
+<!DOCTYPE html>
+<html lang="${esc((window.posConfig && window.posConfig.locale) || '')}" dir="${esc(dir)}">
+<head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:DejaVu Sans,Arial,sans-serif }
+        [dir="rtl"] { text-align:right }
+        [dir="ltr"] { text-align:left }
+        .receipt { width:${widthMm - 10}mm; padding:6.35mm }
+        .header { text-align:center; margin-bottom:3mm }
+        .restaurant-info { font-size:${baseFont}; margin-bottom:1mm }
+        .order-info {
+            text-align:center;
+            border-top:1px dashed #000;
+            border-bottom:1px dashed #000;
+            padding:2mm 0;
+            margin-bottom:3mm;
+            font-size:${baseFont}
+        }
+        .kot-title {
+            font-size:${titleFont};
+            font-weight:bold;
+            text-align:center;
+            margin-bottom:2mm
+        }
+        .items-table {
+            width:100%;
+            border-collapse:collapse;
+            margin-bottom:3mm;
+            font-size:${baseFont}
+        }
+        .items-table th { padding:1mm; border-bottom:1px solid #000 }
+        [dir="rtl"] .items-table th { text-align:right }
+        [dir="ltr"] .items-table th { text-align:left }
+        .items-table td { padding:1mm 0; vertical-align:top }
+        .qty { width:15%; text-align:center }
+        .description { width:85% }
+        .modifiers { font-size:${smallFont}; color:#555 }
+        .footer {
+            text-align:center;
+            margin-top:3mm;
+            font-size:9pt;
+            padding-top:2mm;
+            border-top:1px dashed #000
+        }
+        .italic { font-style:italic }
+        .bold { font-weight:bold }
+        .order-row { width:100%; margin-bottom:5px }
+        .order-row table { width:100%; border-collapse:collapse }
+        .order-left { text-align:left; width:50% }
+        .order-right { text-align:right; width:50% }
+        .back-button {
+            position:fixed;
+            top:10px;
+            left:10px;
+            z-index:1000;
+            padding:10px 20px;
+            background:#3b82f6;
+            color:#fff;
+            border:none;
+            border-radius:5px;
+            cursor:pointer;
+            font-size:14px
+        }
+        @media print {
+            @page { margin:0; size:80mm auto }
+            .back-button { display:none!important }
+        }
+    </style>
+</head>
+<body>
+    <button
+        type="button"
+        class="back-button"
+        onclick="goBack()"
+        id="backButton"
+        style="display:none"
+    >← ${esc(labels.back)}</button>
+    <div class="receipt">
+        <div class="header">
+            <div class="restaurant-info">${esc(ctx.restaurant_name)}</div>
+        </div>
+        <div class="kot-title">
+            KOT <span class="bold">#${esc(ctx.kot_number_label)}</span>
+        </div>
+        <div class="order-info" style="margin-bottom:3mm">
+            <div class="order-row">
+                <table>
+                    <tr>
+                        <td class="order-left"><span class="bold">${esc(ctx.order_number_label)}</span></td>
+                        <td class="order-right">
+                            <span>${esc(labels.table)}: <span class="bold">${esc(ctx.table_code)}</span></span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="order-row">
+                <table>
+                    <tr>
+                        <td class="order-left">${esc(labels.date)}: ${esc(dateStr)}</td>
+                        <td class="order-right">${esc(labels.time)}: ${esc(timeStr)}</td>
+                    </tr>
+                </table>
+            </div>
+            ${waiterRow}
+            ${orderTypeRow}
+        </div>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="description">${esc(labels.itemName)}</th>
+                    <th class="qty">${esc(labels.qty)}</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itemsHtml}
+            </tbody>
+        </table>
+        ${kotNoteBlock}
+    </div>
+    <script>
+        function isPWA() {
+            return (
+                window.matchMedia("(display-mode: standalone)").matches ||
+                window.navigator.standalone === true ||
+                document.referrer.includes("android-app://")
+            );
+        }
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.close();
+            }
+        }
+        if (isPWA()) {
+            var b = document.getElementById("backButton");
+            if (b) b.style.display = "block";
+        }
+        window.onload = function() {
+            if (window.self !== window.top) return;
+            var closeAfter = function() {
+                if (isPWA()) {
+                    goBack();
+                } else {
+                    window.close();
+                }
+            };
+            if ('onafterprint' in window) {
+                window.onafterprint = closeAfter;
+            } else {
+                setTimeout(closeAfter, 1000);
+            }
+            window.print();
+        };
+    <\/script>
+</body>
+</html>
+`;
+    return html;
+};
+
+/**
+ * Open a new tab with KOT HTML (blob URL) and trigger print — works fully offline.
+ */
+window.openPosOfflineKotPrintTab = function(context) {
+    if (!context || !Array.isArray(context.items) || context.items.length === 0) {
+        return;
+    }
+    const ctx = Object.assign({}, context, {
+        printed_at_iso: new Date().toISOString(),
+    });
+    const html = window.__buildOfflineKotPrintHtml(ctx);
+    let url = '';
+    try {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        url = URL.createObjectURL(blob);
+    } catch (e) {
+        console.error('Offline KOT print: blob failed', e);
+        return;
+    }
+    const w = window.open(url, '_blank');
+    if (!w) {
+        URL.revokeObjectURL(url);
+        if (typeof window.showToast === 'function') {
+            window.showToast('warning', @json(__('messages.posOfflineKotPrintPopupBlocked')));
+        } else {
+            alert(@json(__('messages.posOfflineKotPrintPopupBlocked')));
+        }
+        return;
+    }
+    setTimeout(function() {
+        try {
+            URL.revokeObjectURL(url);
+        } catch (e2) {
+            // ignore
+        }
+    }, 120000);
+};
+
+window.__posOfflineBillLabels = {
+    billReceipt: @json(__('modules.order.bill')),
+    qty: @json(__('modules.order.qty')),
+    itemName: @json(__('modules.menu.itemName')),
+    price: @json(__('modules.order.price')),
+    amount: @json(__('modules.order.amount')),
+    subTotal: @json(__('modules.order.subTotal')),
+    discount: @json(__('modules.order.discount')),
+    tip: @json(__('modules.order.tip')),
+    deliveryFee: @json(__('modules.delivery.deliveryFee')),
+    freeDelivery: @json(__('modules.delivery.freeDelivery')),
+    totalTax: @json(__('modules.order.totalTax')),
+    total: @json(__('modules.order.total')),
+    table: @json(__('modules.table.table')),
+    noOfPax: @json(__('modules.order.noOfPax')),
+    waiter: @json(__('modules.order.waiter')),
+    orderType: @json(__('modules.settings.orderType')),
+    pickupAt: @json(__('modules.order.pickupAt')),
+    customer: @json(__('modules.customer.customer')),
+    phone: @json(__('modules.customer.phone')),
+    orderNote: @json(__('modules.order.specialInstructions')),
+    thankYou: @json(__('messages.thankYouVisit')),
+    unpaid: @json(__('modules.order.unpaid')),
+    paymentStatus: @json(__('modules.order.paymentStatus')),
+    loyaltyDiscount: @json(__('app.loyaltyDiscount')),
+    points: @json(__('app.points')),
+    back: @json(__('app.back')),
+};
+
+/**
+ * Snapshot for printing a bill (order receipt) without a server order id — offline queue.
+ */
+window.buildPosOfflineBillPrintContext = function(orderData, orderItems) {
+    const actions = Array.isArray(orderData && orderData.actions) ? orderData.actions : [];
+    if (!actions.includes('bill')) {
+        return null;
+    }
+    const st = window.posState || {};
+    const fc =
+        typeof window.formatCurrency === 'function'
+            ? function(n) {
+                return window.formatCurrency(Number(n) || 0);
+            }
+            : function(n) {
+                return String((Number(n) || 0).toFixed(2));
+            };
+    const waiterName =
+        typeof window.__posResolveWaiterNameForPrint === 'function'
+            ? window.__posResolveWaiterNameForPrint(orderData)
+            : null;
+    const orderTypeSlug = (st.orderTypeSlug || orderData.order_type || '').toString();
+    let pickupLine = null;
+    if (orderTypeSlug === 'pickup' && st.pickupDate && st.pickupTime) {
+        pickupLine = (st.pickupDate + ' ' + st.pickupTime).trim();
+    }
+    const modMap = st.modifierOptions || {};
+    const items = (orderItems || []).map(function(row) {
+        const item = st.orderItemList && st.orderItemList[row.key];
+        const nm = item ? (item.item_name || item.name || ('#' + row.id)) : ('#' + row.id);
+        const variation = st.orderItemVariation && st.orderItemVariation[row.key];
+        const variationLabel = variation
+            ? (variation.variation || variation.name || null)
+            : null;
+        const modIds = (st.itemModifiersSelected && st.itemModifiersSelected[row.key]) || [];
+        const modifierLines = [];
+        (Array.isArray(modIds) ? modIds : []).forEach(function(mid) {
+            const key = String(mid);
+            const mo = modMap[key] || modMap[mid];
+            const label = mo
+                ? (mo.name || mo.option_name || mo.modifier_name || null)
+                : null;
+            if (label) {
+                const mp =
+                    mo && (mo.price != null || mo.option_price != null)
+                        ? Number(mo.price != null ? mo.price : mo.option_price)
+                        : 0;
+                modifierLines.push({
+                    text: label,
+                    extra_fmt: mp > 0 ? '(+' + fc(mp) + ')' : '',
+                });
+            }
+        });
+        return {
+            name: nm,
+            quantity: row.quantity,
+            price_fmt: fc(row.price),
+            amount_fmt: fc(row.amount),
+            variation_label: variationLabel,
+            modifier_lines: modifierLines,
+        };
+    });
+    const extraChargeRows = [];
+    (Array.isArray(orderData.extra_charges) ? orderData.extra_charges : []).forEach(function(ch) {
+        if (!ch || ch.is_enabled === false) {
+            return;
+        }
+        const label = ch.name || ch.charge_name || '—';
+        const amt = Number(ch.amount != null ? ch.amount : 0);
+        if (amt !== 0) {
+            extraChargeRows.push({ label: label, amount_fmt: fc(amt) });
+        }
+    });
+    const loyaltyAmt = Number(orderData.loyalty_discount_amount || 0);
+    const discAmt = Number(orderData.discount_amount || 0);
+    const taxAmt = Number(orderData.total_tax_amount || 0);
+    const tipAmt = Number(orderData.tip_amount || 0);
+    const delivAmt = Number(orderData.delivery_fee || 0);
+    return {
+        dir: @json(isRtl() ? 'rtl' : 'ltr'),
+        restaurant_name: @json($restaurant->name ?? ''),
+        restaurant_phone: @json($restaurant->phone_number ?? ''),
+        order_number_label: (st.formattedOrderNumber || st.orderNumber || '').toString().trim() || '—',
+        printed_at_iso: new Date().toISOString(),
+        table_code: (st.tableNo || '').toString().trim() || '—',
+        no_of_pax: orderData.pax != null ? orderData.pax : st.noOfPax,
+        waiter_name: waiterName,
+        order_type_display: (function() {
+            const raw = (orderData.order_type_display || orderData.order_type || '').toString();
+            return typeof window.__posFormatOrderTypeLabelForPrint === 'function'
+                ? window.__posFormatOrderTypeLabelForPrint(raw, orderTypeSlug)
+                : raw;
+        })(),
+        pickup_line: pickupLine,
+        customer: orderData.customer || null,
+        order_note: orderData.order_note || null,
+        items: items,
+        sub_total_fmt: fc(orderData.sub_total),
+        discount_amount: discAmt,
+        discount_type: orderData.discount_type || null,
+        discount_value: orderData.discount_value,
+        discount_fmt: fc(discAmt),
+        loyalty_discount_amount: loyaltyAmt,
+        loyalty_discount_fmt: fc(loyaltyAmt),
+        loyalty_points: parseInt(orderData.loyalty_points_redeemed || 0, 10) || 0,
+        extra_charge_rows: extraChargeRows,
+        tip_amount: tipAmt,
+        tip_fmt: fc(tipAmt),
+        delivery_fee: delivAmt,
+        delivery_fmt: fc(delivAmt),
+        order_type_slug: orderTypeSlug,
+        total_tax_amount: taxAmt,
+        total_tax_fmt: fc(taxAmt),
+        total_fmt: fc(orderData.total),
+    };
+};
+
+window.__buildOfflineBillPrintHtml = function (ctx) {
+    // Helper Vars
+    const labels = window.__posOfflineBillLabels || {};
+    const esc = window.__posEscHtml;
+    const dir = (ctx && ctx.dir) || 'ltr';
+    const widthMm = 80;
+
+    // Format current date/time string
+    let dateTimeStr = '';
+    try {
+        const d = ctx.printed_at_iso ? new Date(ctx.printed_at_iso) : new Date();
+        const loc = (window.posConfig && window.posConfig.locale) || undefined;
+        dateTimeStr =
+            d.toLocaleDateString(loc, { year: 'numeric', month: 'short', day: 'numeric' }) +
+            ' ' +
+            d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        dateTimeStr = '';
+    }
+
+    // Render item rows
+    const itemsRows = (ctx.items || [])
+        .map(function (item) {
+            // Item modifiers, if any
+            const modifierHtml = (item.modifier_lines || [])
+                .map(m =>
+                    `<div class="modifiers">• ${esc(m.text)}${m.extra_fmt ? ' ' + esc(m.extra_fmt) : ''}</div>`
+                )
+                .join('');
+            // Variation label, if present
+            const variationHtml = item.variation_label
+                ? `<br><small>(${esc(item.variation_label)})</small>`
+                : '';
+            return `
+                <tr>
+                    <td class="qty">${esc(item.quantity)}</td>
+                    <td class="description">${esc(item.name)}${variationHtml}${modifierHtml}</td>
+                    <td class="price">${esc(item.price_fmt)}</td>
+                    <td class="amount">${esc(item.amount_fmt)}</td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    // Discount row
+    let discountRow = '';
+    if (ctx.discount_amount > 0) {
+        let discLabel = esc(labels.discount);
+        if (ctx.discount_type === 'percent' && ctx.discount_value != null) {
+            const dv = String(ctx.discount_value).replace(/\.?0+$/, '');
+            discLabel += ` (${esc(dv)}%)`;
+        }
+        discountRow = `
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${discLabel}</td>
+                        <td>-${esc(ctx.discount_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Loyalty row
+    let loyaltyRow = '';
+    if (ctx.loyalty_discount_amount > 0 && ctx.loyalty_points > 0) {
+        loyaltyRow = `
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.loyaltyDiscount)} (${esc(String(ctx.loyalty_points))} ${esc(labels.points)})</td>
+                        <td>-${esc(ctx.loyalty_discount_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Extra charges rows
+    const extraRows = (ctx.extra_charge_rows || [])
+        .map(row =>
+            `<div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(row.label)}</td>
+                        <td>${esc(row.amount_fmt)}</td>
+                    </tr>
+                </table>
+            </div>`
+        )
+        .join('');
+
+    // Delivery row
+    let deliveryRow = '';
+    if (ctx.order_type_slug === 'delivery') {
+        deliveryRow = `
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.deliveryFee)}</td>
+                        <td>${ctx.delivery_fee > 0 ? esc(ctx.delivery_fmt) : esc(labels.freeDelivery)}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Tip row
+    let tipRow = '';
+    if (ctx.tip_amount > 0) {
+        tipRow = `
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.tip)}</td>
+                        <td>${esc(ctx.tip_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Tax row
+    let taxRow = '';
+    if (ctx.total_tax_amount > 0) {
+        taxRow = `
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.totalTax)}</td>
+                        <td>${esc(ctx.total_tax_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Customer block
+    const cust = ctx.customer;
+    let custBlock = '';
+    if (cust && (cust.name || cust.phone)) {
+        custBlock = `
+            <div class="summary-row">
+                <span>${esc(labels.customer)}: ${esc(cust.name || '—')}</span>
+            </div>
+        `;
+        if (cust.phone) {
+            custBlock += `
+                <div class="summary-row">
+                    <span>${esc(labels.phone)}: <span dir="ltr">${esc(cust.phone)}</span></span>
+                </div>
+            `;
+        }
+    }
+
+    // Note block
+    const noteBlock = ctx.order_note
+        ? `<div class="summary-row" style="margin-top:2mm"><em>${esc(labels.orderNote)}: ${esc(ctx.order_note)}</em></div>`
+        : '';
+
+    // Waiter row
+    const waiterRow = ctx.waiter_name
+        ? `<div class="summary-row"><span>${esc(labels.waiter)}: ${esc(ctx.waiter_name)}</span></div>`
+        : '';
+
+    // Pax row
+    const paxRow = ctx.no_of_pax
+        ? `<div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.table)}: ${esc(ctx.table_code)}</td>
+                        <td>${esc(labels.noOfPax)}: ${esc(String(ctx.no_of_pax))}</td>
+                    </tr>
+                </table>
+            </div>`
+        : `<div class="summary-row"><span>${esc(labels.table)}: ${esc(ctx.table_code)}</span></div>`;
+
+    // Order type row
+    const orderTypeRow = ctx.order_type_display
+        ? `<div class="summary-row">
+                <span>${esc(labels.orderType)}: ${esc(ctx.order_type_display)}${
+                ctx.pickup_line ? ' — ' + esc(labels.pickupAt) + ': ' + esc(ctx.pickup_line) : ''
+            }</span>
+           </div>`
+        : '';
+
+    // Title and phone line
+    const title = `${esc(ctx.restaurant_name)} — ${esc(labels.billReceipt)} ${esc(ctx.order_number_label)}`;
+    const phoneLine = ctx.restaurant_phone
+        ? `<div class="restaurant-info">${esc(labels.phone)}: <span dir="ltr">${esc(ctx.restaurant_phone)}</span></div>`
+        : '';
+
+    // HTML Template
+    return `
+<!DOCTYPE html>
+<html lang="${esc((window.posConfig && window.posConfig.locale) || '')}" dir="${esc(dir)}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${title}</title>
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family:DejaVu Sans,Arial,sans-serif
+        }
+        [dir="rtl"]{text-align:right}
+        [dir="ltr"]{text-align:left}
+        .receipt{width:${widthMm - 5}mm;padding:6.35mm}
+        .restaurant-name{text-align:center;font-size:14pt;font-weight:bold;margin-bottom:1mm}
+        .restaurant-info{font-size:9pt;margin-bottom:1mm;text-align:center}
+        .order-info{border-top:1px dashed #000;border-bottom:1px dashed #000;padding:2mm 0;margin-bottom:3mm;font-size:9pt}
+        .summary-row{margin-bottom:1mm;font-size:9pt}
+        .summary-row table{width:100%;border-collapse:collapse}
+        .summary-row td:first-child{text-align:left}
+        .summary-row td:last-child{text-align:right}
+        .items-table{width:100%;border-collapse:collapse;margin-bottom:3mm;font-size:9pt}
+        .items-table th{padding:1mm;border-bottom:1px solid #000}
+        [dir="rtl"] .items-table th{text-align:right}
+        [dir="ltr"] .items-table th{text-align:left}
+        .items-table td{padding:1mm 0.5mm;vertical-align:top}
+        .qty{width:10%;text-align:center}
+        .description{width:52%}
+        .price{width:18%;text-align:right;padding-right:1mm}
+        .amount{width:16%;text-align:right}
+        .modifiers{font-size:8pt;color:#555}
+        .summary{margin-top:2mm}
+        .total{
+            font-weight:bold;
+            font-size:11pt;
+            border-top:1px solid #000;
+            padding-top:1mm;
+            margin-top:1mm
+        }
+        .footer{
+            text-align:center;
+            margin-top:3mm;
+            font-size:9pt;
+            padding-top:2mm;
+            border-top:1px dashed #000
+        }
+        .back-button{
+            position:fixed;
+            top:10px;
+            left:10px;
+            z-index:1000;
+            padding:10px 20px;
+            background:#3b82f6;
+            color:#fff;
+            border:none;
+            border-radius:5px;
+            cursor:pointer;
+            font-size:14px
+        }
+        @media print{
+            @page{margin:0;size:80mm auto}
+            .back-button{display:none!important}
+        }
+    </style>
+</head>
+<body>
+    <button type="button" class="back-button" onclick="goBack()" id="backButton" style="display:none">
+        ← ${esc(labels.back)}
+    </button>
+    <div class="receipt">
+        <div class="header">
+            <div class="restaurant-name">${esc(ctx.restaurant_name)}</div>
+            ${phoneLine}
+        </div>
+        <div class="order-info">
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td><span style="font-weight:bold">${esc(ctx.order_number_label)}</span></td>
+                        <td style="text-align:right">${esc(dateTimeStr)}</td>
+                    </tr>
+                </table>
+            </div>
+            ${paxRow}
+            ${waiterRow}
+            ${orderTypeRow}
+            ${custBlock}
+            ${noteBlock}
+        </div>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="qty">${esc(labels.qty)}</th>
+                    <th class="description">${esc(labels.itemName)}</th>
+                    <th class="price">${esc(labels.price)}</th>
+                    <th class="amount">${esc(labels.amount)}</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itemsRows}
+            </tbody>
+        </table>
+        <div class="summary">
+            <div class="summary-row">
+                <table>
+                    <tr>
+                        <td>${esc(labels.subTotal)}:</td>
+                        <td>${esc(ctx.sub_total_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+            ${discountRow}
+            ${loyaltyRow}
+            ${extraRows}
+            ${deliveryRow}
+            ${tipRow}
+            ${taxRow}
+            <div class="summary-row total">
+                <table>
+                    <tr>
+                        <td>${esc(labels.total)}:</td>
+                        <td>${esc(ctx.total_fmt)}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="summary-row" style="margin-top:2mm;padding-top:2mm;border-top:1px dashed #000">
+                <table>
+                    <tr>
+                        <td style="font-weight:bold">${esc(labels.paymentStatus)}</td>
+                        <td style="font-weight:bold;text-align:right">${esc(labels.unpaid)}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="footer"><p>${esc(labels.thankYou)}</p></div>
+    </div>
+
+    <script>
+        function isPWA() {
+            return (
+                (window.matchMedia("(display-mode: standalone)").matches) ||
+                (window.navigator.standalone === true) ||
+                (document.referrer.includes("android-app://"))
+            );
+        }
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.close();
+            }
+        }
+        if (isPWA()) {
+            var b = document.getElementById("backButton");
+            if (b) b.style.display = "block";
+        }
+        window.onload = function () {
+            if (window.self !== window.top) return;
+            var closeAfter = function () {
+                if (isPWA()) {
+                    goBack();
+                } else {
+                    window.close();
+                }
+            };
+            if ('onafterprint' in window) {
+                window.onafterprint = closeAfter;
+            } else {
+                setTimeout(closeAfter, 1000);
+            }
+            window.print();
+        };
+    <\/script>
+</body>
+</html>
+    `;
+};
+
+window.openPosOfflineBillPrintTab = function(context) {
+    if (!context || !Array.isArray(context.items) || context.items.length === 0) {
+        return;
+    }
+    const ctx = Object.assign({}, context, {
+        printed_at_iso: new Date().toISOString(),
+    });
+    const html = window.__buildOfflineBillPrintHtml(ctx);
+    let url = '';
+    try {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        url = URL.createObjectURL(blob);
+    } catch (e) {
+        console.error('Offline bill print: blob failed', e);
+        return;
+    }
+    const w = window.open(url, '_blank');
+    if (!w) {
+        URL.revokeObjectURL(url);
+        if (typeof window.showToast === 'function') {
+            window.showToast('warning', @json(__('messages.posOfflineKotPrintPopupBlocked')));
+        } else {
+            alert(@json(__('messages.posOfflineKotPrintPopupBlocked')));
+        }
+        return;
+    }
+    setTimeout(function() {
+        try {
+            URL.revokeObjectURL(url);
+        } catch (e2) {
+            // ignore
+        }
+    }, 120000);
+};
+
+/**
+ * Rebuild posState KOT lines from a fresh /ajax/pos/orders/{id} payload (no full page reload).
+ * Keeps non–kot_* cart keys (e.g. newly typed lines) intact; replaces all kot_* rows from server.
+ */
+window.applyPosKotOrderSnapshotFromAjaxOrder = function(order) {
+    if (!order || !window.posState) {
+        return;
+    }
+
+    const kotKeyRe = /^kot_\d+_\d+$/;
+    const existingKotKeys = Object.keys(window.posState.orderItemList || {}).filter(function(k) {
+        return kotKeyRe.test(k);
+    });
+    if (existingKotKeys.length && typeof window.removePosCartLinesByKeys === 'function') {
+        window.removePosCartLinesByKeys(existingKotKeys);
+    }
+
+    const kotRows = Array.isArray(order.kot) ? order.kot.slice() : (order.kot ? [order.kot] : []);
+    kotRows.sort(function(a, b) {
+        const ta = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+        return ta - tb;
+    });
+
+    kotRows.forEach(function(kotRow) {
+        if (!kotRow || !kotRow.id) {
+            return;
+        }
+        const rawItems = kotRow.items || [];
+        const items = rawItems.filter(function(it) {
+            return it && String(it.status || '').toLowerCase() !== 'cancelled';
+        });
+        items.forEach(function(item) {
+            const key = 'kot_' + kotRow.id + '_' + item.id;
+            const mi = item.menu_item || {};
+            const menuPayload = {
+                id: mi.id,
+                name: mi.name || mi.item_name,
+                item_name: mi.item_name || mi.name,
+                price: parseFloat(mi.price != null ? mi.price : 0) || 0,
+            };
+            if (Array.isArray(mi.taxes)) {
+                menuPayload.taxes = mi.taxes;
+            }
+            if (Array.isArray(mi.eu_allergen_keys)) {
+                menuPayload.eu_allergen_keys = mi.eu_allergen_keys;
+            }
+            if (Array.isArray(mi.dietary_labels)) {
+                menuPayload.dietary_labels = mi.dietary_labels;
+            }
+            menuPayload.is_free_item_from_stamp = !!item.is_free_item_from_stamp;
+            menuPayload.stamp_rule_id = item.stamp_rule_id || null;
+
+            window.posState.orderItemList[key] = menuPayload;
+            window.posState.orderItemQty[key] = parseInt(item.quantity, 10) || 1;
+            window.posState.orderItemAmount[key] = parseFloat(item.amount != null ? item.amount : 0) || 0;
+
+            const mods = item.modifier_options || item.modifierOptions || [];
+            const modIds = [];
+            let modPrice = 0;
+            if (Array.isArray(mods)) {
+                mods.forEach(function(m) {
+                    if (!m) {
+                        return;
+                    }
+                    const mid = parseInt(m.id, 10);
+                    if (mid) {
+                        modIds.push(mid);
+                    }
+                    modPrice += parseFloat(m.price != null ? m.price : 0) || 0;
+                });
+            }
+            window.posState.itemModifiersSelected[key] = modIds;
+            window.posState.orderItemModifiersPrice[key] = modPrice;
+
+            const mv = item.menu_item_variation || item.menuItemVariation;
+            if (mv && mv.id) {
+                window.posState.orderItemVariation[key] = {
+                    id: mv.id,
+                    name: mv.variation || mv.name,
+                    price: parseFloat(mv.price != null ? mv.price : 0) || 0,
+                };
+            } else if (window.posState.orderItemVariation) {
+                delete window.posState.orderItemVariation[key];
+            }
+
+            if (item.note) {
+                window.posState.itemNotes[key] = item.note;
+            } else if (window.posState.itemNotes) {
+                delete window.posState.itemNotes[key];
+            }
+
+            const oid = item.order_item_id != null ? parseInt(item.order_item_id, 10) : null;
+            if (oid && window.posState.orderItemIds) {
+                window.posState.orderItemIds[key] = oid;
+            }
+
+            if (window.posState.orderItemTaxDetails) {
+                let decodedBreakup = null;
+                if (item.tax_breakup) {
+                    if (typeof item.tax_breakup === 'string') {
+                        try {
+                            decodedBreakup = JSON.parse(item.tax_breakup);
+                        } catch (e) {
+                            decodedBreakup = null;
+                        }
+                    } else if (typeof item.tax_breakup === 'object') {
+                        decodedBreakup = item.tax_breakup;
+                    }
+                }
+                if (decodedBreakup && Object.keys(decodedBreakup).length) {
+                    window.posState.orderItemTaxDetails[key] = {
+                        qty: parseInt(item.quantity, 10) || 1,
+                        tax_breakup: decodedBreakup,
+                        total_tax: parseFloat(item.tax_amount != null ? item.tax_amount : 0) || 0,
+                    };
+                } else {
+                    delete window.posState.orderItemTaxDetails[key];
+                }
+            }
+        });
+    });
+
+    window.posState.orderDetail = Object.assign({}, window.posState.orderDetail || {}, order);
+    window.posState.orderID = order.id || window.posState.orderID;
+    window.posState.showOrderDetail = true;
+
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+    if (typeof window.updateOrderDetailTotalsFromResponse === 'function') {
+        window.updateOrderDetailTotalsFromResponse(order, null);
+    }
+};
+
+/**
+ * After a successful Bill save on the Blade POS: avoid resetPosState() on /pos/kot/{id},
+ * which wipes orderItemList and leaves KOT line containers empty when the order-detail drawer closes.
+ * Refreshes the right column from the server (e.g. order_detail when status becomes billed) and syncs posState.
+ */
+window.__posAfterBillSaveSuccess = function(response, orderId, opts) {
+    opts = opts || {};
+    var dispatchShowOrderDetail = opts.dispatchShowOrderDetail !== false;
+
+    var doToast = function() {
+        if (response && response.message) {
+            if (typeof window.showToast === 'function') {
+                window.showToast('success', response.message);
+            } else {
+                alert(response.message);
+            }
+        }
+    };
+
+    var finishBillUi = function() {
+        if (typeof Livewire !== 'undefined') {
+            Livewire.dispatch('refreshPos');
+        }
+        doToast();
+    };
+
+    if (dispatchShowOrderDetail && orderId && typeof Livewire !== 'undefined') {
+        Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
+    }
+
+    var isPosKotOrderRoute = /\/pos\/kot\/\d+/.test(
+        (window.location && window.location.pathname) ? window.location.pathname : ''
+    );
+
+    if (isPosKotOrderRoute && orderId) {
+        if (response && response.order && window.posState) {
+            window.posState.orderID = response.order.id || orderId;
+            window.posState.orderDetail = Object.assign({}, window.posState.orderDetail || {}, response.order);
+        }
+        if (typeof window.refreshOrderPanelsFromServer === 'function') {
+            var panelUrl;
+            try {
+                var u = new URL(window.location.href);
+                panelUrl = u.pathname + u.search + u.hash;
+            } catch (e) {
+                panelUrl = window.location.href;
+            }
+            window.refreshOrderPanelsFromServer({
+                url: panelUrl,
+                onSuccess: function() {
+                    $.ajax({
+                        url: '/ajax/pos/orders/' + orderId,
+                        type: 'GET',
+                        dataType: 'json',
+                        success: function(fetchRes) {
+                            if (fetchRes && fetchRes.success && fetchRes.order && window.posState) {
+                                window.posState.orderDetail = fetchRes.order;
+                                window.posState.orderID = fetchRes.order.id;
+                                var ost = fetchRes.order.status;
+                                if (ost === 'kot' && typeof window.applyPosKotOrderSnapshotFromAjaxOrder === 'function') {
+                                    window.applyPosKotOrderSnapshotFromAjaxOrder(fetchRes.order);
+                                } else {
+                                    if (typeof window.calculateTotal === 'function') {
+                                        window.calculateTotal();
+                                    }
+                                    if (typeof window.updateTotalsDisplay === 'function') {
+                                        window.updateTotalsDisplay();
+                                    }
+                                }
+                            }
+                        },
+                        complete: function() {
+                            finishBillUi();
+                        }
+                    });
+                },
+                onError: finishBillUi
+            });
+        } else {
+            finishBillUi();
+        }
+    } else {
+        window.resetPosState();
+        finishBillUi();
+    }
+};
+
 window.saveKotActionOnce = function() {
     // Strict guard: once a KOT submit starts, block subsequent KOT clicks
-    // until current flow ends (success navigation or explicit unlock on error).
+    // until current flow ends (success navigation, client refresh, or explicit unlock on error).
     if (window.__posKotSubmissionLocked) {
         return;
     }
@@ -1970,13 +4760,13 @@ window.saveOrder = function() {
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
-                title: '@lang("messages.noItemsFound")',
-                text: '@lang("messages.orderItemRequired")',
-                confirmButtonText: '@lang("app.ok")',
+                title: @json(__('messages.noItemsFound')),
+                text: @json(__('messages.orderItemRequired')),
+                confirmButtonText: @json(__('app.ok')),
                 confirmButtonColor: '#3085d6'
             });
         } else {
-            alert('@lang("messages.orderItemRequired")');
+            alert(@json(__('messages.orderItemRequired')));
         }
         if (isKotAction) {
             window.__posKotSubmissionLocked = false;
@@ -1985,7 +4775,10 @@ window.saveOrder = function() {
     }
 
     // Frontend validation: for room service, require a selected stay
-    const orderTypeSlug = (window.posState.orderTypeSlug || '').toString();
+    const rawOrderTypeSlug = (window.posState.orderTypeSlug || window.posState.orderType || '').toString();
+    const orderTypeSlug = (typeof window.posNormalizeSidebarOrderTypeKey === 'function')
+        ? window.posNormalizeSidebarOrderTypeKey(rawOrderTypeSlug)
+        : rawOrderTypeSlug;
     if (orderTypeSlug === 'room_service') {
         const stayId = parseInt(window.posState?.selectedStayId || 0, 10);
         if (!stayId) {
@@ -2104,13 +4897,14 @@ window.saveOrder = function() {
             break;
     }
 
-    window.__setPosOrderActionButtonsDisabled = function(disabled) {
+        window.__setPosOrderActionButtonsDisabled = function(disabled) {
         if (typeof window.setGlobalOrderActionLock === 'function') {
             window.setGlobalOrderActionLock(!!disabled);
             return;
         }
         if (typeof jQuery === 'undefined' || typeof $ === 'undefined') return;
-        $('.pos-order-action-btn').prop('disabled', !!disabled).toggleClass('opacity-50', !!disabled);
+        $('.pos-order-action-btn').prop('disabled', !!disabled).toggleClass('opacity-50 pointer-events-none', !!disabled);
+        $('.pos-new-kot-link').toggleClass('opacity-50 pointer-events-none', !!disabled).attr('aria-disabled', disabled ? 'true' : 'false');
     };
 
     window.__togglePosButtonLoading = function(id, textId, loadingId, isLoading) {
@@ -2209,13 +5003,13 @@ window.saveOrder = function() {
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
-                title: '@lang("modules.order.noItemsInCart")',
-                text: '@lang("messages.orderItemRequired")',
-                confirmButtonText: '@lang("app.ok")',
+                title: @json(__('modules.order.noItemsInCart')),
+                text: @json(__('messages.orderItemRequired')),
+                confirmButtonText: @json(__('app.ok')),
                 confirmButtonColor: '#3085d6'
             });
         } else {
-            alert('@lang("messages.orderItemRequired")');
+            alert(@json(__('messages.orderItemRequired')));
         }
         // Hide loading state
         if (buttonId) {
@@ -2261,8 +5055,11 @@ window.saveOrder = function() {
     }
 
     // Prepare order data
+    const effectiveOrderId = (typeof window.getCurrentPosOrderId === 'function')
+        ? window.getCurrentPosOrderId()
+        : (window.posState.orderID || window.posState.orderDetail?.id || null);
     const orderData = {
-        order_id: window.posState.orderID || null,
+        order_id: effectiveOrderId || null,
         order_type: window.posState.orderType || window.posState.orderTypeSlug,
         order_type_id: window.posState.orderTypeId,
         order_type_display: window.posState.orderType,
@@ -2281,6 +5078,7 @@ window.saveOrder = function() {
         discount_type: window.posState.discountType,
         discount_value: window.posState.discountValue || 0,
         discount_amount: window.posState.discountAmount || 0,
+        discount_apply_on: window.posState.discountApplyOn || ((window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }}) ? 'total' : 'sub_total'),
         loyalty_points_redeemed: parseInt(window.posState.loyaltyPointsRedeemed || 0),
         loyalty_discount_amount: parseFloat(window.posState.loyaltyDiscountAmount || 0),
         delivery_fee: window.posState.deliveryFee || 0,
@@ -2291,7 +5089,7 @@ window.saveOrder = function() {
         discounted_total: window.posState.discountedTotal || 0,
         total_tax_amount: window.posState.totalTaxAmount || 0,
         tax_base: window.posState.taxBase || 0,
-        tax_mode: window.posConfig?.taxMode || '{{ $taxMode ?? "order" }}',
+        tax_mode: window.posConfig?.taxMode || @json($taxMode ?? 'order'),
         order_status: window.posState.orderStatus || 'confirmed',
         // For pickup, send combined "<date> <time>" string so the
         // backend can validate and normalize it using the same rules
@@ -2306,12 +5104,17 @@ window.saveOrder = function() {
         taxes: taxes,
         order_item_tax_details: window.posState.orderItemTaxDetails || {},
         actions: actions,
+        order_number: window.posState.orderNumber || null,
+        formatted_order_number: window.posState.formattedOrderNumber || null,
         orders_to_delete_after_merge: @json(session('pos_merged_orders_to_delete', [])),
         _token: '{{ csrf_token() }}'
     };
 
     // Attach Hotel room-service context (parity with Livewire Pos.php)
-    const roomServiceOrderTypeSlug = (window.posState.orderTypeSlug || '').toString();
+    const rawRoomServiceOrderTypeSlug = (window.posState.orderTypeSlug || window.posState.orderType || '').toString();
+    const roomServiceOrderTypeSlug = (typeof window.posNormalizeSidebarOrderTypeKey === 'function')
+        ? window.posNormalizeSidebarOrderTypeKey(rawRoomServiceOrderTypeSlug)
+        : rawRoomServiceOrderTypeSlug;
     if (roomServiceOrderTypeSlug === 'room_service' && window.posState.selectedStayId) {
         orderData.context_type = 'HOTEL_ROOM';
         orderData.context_id = window.posState.selectedStayId;
@@ -2324,8 +5127,795 @@ window.saveOrder = function() {
         }
     }
 
-    // Call API
-    $.easyAjax({
+    function __posExtractNumericOrderNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        var s = String(value).trim();
+        if (!s) {
+            return null;
+        }
+        var m = s.match(/(\d+)(?!.*\d)/);
+        if (!m) {
+            return null;
+        }
+        var n = parseInt(m[1], 10);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function __posOfflineOpInCurrentBusinessDay(op) {
+        var cfg = window.posConfig && window.posConfig.orderNumberFormat;
+        if (!cfg || !cfg.resetDaily) {
+            return true;
+        }
+        var bd = window.posConfig && window.posConfig.posBusinessDayUtc;
+        if (!bd || !bd.start || !bd.end) {
+            return true;
+        }
+        var t = op && op.createdAt ? new Date(op.createdAt).getTime() : NaN;
+        if (!Number.isFinite(t)) {
+            return true;
+        }
+        var s = new Date(bd.start).getTime();
+        var e = new Date(bd.end).getTime();
+        return t >= s && t <= e;
+    }
+
+    function __posNowPartsInRestaurantTz() {
+        var tz = (window.posConfig && window.posConfig.restaurantTimezone) || 'UTC';
+        var d = new Date();
+        var fmt = new Intl.DateTimeFormat('en-CA', {
+            timeZone: tz,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        var parts = fmt.formatToParts(d);
+        var map = {};
+        parts.forEach(function(p) {
+            if (p.type !== 'literal') {
+                map[p.type] = p.value;
+            }
+        });
+        var year = map.year || '0000';
+        var month = String(map.month || '01').replace(/\D/g, '').padStart(2, '0');
+        var day = String(map.day || '01').replace(/\D/g, '').padStart(2, '0');
+        var hour = String(map.hour || '00').replace(/\D/g, '').padStart(2, '0');
+        var minute = String(map.minute || '00').replace(/\D/g, '').padStart(2, '0');
+        return { year: year, month: month, day: day, hi: hour + minute };
+    }
+
+    /**
+     * Mirror App\Models\Order::buildFormattedOrderNumber (prefix, date parts, padded seq, separator).
+     */
+    window.__posFormatOrderNumberForDisplay = function(orderNumber) {
+        var n = parseInt(orderNumber, 10);
+        if (!Number.isFinite(n) || n < 1) {
+            n = 1;
+        }
+        var cfg = window.posConfig && window.posConfig.orderNumberFormat;
+        if (!cfg || !cfg.enable) {
+            var s = String(n);
+            return { order_number: s, formatted_order_number: s };
+        }
+        var parts = [];
+        if (cfg.prefix) {
+            parts.push(String(cfg.prefix));
+        }
+        var dt = __posNowPartsInRestaurantTz();
+        if (cfg.includeDate) {
+            var dateParts = [];
+            if (cfg.showYear) {
+                dateParts.push(dt.year);
+            }
+            if (cfg.showMonth) {
+                dateParts.push(dt.month);
+            }
+            if (cfg.showDay) {
+                dateParts.push(dt.day);
+            }
+            if (dateParts.length) {
+                parts.push(dateParts.join(''));
+            }
+            if (cfg.showTime) {
+                parts.push(dt.hi);
+            }
+        }
+        var digits = parseInt(cfg.digits, 10);
+        if (!Number.isFinite(digits) || digits < 1) {
+            digits = 4;
+        }
+        var padded = String(n);
+        while (padded.length < digits) {
+            padded = '0' + padded;
+        }
+        parts.push(padded);
+        var sep = cfg.separator !== undefined && cfg.separator !== null ? String(cfg.separator) : '-';
+        var formatted = parts.join(sep);
+        return { order_number: String(n), formatted_order_number: formatted };
+    };
+
+    /**
+     * Highest numeric order label already used in the offline queue (queued saves only).
+     * Excludes the current cart display so we can compare server "next" vs queued.
+     */
+    function __posMaxNumericOrderLabelFromOfflineQueueOnly() {
+        var maxKnown = null;
+        try {
+            var raw = window.localStorage.getItem('pos_blade_offline_queue');
+            var q = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(q)) {
+                q.forEach(function(op) {
+                    if (!op || op.type !== 'save_order') {
+                        return;
+                    }
+                    if (!__posOfflineOpInCurrentBusinessDay(op)) {
+                        return;
+                    }
+                    var p = op.payload || {};
+                    var n = null;
+                    var rawNum = p.order_number;
+                    if (rawNum !== undefined && rawNum !== null && rawNum !== '') {
+                        var pn = parseInt(rawNum, 10);
+                        if (Number.isFinite(pn) && pn > 0) {
+                            n = pn;
+                        }
+                    }
+                    if (n === null) {
+                        var s =
+                            (op.summary && op.summary.order_number_label) ||
+                            p.order_number_label ||
+                            p.formatted_order_number ||
+                            p.order_number;
+                        n = __posExtractNumericOrderNumber(s);
+                    }
+                    if (n !== null && (maxKnown === null || n > maxKnown)) {
+                        maxKnown = n;
+                    }
+                });
+            }
+        } catch (e) {
+            // ignore localStorage parse errors
+        }
+        return maxKnown;
+    }
+
+    function __posMaxNumericOrderLabelInOfflineQueue() {
+        var maxKnown = __posMaxNumericOrderLabelFromOfflineQueueOnly();
+        var cur = (window.posState.formattedOrderNumber || window.posState.orderNumber || '').toString().trim();
+        var nCur = __posExtractNumericOrderNumber(cur);
+        if (nCur !== null && (maxKnown === null || nCur > maxKnown)) {
+            maxKnown = nCur;
+        }
+        return maxKnown;
+    }
+
+    function __posPlannedOrderSeqStorageKey() {
+        if (!window.posConfig || !window.posConfig.branchId) {
+            return 'pos_planned_order_seq_0';
+        }
+        return 'pos_planned_order_seq_' + String(window.posConfig.branchId);
+    }
+
+    /**
+     * Last known planned order sequence from an online POS load (or after bump). Offline new orders
+     * use max(queue, cached, posState) so we continue after ORD-243 instead of resetting to ORD-001.
+     */
+    window.__posGetCachedPlannedOrderSequence = function() {
+        try {
+            var raw = window.localStorage.getItem(__posPlannedOrderSeqStorageKey());
+            if (!raw) {
+                return null;
+            }
+            var n = parseInt(raw, 10);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    window.__posCachePlannedOrderSequence = function() {
+        if (!window.posState || !window.posConfig) {
+            return;
+        }
+        var n = parseInt(window.posState.orderNumber, 10);
+        if (!Number.isFinite(n) || n < 1) {
+            var ex = __posExtractNumericOrderNumber(
+                (window.posState.formattedOrderNumber || '').toString().trim()
+            );
+            n = ex !== null ? ex : NaN;
+        }
+        if (!Number.isFinite(n) || n < 1) {
+            return;
+        }
+        try {
+            var prev = typeof window.__posGetCachedPlannedOrderSequence === 'function'
+                ? window.__posGetCachedPlannedOrderSequence()
+                : null;
+            if (prev !== null && n < prev) {
+                return;
+            }
+            window.localStorage.setItem(__posPlannedOrderSeqStorageKey(), String(n));
+        } catch (e2) {
+            // ignore
+        }
+    };
+
+    function __posApplyNumericToOrderDisplay(nextN) {
+        if (!window.posState || !Number.isFinite(nextN)) {
+            return;
+        }
+        var formatted =
+            typeof window.__posFormatOrderNumberForDisplay === 'function'
+                ? window.__posFormatOrderNumberForDisplay(nextN)
+                : { order_number: String(nextN), formatted_order_number: String(nextN) };
+        var ord = formatted.order_number != null ? String(formatted.order_number) : String(nextN);
+        var disp =
+            formatted.formatted_order_number != null && String(formatted.formatted_order_number).trim() !== ''
+                ? String(formatted.formatted_order_number)
+                : ord;
+        window.posState.orderNumber = ord;
+        window.posState.formattedOrderNumber = disp;
+        document.querySelectorAll('.order-number-value').forEach(function(el) {
+            el.textContent = ord;
+        });
+        document.querySelectorAll('.formatted-order-number-value').forEach(function(el) {
+            el.textContent = disp;
+        });
+        if (typeof window.__posCachePlannedOrderSequence === 'function') {
+            window.__posCachePlannedOrderSequence();
+        }
+    }
+
+    /**
+     * Server-generated "next" order # does not account for labels already reserved in the offline queue.
+     * For a fresh cart, bump display to max(serverNext, maxQueued + 1, cached planned seq) when numeric labels apply.
+     */
+    window.__posSyncNewCartOrderNumberAheadOfOfflineQueue = function() {
+        if (!window.posState) {
+            return;
+        }
+        var oid = parseInt(
+            window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id) || 0,
+            10
+        );
+        if (Number.isFinite(oid) && oid > 0) {
+            return;
+        }
+        if (typeof window.location !== 'undefined' && String(window.location.pathname || '').indexOf('/pos/kot/') !== -1) {
+            return;
+        }
+        var maxQ = __posMaxNumericOrderLabelFromOfflineQueueOnly();
+        var fromQueue = maxQ !== null ? maxQ + 1 : 0;
+        var cachedPl =
+            typeof window.__posGetCachedPlannedOrderSequence === 'function'
+                ? window.__posGetCachedPlannedOrderSequence()
+                : null;
+        var fromCache = Number.isFinite(cachedPl) && cachedPl > 0 ? cachedPl : 0;
+        var floor = Math.max(fromQueue, fromCache);
+        if (floor < 1 && maxQ === null && fromCache === 0) {
+            return;
+        }
+        var serverN = __posExtractNumericOrderNumber(
+            (window.posState.formattedOrderNumber || window.posState.orderNumber || '').toString().trim()
+        );
+        if (serverN === null) {
+            var formattedOrderNode = document.querySelector('.formatted-order-number-value');
+            var plainOrderNode = document.querySelector('.order-number-value');
+            if (formattedOrderNode && formattedOrderNode.textContent) {
+                serverN = __posExtractNumericOrderNumber(formattedOrderNode.textContent.toString().trim());
+            } else if (plainOrderNode && plainOrderNode.textContent) {
+                serverN = __posExtractNumericOrderNumber(plainOrderNode.textContent.toString().trim());
+            }
+        }
+        var serverNum = Number.isFinite(serverN) && serverN > 0 ? serverN : 0;
+        var nextN = Math.max(serverNum, floor);
+        if (nextN < 1) {
+            return;
+        }
+        if (serverNum > 0 && nextN === serverNum) {
+            return;
+        }
+        __posApplyNumericToOrderDisplay(nextN);
+    };
+
+    function __posGetOfflineQueueSession() {
+        try {
+            var raw = sessionStorage.getItem('pos_blade_offline_active_session');
+            if (!raw) {
+                return null;
+            }
+            var o = JSON.parse(raw);
+            return o && typeof o === 'object' ? o : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function __posSetOfflineQueueSession(obj) {
+        try {
+            if (!obj) {
+                sessionStorage.removeItem('pos_blade_offline_active_session');
+            } else {
+                sessionStorage.setItem('pos_blade_offline_active_session', JSON.stringify(obj));
+            }
+        } catch (e) {
+            // ignore quota / private mode
+        }
+    }
+
+    window.__posClearOfflineQueueSession = function() {
+        __posSetOfflineQueueSession(null);
+    };
+
+    window.__posSetOfflineQueueSessionForAppend = function(groupKey, orderNumberLabel) {
+        var gk = (groupKey || '').toString().trim();
+        if (!gk) {
+            __posSetOfflineQueueSession(null);
+            return;
+        }
+        var lbl = (orderNumberLabel || '').toString().trim();
+        if (!lbl) {
+            lbl = gk;
+        }
+        __posSetOfflineQueueSession({
+            groupKey: gk,
+            orderNumberLabel: lbl
+        });
+    };
+
+    function __posActionsIncludeKot(actions) {
+        if (!Array.isArray(actions)) {
+            return false;
+        }
+        return actions.some(function(a) {
+            var x = String(a || '').toLowerCase();
+            return x === 'kot' || x === 'send_to_kitchen';
+        });
+    }
+
+    window.__posCountQueuedKotsForCurrentOrder = function() {
+        var oid = parseInt(window.posState && window.posState.orderID || 0, 10);
+        var sess = typeof __posGetOfflineQueueSession === 'function' ? __posGetOfflineQueueSession() : null;
+        try {
+            var raw = window.localStorage.getItem('pos_blade_offline_queue');
+            var q = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(q)) {
+                return 0;
+            }
+            return q.filter(function(op) {
+                if (!op || op.type !== 'save_order') {
+                    return false;
+                }
+                var p = op.payload || {};
+                var act = Array.isArray(p.actions) ? p.actions : (op.summary && op.summary.actions) || [];
+                if (!__posActionsIncludeKot(act)) {
+                    return false;
+                }
+                if (Number.isFinite(oid) && oid > 0) {
+                    return parseInt(p.order_id, 10) === oid;
+                }
+                if (!sess || !sess.groupKey) {
+                    return false;
+                }
+                return String(p.offline_queue_group_key || '') === String(sess.groupKey);
+            }).length;
+        } catch (e) {
+            return 0;
+        }
+    };
+
+    window.__posServerKotCountFromOrderDetail = function() {
+        try {
+            var od = window.posState && window.posState.orderDetail;
+            if (!od || typeof od !== 'object') {
+                return 0;
+            }
+            if (Array.isArray(od.kot)) {
+                return od.kot.length;
+            }
+            if (Array.isArray(od.kots)) {
+                return od.kots.length;
+            }
+            var n = parseInt(od.kot_count, 10);
+            return Number.isFinite(n) && n > 0 ? n : 0;
+        } catch (e) {
+            return 0;
+        }
+    };
+
+    window.__posUpdateRunningOrderBanner = function() {
+        if (!window.posState) {
+            return;
+        }
+        var el = document.getElementById('pos-running-order-banner');
+        var textEl = document.getElementById('pos-running-order-banner-text');
+        var bannerReady = !!(el && textEl);
+
+        var oid = parseInt(
+            window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id) || 0,
+            10
+        );
+        // Full page load: posState can be empty briefly; URL /pos/kot/{id} always carries the order id.
+        var kotPathMatch =
+            typeof window.location !== 'undefined' && window.location.pathname
+                ? window.location.pathname.match(/^\/pos\/kot\/(\d+)/)
+                : null;
+        var kotOrderIdFromUrl = kotPathMatch ? parseInt(kotPathMatch[1], 10) : 0;
+        if ((!Number.isFinite(oid) || oid <= 0) && Number.isFinite(kotOrderIdFromUrl) && kotOrderIdFromUrl > 0) {
+            oid = kotOrderIdFromUrl;
+        }
+        var offlineMode =
+            window.PosOffline &&
+            typeof window.PosOffline.shouldQueueNow === 'function' &&
+            window.PosOffline.shouldQueueNow();
+        var append = !!window.posState.__posOfflineAppendToQueuedOrder;
+        var isKotRoute = typeof window.location !== 'undefined' && String(window.location.pathname || '').indexOf('/pos/kot/') !== -1;
+        var showOrderDetailKotPage = false;
+        try {
+            showOrderDetailKotPage = new URLSearchParams(window.location.search || '').get('show-order-detail') === 'true';
+        } catch (eSd) {
+            showOrderDetailKotPage = false;
+        }
+        var isKotNewCartRoute = isKotRoute && !showOrderDetailKotPage;
+        var sess = typeof __posGetOfflineQueueSession === 'function' ? __posGetOfflineQueueSession() : null;
+        var orderLabel =
+            (window.posState.formattedOrderNumber || window.posState.orderNumber || '').toString().trim();
+        if (!orderLabel && window.posState.orderDetail) {
+            orderLabel = (
+                window.posState.orderDetail.formatted_order_number ||
+                window.posState.orderDetail.order_number ||
+                ''
+            ).toString().trim();
+        }
+        if (!orderLabel && isKotRoute) {
+            var formattedOrderNode = document.querySelector('.formatted-order-number-value');
+            var plainOrderNode = document.querySelector('.order-number-value');
+            if (formattedOrderNode && formattedOrderNode.textContent) {
+                orderLabel = formattedOrderNode.textContent.toString().trim();
+            } else if (plainOrderNode && plainOrderNode.textContent) {
+                orderLabel = plainOrderNode.textContent.toString().trim();
+            }
+        }
+        if (!orderLabel && isKotRoute && Number.isFinite(oid) && oid > 0) {
+            orderLabel = String(oid);
+        }
+        var queuedKot =
+            typeof window.__posCountQueuedKotsForCurrentOrder === 'function'
+                ? window.__posCountQueuedKotsForCurrentOrder()
+                : 0;
+        var kitchenKot =
+            typeof window.__posServerKotCountFromOrderDetail === 'function'
+                ? window.__posServerKotCountFromOrderDetail()
+                : 0;
+
+        var show = false;
+        var title = '';
+        var sub = '';
+        var orderNumberBadges = document.querySelectorAll('[data-pos-order-number-badge]');
+
+        if (orderNumberBadges && orderNumberBadges.length) {
+            orderNumberBadges.forEach(function(node) {
+                if (!node) {
+                    return;
+                }
+                if (append || isKotNewCartRoute) {
+                    node.classList.add('hidden');
+                } else {
+                    node.classList.remove('hidden');
+                }
+            });
+        }
+
+        // Show running-order banner for explicit "New KOT" append flow and server KOT route.
+        if ((append || isKotRoute) && Number.isFinite(oid) && oid > 0 && orderLabel) {
+            show = true;
+            title =
+                @json(__('messages.posRunningOrderBannerTitle')) +
+                ' · ' +
+                orderLabel;
+            if (isKotRoute && !append) {
+                sub = @json(__('messages.posRunningOrderBannerExistingOrder'));
+            } else {
+                sub =
+                    @json(__('messages.posRunningOrderBannerKotsKitchen')) +
+                    ': ' +
+                    kitchenKot +
+                    (offlineMode
+                        ? ' · ' + @json(__('messages.posRunningOrderBannerKotsQueued')) + ': ' + queuedKot
+                        : '');
+            }
+        } else if (
+            offlineMode &&
+            append &&
+            sess &&
+            sess.orderNumberLabel
+        ) {
+            show = true;
+            title =
+                @json(__('messages.posRunningOfflineOrderBannerTitle')) +
+                ' · ' +
+                sess.orderNumberLabel;
+            sub = @json(__('messages.posRunningOrderBannerKotsQueued')) + ': ' + queuedKot;
+        }
+
+        if (bannerReady) {
+            if (show) {
+                el.classList.remove('hidden');
+                textEl.textContent = sub ? title + ' · ' + sub : title;
+            } else {
+                el.classList.add('hidden');
+                textEl.textContent = '';
+            }
+        }
+
+        var hideNonKotCartActions = !!append || isKotNewCartRoute;
+        document.querySelectorAll('[data-pos-non-kot-cart-actions]').forEach(function(node) {
+            if (!node) {
+                return;
+            }
+            if (hideNonKotCartActions) {
+                node.classList.add('hidden');
+            } else {
+                node.classList.remove('hidden');
+            }
+        });
+    };
+
+    /**
+     * Stable order number + group key for multiple offline KOTs on the same order (no server order_id yet).
+     * Server-side orders use the live formatted order number from posState.
+     * Reuses session only when __posOfflineAppendToQueuedOrder is true (set from offline "New KOT" flow).
+     */
+    function __posPrepareOfflineQueueMeta(orderData) {
+        orderData = orderData || {};
+        var oid = parseInt(orderData.order_id || window.posState.orderID || 0, 10);
+        if (Number.isFinite(oid) && oid > 0) {
+            var lbl = (window.posState.formattedOrderNumber || window.posState.orderNumber || '').toString().trim();
+            return {
+                order_number_label: lbl || String(oid),
+                offline_queue_group_key: null
+            };
+        }
+        var append = !!window.posState.__posOfflineAppendToQueuedOrder;
+        if (!append) {
+            __posClearOfflineQueueSession();
+        }
+        var sess = __posGetOfflineQueueSession();
+        if (!sess || !sess.groupKey || !sess.orderNumberLabel) {
+            var fromStateNum = parseInt(window.posState.orderNumber, 10);
+            if (!Number.isFinite(fromStateNum) || fromStateNum < 1) {
+                var exNum = __posExtractNumericOrderNumber(
+                    (window.posState.formattedOrderNumber || '').toString().trim()
+                );
+                fromStateNum = exNum !== null && Number.isFinite(exNum) ? exNum : 0;
+            }
+            var maxQ = __posMaxNumericOrderLabelFromOfflineQueueOnly();
+            var fromQueue = maxQ !== null ? maxQ + 1 : 0;
+            var cachedPl =
+                typeof window.__posGetCachedPlannedOrderSequence === 'function'
+                    ? window.__posGetCachedPlannedOrderSequence()
+                    : null;
+            // Fresh order must move to next number; cached sequence stores last used/planned.
+            var fromCache = Number.isFinite(cachedPl) && cachedPl > 0 ? (cachedPl + 1) : 0;
+            var numForLabel = Math.max(fromStateNum, fromQueue, fromCache);
+            if (numForLabel < 1) {
+                numForLabel = 1;
+            }
+            var applied =
+                typeof window.__posFormatOrderNumberForDisplay === 'function'
+                    ? window.__posFormatOrderNumberForDisplay(numForLabel)
+                    : { order_number: String(numForLabel), formatted_order_number: String(numForLabel) };
+            window.posState.orderNumber =
+                applied.order_number != null ? String(applied.order_number) : String(numForLabel);
+            window.posState.formattedOrderNumber =
+                applied.formatted_order_number != null
+                    ? String(applied.formatted_order_number)
+                    : String(numForLabel);
+            document.querySelectorAll('.order-number-value').forEach(function(el) {
+                el.textContent = window.posState.orderNumber;
+            });
+            document.querySelectorAll('.formatted-order-number-value').forEach(function(el) {
+                el.textContent = window.posState.formattedOrderNumber;
+            });
+            if (typeof window.__posCachePlannedOrderSequence === 'function') {
+                window.__posCachePlannedOrderSequence();
+            }
+            var label = (window.posState.formattedOrderNumber || '').toString().trim();
+            if (!label) {
+                var fb =
+                    typeof window.__posFormatOrderNumberForDisplay === 'function'
+                        ? window.__posFormatOrderNumberForDisplay(numForLabel)
+                        : null;
+                label = fb && fb.formatted_order_number ? String(fb.formatted_order_number) : String(numForLabel);
+            }
+            if (!label) {
+                label = 'ORD-' + Date.now().toString(36).toUpperCase();
+            }
+            sess = {
+                groupKey: 'ogk_' + Date.now() + '_' + Math.random().toString(16).slice(2, 10),
+                orderNumberLabel: label
+            };
+            __posSetOfflineQueueSession(sess);
+        }
+        orderData.offline_queue_group_key = sess.groupKey;
+        return {
+            order_number_label: sess.orderNumberLabel,
+            offline_queue_group_key: sess.groupKey
+        };
+    }
+
+    window.__posOfflineQueuedBannerHideTimer = null;
+
+    window.__posHideOfflineQueuedBannerSmooth = function() {
+        var wrap = document.getElementById('pos-offline-queued-banner-wrap');
+        if (!wrap) {
+            return;
+        }
+        wrap.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+        wrap.classList.remove('opacity-100', 'translate-y-0');
+        wrap.setAttribute('aria-hidden', 'true');
+        if (window.__posOfflineQueuedBannerHideTimer) {
+            clearTimeout(window.__posOfflineQueuedBannerHideTimer);
+            window.__posOfflineQueuedBannerHideTimer = null;
+        }
+    };
+
+    window.__posShowOfflineQueuedBanner = function(message) {
+        var wrap = document.getElementById('pos-offline-queued-banner-wrap');
+        var txt = document.getElementById('pos-offline-queued-banner-text');
+        if (!wrap || !txt) {
+            return;
+        }
+        txt.textContent = message || '';
+        if (window.__posOfflineQueuedBannerHideTimer) {
+            clearTimeout(window.__posOfflineQueuedBannerHideTimer);
+        }
+        wrap.classList.remove('opacity-0', '-translate-y-2');
+        wrap.classList.add('opacity-100', 'translate-y-0');
+        wrap.setAttribute('aria-hidden', 'false');
+        window.__posOfflineQueuedBannerHideTimer = setTimeout(function() {
+            window.__posHideOfflineQueuedBannerSmooth();
+        }, 7500);
+    };
+
+    function queuePosSaveOrderForLaterSync(orderData, orderItems, actions, ui) {
+        ui = ui || {};
+        if (!window.PosOffline || typeof window.PosOffline.queueSaveOrder !== 'function') {
+            return false;
+        }
+        var offlineMeta = __posPrepareOfflineQueueMeta(orderData);
+        if (offlineMeta.offline_queue_group_key) {
+            orderData.offline_queue_group_key = offlineMeta.offline_queue_group_key;
+        }
+        const offlineSummary = {
+            order_type: orderData.order_type_display || orderData.order_type || '',
+            order_number_label: offlineMeta.order_number_label,
+            offline_queue_group_key: offlineMeta.offline_queue_group_key || null,
+            table_no: window.posState.tableNo || null,
+            items: orderItems.map(function(row) {
+                var item = window.posState.orderItemList[row.key];
+                var nm = item ? (item.item_name || item.name || ('#' + row.id)) : ('#' + row.id);
+                return {
+                    name: nm,
+                    quantity: row.quantity,
+                    price: row.price,
+                    amount: row.amount
+                };
+            }),
+            customer: orderData.customer || null,
+            total: orderData.total,
+            sub_total: orderData.sub_total,
+            discount_amount: orderData.discount_amount,
+            total_tax_amount: orderData.total_tax_amount,
+            delivery_fee: orderData.delivery_fee,
+            tip_amount: orderData.tip_amount,
+            extra_charges: Array.isArray(orderData.extra_charges) ? orderData.extra_charges : [],
+            actions: actions.slice(),
+            kot_print_context:
+                typeof window.buildPosOfflineKotPrintContext === 'function'
+                    ? window.buildPosOfflineKotPrintContext(orderData, orderItems)
+                    : null,
+            bill_print_context:
+                typeof window.buildPosOfflineBillPrintContext === 'function'
+                    ? window.buildPosOfflineBillPrintContext(orderData, orderItems)
+                    : null,
+        };
+        window.PosOffline.queueSaveOrder(orderData, offlineSummary);
+        window.posState.__posOfflineAppendToQueuedOrder = false;
+        if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+            window.__posUpdateRunningOrderBanner();
+        }
+        const wantsOfflineKotPrint =
+            actions[0] === 'kot' && actions.indexOf('print') !== -1;
+        const wantsOfflineBillPrint =
+            actions.indexOf('bill') !== -1 && actions.indexOf('print') !== -1;
+        if (
+            wantsOfflineKotPrint &&
+            offlineSummary.kot_print_context &&
+            typeof window.openPosOfflineKotPrintTab === 'function'
+        ) {
+            window.openPosOfflineKotPrintTab(offlineSummary.kot_print_context);
+        }
+        if (
+            wantsOfflineBillPrint &&
+            offlineSummary.bill_print_context &&
+            typeof window.openPosOfflineBillPrintTab === 'function'
+        ) {
+            const delayMs = wantsOfflineKotPrint ? 450 : 0;
+            setTimeout(function() {
+                window.openPosOfflineBillPrintTab(offlineSummary.bill_print_context);
+            }, delayMs);
+        }
+        const keysToRemove = orderItems.map(function(row) {
+            return row.key;
+        }).filter(Boolean);
+        if (!window.posState.orderID) {
+            window.resetPosState();
+        } else if (typeof window.removePosCartLinesByKeys === 'function') {
+            window.removePosCartLinesByKeys(keysToRemove);
+        }
+        const queuedMsg = ui.userMessage || @json(__('messages.posOrderQueuedForSync'));
+        if (typeof window.__posShowOfflineQueuedBanner === 'function') {
+            window.__posShowOfflineQueuedBanner(queuedMsg);
+        } else if (typeof window.showToast === 'function') {
+            window.showToast('success', queuedMsg);
+        } else {
+            alert(queuedMsg);
+        }
+        if (ui.buttonId) {
+            window.__posOrderActionInProgress = false;
+            window.__setPosOrderActionButtonsDisabled(false);
+            window.__togglePosButtonLoading(ui.buttonId, ui.buttonTextId, ui.buttonLoadingId, false);
+        }
+        if (ui.isKotAction) {
+            window.__posKotSubmissionLocked = false;
+        }
+        const wantsOfflinePayment = actions.indexOf('payment') !== -1;
+        if (wantsOfflinePayment && typeof window.openPosOfflinePaymentModal === 'function') {
+            setTimeout(function() {
+                var oid = orderData.order_id != null ? orderData.order_id : null;
+                window.openPosOfflinePaymentModal({
+                    order_id: oid,
+                    offline_queue_group_key: offlineMeta.offline_queue_group_key || null,
+                    due_amount: parseFloat(orderData.total) || 0,
+                    formatted_order_number: offlineMeta.order_number_label || orderData.formatted_order_number || ''
+                });
+            }, 200);
+        }
+        return true;
+    }
+
+    // Offline: queue save (draft, KOT, bill, etc. share the same ajax.pos.save-order endpoint)
+    if (window.PosOffline && typeof window.PosOffline.shouldQueueNow === 'function' && window.PosOffline.shouldQueueNow()) {
+        queuePosSaveOrderForLaterSync(orderData, orderItems, actions, {
+            buttonId: buttonId,
+            buttonTextId: buttonTextId,
+            buttonLoadingId: buttonLoadingId,
+            isKotAction: isKotAction,
+            userMessage: @json(__('messages.posOrderQueuedForSync')),
+        });
+        return;
+    }
+
+    // Call API (fallback to jQuery.ajax when easyAjax helper is unavailable)
+    const runPosAjax = function(options) {
+        if (typeof $.easyAjax === 'function') {
+            return $.easyAjax(options);
+        }
+        return $.ajax({
+            url: options.url,
+            type: options.type || 'GET',
+            data: options.data || {},
+            dataType: options.dataType || 'json',
+            success: options.success,
+            error: options.error
+        });
+    };
+    runPosAjax({
         url: "{{ route('ajax.pos.save-order') }}",
         type: "POST",
         data: orderData,
@@ -2388,6 +5978,11 @@ window.saveOrder = function() {
                         }
                     }
 
+                    // Payment flows do not pass through finishKotSaveFlow(), so unlock KOT guard here.
+                    if (isKotAction) {
+                        window.__posKotSubmissionLocked = false;
+                    }
+
                     // Clear cart after showing payment modal
                     window.resetPosState();
                 // KOT + print is handled in the `action === 'kot'` branch so we can finish the print
@@ -2417,39 +6012,33 @@ window.saveOrder = function() {
                         }
                     }
 
-                    window.resetPosState();
-
-                    // Show success message
-                    if (response.message) {
-                        // Use toast notification if available, otherwise alert
-                        if (typeof window.showToast === 'function') {
-                            window.showToast('success', response.message);
-                        } else {
-                            alert(response.message);
-                        }
-                    }
-
-                    // If action is 'bill', show order detail like simple bill action
                     if (action === 'bill') {
-
-                        // Show order detail modal if available
-                        if (typeof Livewire !== 'undefined') {
-                            Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
+                        if (typeof window.__posAfterBillSaveSuccess === 'function') {
+                            window.__posAfterBillSaveSuccess(response, orderId);
                         } else {
-                            // Fallback: redirect to order detail
-                            window.location.href = "{{ route('orders.show', ['order' => ':id']) }}".replace(':id', orderId);
-                        }
-
-                        // Refresh POS
-                        if (typeof Livewire !== 'undefined') {
-                            Livewire.dispatch('refreshPos');
+                            window.resetPosState();
+                            if (response.message) {
+                                if (typeof window.showToast === 'function') {
+                                    window.showToast('success', response.message);
+                                } else {
+                                    alert(response.message);
+                                }
+                            }
+                            if (typeof Livewire !== 'undefined') {
+                                Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
+                                Livewire.dispatch('refreshPos');
+                            } else if (orderId) {
+                                window.location.href = "{{ route('orders.show', ['order' => ':id']) }}".replace(':id', orderId);
+                            }
                         }
                     } else {
-                        // For KOT action, redirect to KOT detail view with show-order-detail=true
-                        if (orderId && (kotIdsForPrint.length || response.kot?.id || window.currentKotId)) {
-                            const kotDetailUrlTemplate = "{{ route('pos.kot', ['id' => ':id']) }}?show-order-detail=true";
-                            const kotDetailUrl = kotDetailUrlTemplate.replace(':id', orderId);
-                            window.location.href = kotDetailUrl;
+                        window.resetPosState();
+                        if (response.message) {
+                            if (typeof window.showToast === 'function') {
+                                window.showToast('success', response.message);
+                            } else {
+                                alert(response.message);
+                            }
                         }
                     }
                 } else if (action === 'kot') {
@@ -2458,6 +6047,14 @@ window.saveOrder = function() {
                     const wantsKotPrint = secondAction === 'print' && orderId && kotIdsForPrint.length > 0;
 
                     const finishKotSaveFlow = function() {
+                        const finalizeKotActionUi = function() {
+                            keepActionLockedAfterComplete = false;
+                            window.__posOrderActionInProgress = false;
+                            window.__setPosOrderActionButtonsDisabled(false);
+                            window.__togglePosButtonLoading(buttonId, buttonTextId, buttonLoadingId, false);
+                            window.__posKotSubmissionLocked = false;
+                        };
+
                         // For fresh KOT creation, show toast with view order button
                         if (isNewOrder && orderId) {
                             if (typeof Swal !== 'undefined') {
@@ -2466,23 +6063,41 @@ window.saveOrder = function() {
                                 Swal.fire({
                                     toast: true,
                                     position: 'top-end',
-                                    title: response.message || '@lang("modules.order.kotCreated")',
+                                    title: response.message || @json(__('modules.order.kotCreated')),
                                     showConfirmButton: false,
                                     timer: 4000,
                                     timerProgressBar: true,
-                                    footer: '<a href="' + kotDetailUrl + '" style="color: #3085d6; text-decoration: underline;">@lang("modules.order.viewOrder")</a>',
+                                    footer: '<button type="button" class="pos-kot-toast-view-order text-sm font-medium text-skin-base dark:text-skin-base underline underline-offset-2 bg-transparent border-0 cursor-pointer p-0">' + @json(__('modules.order.viewOrder')) + '</button>',
                                     didOpen: (toast) => {
                                         toast.addEventListener('mouseenter', Swal.stopTimer);
                                         toast.addEventListener('mouseleave', Swal.resumeTimer);
+                                        const viewBtn = toast.querySelector('.pos-kot-toast-view-order');
+                                        if (viewBtn) {
+                                            viewBtn.addEventListener('click', function(ev) {
+                                                ev.preventDefault();
+                                                Swal.close();
+                                                window.setTimeout(function() {
+                                                    try {
+                                                        if (typeof Livewire !== 'undefined' && typeof Livewire.navigate === 'function') {
+                                                            Livewire.navigate(kotDetailUrl);
+                                                            return;
+                                                        }
+                                                    } catch (eNav) {
+                                                        // fall through
+                                                    }
+                                                    window.location.href = kotDetailUrl;
+                                                }, 50);
+                                            });
+                                        }
                                     }
-                                }).then((result) => {
-                                    if (result.dismiss === Swal.DismissReason.timer) {
-                                        window.location.href = "{{ route('pos.index') }}";
-                                    }
+                                }).then(function() {
+                                    finalizeKotActionUi();
                                 });
                             } else {
                                 if (response.message) alert(response.message);
-                                setTimeout(() => window.location.href = "{{ route('pos.index') }}", 400);
+                                setTimeout(function() {
+                                    finalizeKotActionUi();
+                                }, 400);
                             }
                             return;
                         }
@@ -2496,13 +6111,69 @@ window.saveOrder = function() {
                             }
                         }
 
-                        // After saving KOT (existing order), redirect to KOT detail view
-                        if (orderId) {
-                            const kotDetailUrl = "{{ route('pos.kot', ['id' => ':id']) }}?show-order-detail=true".replace(':id', orderId);
-                            window.location.href = (response.order && response.order.status === 'kot')
-                                ? kotDetailUrl
-                                : "{{ route('pos.index') }}";
+                        // Existing order: if this save happened from "new KOT" URL (/pos/kot/{id} without
+                        // show-order-detail), redirect to detail view so all KOTs are shown for the order.
+                        const isShowOrderDetailUrl = /[?&]show-order-detail=true(?:&|$)/.test((window.location && window.location.href) ? window.location.href.toString() : '');
+                        if (orderId && !isShowOrderDetailUrl) {
+                            const detailUrl = "{{ route('pos.kot', ['id' => ':id']) }}?show-order-detail=true".replace(':id', orderId);
+                            window.location.href = detailUrl;
+                            return;
                         }
+
+                        // Existing order: refresh KOT lines in-page (no full navigation).
+                        if (orderId) {
+                            const pendingKeys = orderItems.map(function(row) {
+                                return row.key;
+                            }).filter(Boolean);
+                            try {
+                                $.ajax({
+                                    url: '/ajax/pos/orders/' + orderId,
+                                    type: 'GET',
+                                    async: false,
+                                    dataType: 'json',
+                                    success: function(fetchRes) {
+                                        if (fetchRes && fetchRes.success && fetchRes.order && typeof window.applyPosKotOrderSnapshotFromAjaxOrder === 'function') {
+                                            window.applyPosKotOrderSnapshotFromAjaxOrder(fetchRes.order);
+                                        }
+                                    },
+                                });
+                            } catch (eSync) {
+                                // ignore sync fetch errors; pending lines still cleared below
+                            }
+                            if (pendingKeys.length && typeof window.removePosCartLinesByKeys === 'function') {
+                                window.removePosCartLinesByKeys(pendingKeys);
+                            }
+                            if (response.kot && response.kot.id) {
+                                window.currentKotId = parseInt(response.kot.id, 10);
+                            } else if (kotIdsForPrint.length) {
+                                window.currentKotId = kotIdsForPrint[kotIdsForPrint.length - 1];
+                            }
+                            if (response.order && response.order.status === 'kot' && typeof history !== 'undefined' && history.replaceState) {
+                                try {
+                                    const u = "{{ route('pos.kot', ['id' => ':id']) }}?show-order-detail=true".replace(':id', orderId);
+                                    history.replaceState(null, '', u);
+                                } catch (eHist) {
+                                    // ignore
+                                }
+                            }
+                            if (typeof Livewire !== 'undefined') {
+                                try {
+                                    Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
+                                } catch (eLw) {
+                                    // ignore
+                                }
+                            }
+                            // Keep table picker state fresh right after KOT generation, so full tables
+                            // appear blocked without requiring a hard reload.
+                            try {
+                                if (typeof loadAvailableTables === 'function') {
+                                    loadAvailableTables();
+                                }
+                            } catch (eTbl) {
+                                // ignore
+                            }
+                        }
+                        finalizeKotActionUi();
                     };
 
                     // Defer finish until print AJAX + browser tabs complete (see handleAjaxPrintKotResponse)
@@ -2558,31 +6229,26 @@ window.saveOrder = function() {
                         window.updateCategoryCounts();
                     }
                 } else if (action === 'bill') {
-                    // For bill without payment/print, show order detail
-                    if (orderId) {
-                        // Show order detail modal if available
-                        if (typeof Livewire !== 'undefined') {
-                            Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
-                        } else {
-                            // Fallback: redirect to order detail
-                            window.location.href = "{{ route('orders.show', ['order' => ':id']) }}".replace(':id', orderId);
+                    if (typeof window.__posAfterBillSaveSuccess === 'function') {
+                        window.__posAfterBillSaveSuccess(response, orderId);
+                    } else {
+                        if (orderId) {
+                            if (typeof Livewire !== 'undefined') {
+                                Livewire.dispatch('showOrderDetail', { id: orderId, fromPos: true });
+                            } else {
+                                window.location.href = "{{ route('orders.show', ['order' => ':id']) }}".replace(':id', orderId);
+                            }
                         }
-                    }
-
-                    // Reset POS
-                    window.resetPosState();
-
-                    // Refresh POS
-                    if (typeof Livewire !== 'undefined') {
-                        Livewire.dispatch('refreshPos');
-                    }
-
-                    // Show success message
-                    if (response.message) {
-                        if (typeof window.showToast === 'function') {
-                            window.showToast('success', response.message);
-                        } else {
-                            alert(response.message);
+                        window.resetPosState();
+                        if (typeof Livewire !== 'undefined') {
+                            Livewire.dispatch('refreshPos');
+                        }
+                        if (response.message) {
+                            if (typeof window.showToast === 'function') {
+                                window.showToast('success', response.message);
+                            } else {
+                                alert(response.message);
+                            }
                         }
                     }
                 } else {
@@ -2616,6 +6282,17 @@ window.saveOrder = function() {
             window.__togglePosButtonLoading(buttonId, buttonTextId, buttonLoadingId, false);
         },
         error: function(xhr) {
+            const xhrStatus = typeof xhr.status !== 'undefined' ? xhr.status : 0;
+            if (xhrStatus === 0 && queuePosSaveOrderForLaterSync(orderData, orderItems, actions, {
+                buttonId: buttonId,
+                buttonTextId: buttonTextId,
+                buttonLoadingId: buttonLoadingId,
+                isKotAction: isKotAction,
+                userMessage: @json(__('messages.posSaveQueuedNetworkError')),
+            })) {
+                return;
+            }
+
             let errorMessage = 'Error saving order';
             if (xhr.responseJSON && xhr.responseJSON.message) {
                 errorMessage = xhr.responseJSON.message;
@@ -2659,8 +6336,83 @@ window.saveOrder = function() {
 };
 
 // Update Functions
+window.__posIsDineInOrderType = function() {
+    const s = window.posState || {};
+    return s.orderType === 'dine_in' || s.orderTypeSlug === 'dine_in';
+};
+
+window.__posFormatPaxExceedsTableMessage = function(pax, tableCode, remainingSeats) {
+    let msg = String(window.__posPaxExceedsTableMsgTpl || '');
+    msg = msg.replace(/:pax/g, String(pax));
+    msg = msg.replace(/:table/g, String(tableCode || ''));
+    msg = msg.replace(/:remaining/g, String(remainingSeats));
+    return msg;
+};
+
+/**
+ * If dine-in with an assigned table, cap pax at seating_capacity and sync inputs.
+ * @param {Object} opts Optional. Use opts.silent === true to only adjust state/inputs without toast (e.g. after table change).
+ */
+window.__posClampPaxToTableCapacity = function(opts) {
+    opts = opts || {};
+    if (!window.posState || !window.__posIsDineInOrderType()) {
+        return;
+    }
+    const remaining = parseInt(window.posState.tableRemainingSeats, 10);
+    const capacity = parseInt(window.posState.tableSeatingCapacity, 10);
+    const cap = Number.isFinite(remaining) && remaining > 0
+        ? remaining
+        : (Number.isFinite(capacity) && capacity > 0 ? capacity : null);
+    const tableCode = window.posState.tableNo || '';
+    if (!window.posState.tableId || !cap || cap < 1) {
+        return;
+    }
+    let n = parseInt(window.posState.noOfPax, 10) || 1;
+    if (n <= cap) {
+        return;
+    }
+    const prev = n;
+    n = cap;
+    window.posState.noOfPax = n;
+    const ids = ['noOfPaxInput', 'no-of-pax'];
+    ids.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = n;
+        }
+    });
+    if (!opts.silent && typeof showToast === 'function') {
+        showToast('warning', window.__posFormatPaxExceedsTableMessage(prev, tableCode, cap));
+    }
+};
+
 window.updateNoOfPax = function(value) {
-    window.posState.noOfPax = parseInt(value) || 1;
+    let n = parseInt(value, 10);
+    if (!Number.isFinite(n) || n < 1) {
+        n = 1;
+    }
+    if (window.posState && window.__posIsDineInOrderType() && window.posState.tableId) {
+        const remaining = parseInt(window.posState.tableRemainingSeats, 10);
+        const capacity = parseInt(window.posState.tableSeatingCapacity, 10);
+        const cap = Number.isFinite(remaining) && remaining > 0
+            ? remaining
+            : (Number.isFinite(capacity) && capacity > 0 ? capacity : null);
+        if (cap > 0 && n > cap) {
+            n = cap;
+            const ids = ['noOfPaxInput', 'no-of-pax'];
+            ids.forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = n;
+                }
+            });
+            if (typeof showToast === 'function') {
+                const raw = parseInt(value, 10) || 1;
+                showToast('warning', window.__posFormatPaxExceedsTableMessage(raw, window.posState.tableNo || '', cap));
+            }
+        }
+    }
+    window.posState.noOfPax = n;
 };
 
 window.updateSelectWaiter = function(value) {
@@ -2703,7 +6455,7 @@ window.updateWaiterSelection = function(waiterId) {
                 if (!window.posState.orderID && orderId) {
                     window.posState.orderID = orderId;
                 }
-                showToast('success', response.message || '@lang("messages.waiterUpdated")');
+                showToast('success', response.message || @json(__('messages.waiterUpdated')));
             }
         },
         error: function(xhr) {
@@ -2778,7 +6530,216 @@ window.updateDeliveryExecutiveSelection = function(deliveryExecutiveId) {
 };
 
 window.updateSelectDeliveryExecutive = function(value) {
+    // Determine busy state from the option element (both selects render the same data-* attributes).
+    let isBusy = false;
+    let executiveName = '';
+    try {
+        const active = document.activeElement;
+        const el =
+            (active && (active.id === 'delivery-executive-select' || active.id === 'selectDeliveryExecutiveInput'))
+                ? active
+                : (document.getElementById('delivery-executive-select') || document.getElementById('selectDeliveryExecutiveInput'));
+        const opt = el && el.selectedOptions && el.selectedOptions.length ? el.selectedOptions[0] : null;
+        if (opt) {
+            isBusy = String(opt.dataset?.busy || '0') === '1';
+            executiveName = String(opt.dataset?.name || opt.text || '').trim();
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    // Store previous selection (used to revert when user cancels)
+    const prev = (window.posState && window.posState.prevDeliveryExecutiveSelection !== undefined)
+        ? window.posState.prevDeliveryExecutiveSelection
+        : '';
+
+    // If busy, ask confirmation before assigning
+    if (value && isBusy && typeof Swal !== 'undefined' && Swal.fire) {
+        Swal.fire({
+            title: 'Executive is busy',
+            text: (executiveName ? (executiveName + ' is already assigned to another order today.') : 'This executive is already assigned to another order today.') + ' Do you want to assign this order anyway?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, assign',
+            cancelButtonText: 'Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                window.updateDeliveryExecutiveSelection(value);
+            } else {
+                if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                    $('#delivery-executive-select, #selectDeliveryExecutiveInput').val(prev);
+                }
+            }
+        });
+        return;
+    }
+
+    // Fallback confirm if Swal isn't available
+    if (value && isBusy) {
+        const ok = confirm('This executive is busy (already assigned to another order). Assign anyway?');
+        if (!ok) {
+            if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                $('#delivery-executive-select, #selectDeliveryExecutiveInput').val(prev);
+            }
+            return;
+        }
+    }
+
     window.updateDeliveryExecutiveSelection(value);
+};
+
+// Track previous delivery executive selection so we can revert on cancel.
+// (Both selects exist in different partials; keep them in sync.)
+try {
+    if (!window.posState) window.posState = {};
+    document.addEventListener('focusin', function(e) {
+        if (!e || !e.target) return;
+        if (e.target.id === 'delivery-executive-select' || e.target.id === 'selectDeliveryExecutiveInput') {
+            window.posState.prevDeliveryExecutiveSelection = e.target.value || '';
+        }
+    });
+    document.addEventListener('click', function(e) {
+        if (!e || !e.target) return;
+        if (e.target.id === 'delivery-executive-select' || e.target.id === 'selectDeliveryExecutiveInput') {
+            window.posState.prevDeliveryExecutiveSelection = e.target.value || '';
+        }
+    });
+} catch (e) {
+    // ignore
+}
+
+window.enablePosSearchableSelect = function(selectId, placeholder) {
+    const select = document.getElementById(selectId);
+    if (!select || select.dataset.posSearchInit === '1') {
+        return;
+    }
+
+    const options = Array.from(select.options).map(function(opt) {
+        return {
+            value: String(opt.value ?? ''),
+            text: String(opt.textContent || '').trim(),
+            disabled: !!opt.disabled
+        };
+    });
+    const placeholderOption = options.find(function(opt) { return opt.value === ''; });
+    const defaultLabel = placeholderOption ? placeholderOption.text : (placeholder || 'Select');
+
+    const container = document.createElement('div');
+    container.className = 'pos-searchable-select relative w-full min-w-0';
+    if (selectId === 'waiter-select' || selectId === 'selectWaiterInput') {
+        container.classList.add('sm:max-w-[11rem]');
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'w-full h-8 inline-flex items-center justify-between gap-2 rounded-md border border-gray-300 bg-white px-2.5 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200';
+    button.innerHTML = '<span class="truncate text-left"></span><svg class="w-3.5 h-3.5 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>';
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'hidden absolute z-50 mt-1 left-0 right-0 min-w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg';
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'p-2 border-b border-gray-100 dark:border-gray-700';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'h-8 w-full text-xs rounded-md border border-gray-300 bg-white px-2.5 text-gray-700 placeholder:text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:placeholder:text-gray-500 focus:border-skin-base focus:ring-1 focus:ring-skin-base';
+    searchInput.placeholder = placeholder || 'Search';
+    searchWrap.appendChild(searchInput);
+
+    const list = document.createElement('div');
+    list.className = 'max-h-48 overflow-auto p-1';
+
+    const empty = document.createElement('div');
+    empty.className = 'hidden px-3 py-4 text-center text-xs text-gray-500 dark:text-gray-400';
+    empty.textContent = @json(__('messages.noRecordFound'));
+
+    dropdown.appendChild(searchWrap);
+    dropdown.appendChild(list);
+    dropdown.appendChild(empty);
+
+    select.parentNode.insertBefore(container, select);
+    container.appendChild(button);
+    container.appendChild(dropdown);
+    container.appendChild(select);
+    select.classList.add('hidden');
+
+    const labelEl = button.querySelector('span');
+    const updateButtonLabel = function() {
+        const selected = options.find(function(opt) { return opt.value === String(select.value || ''); });
+        labelEl.textContent = (selected && selected.value !== '') ? selected.text : defaultLabel;
+        labelEl.classList.toggle('text-gray-400', !(selected && selected.value !== ''));
+    };
+
+    const render = function(term) {
+        const q = String(term || '').toLowerCase().trim();
+        const currentValue = String(select.value || '');
+        list.innerHTML = '';
+        let count = 0;
+
+        options.forEach(function(opt) {
+            const isPlaceholder = opt.value === '';
+            if (q && opt.text.toLowerCase().indexOf(q) === -1) {
+                return;
+            }
+            count++;
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'w-full text-left px-2.5 py-1.5 rounded-md text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ' + (currentValue === opt.value ? 'bg-blue-50 dark:bg-blue-900/20 text-skin-base' : (isPlaceholder ? 'text-gray-500 dark:text-gray-400 italic' : 'text-gray-700 dark:text-gray-200'));
+            row.textContent = isPlaceholder ? ('- ' + opt.text + ' -') : opt.text;
+            row.addEventListener('click', function() {
+                select.value = opt.value;
+                updateButtonLabel();
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                dropdown.classList.add('hidden');
+            });
+            list.appendChild(row);
+        });
+
+        empty.classList.toggle('hidden', count > 0);
+    };
+
+    button.addEventListener('click', function() {
+        const opening = dropdown.classList.contains('hidden');
+        document.querySelectorAll('.pos-searchable-select > div.absolute').forEach(function(dd) {
+            dd.classList.add('hidden');
+        });
+        if (opening) {
+            dropdown.classList.remove('hidden');
+            searchInput.value = '';
+            render('');
+            setTimeout(function() { searchInput.focus(); }, 20);
+        }
+    });
+
+    searchInput.addEventListener('input', function() {
+        render(searchInput.value);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!container.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    updateButtonLabel();
+    select.dataset.posSearchInit = '1';
+};
+
+window.initPosAssigneeSearchableSelects = function() {
+    window.enablePosSearchableSelect('waiter-select', @json(__('app.search') . ' ' . __('modules.order.waiter')));
+    window.enablePosSearchableSelect('selectWaiterInput', @json(__('app.search') . ' ' . __('modules.order.waiter')));
+    window.enablePosSearchableSelect('delivery-executive-select', @json(__('app.search') . ' ' . __('modules.delivery.deliveryExecutive')));
+    window.enablePosSearchableSelect('selectDeliveryExecutiveInput', @json(__('app.search') . ' ' . __('modules.delivery.deliveryExecutive')));
+};
+
+window.ensurePosNumberInputNoSpinnerCss = function() {
+    if (document.getElementById('pos-no-spinner-style')) {
+        return;
+    }
+    var style = document.createElement('style');
+    style.id = 'pos-no-spinner-style';
+    style.textContent = '.pos-number-no-spinner::-webkit-outer-spin-button,.pos-number-no-spinner::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}.pos-number-no-spinner{-moz-appearance:textfield;appearance:textfield;}';
+    document.head.appendChild(style);
 };
 
 window.updateDeliveryFee = function(value) {
@@ -2794,8 +6755,8 @@ window.showOrderTypeModal = function() {
     // For now, redirect to order type selection or show modal
     if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
         // Check if modal exists, if not redirect
-        if ($('#orderTypeSelectionModal').length) {
-            $('#orderTypeSelectionModal').show();
+        if (typeof window.showPosOrderTypeModal === 'function') {
+            window.showPosOrderTypeModal();
         } else {
             // Redirect to POS index to select order type
             window.location.href = "{{ route('pos.index') }}";
@@ -2803,38 +6764,7 @@ window.showOrderTypeModal = function() {
     }
 };
 
-window.showAddCustomerModal = function(customerId = null) {
-    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-        return;
-    }
-
-    const dispatchModal = function() {
-        if (typeof Livewire === 'undefined' || !Livewire.dispatch) {
-            return false;
-        }
-
-        const orderID = window.posState.orderID || {{ optional($orderDetail)->id ?? 'null' }};
-        Livewire.dispatch('showAddCustomerModal', {
-            id: orderID,
-            customerId: customerId,
-            fromPos: true
-        });
-        return true;
-    };
-
-    if (dispatchModal()) {
-        return;
-    }
-
-    // Livewire can load asynchronously; retry briefly before failing silently.
-    let attempts = 0;
-    const timer = setInterval(function() {
-        attempts++;
-        if (dispatchModal() || attempts >= 10) {
-            clearInterval(timer);
-        }
-    }, 200);
-};
+// showAddCustomerModal is defined in layouts/app.blade.php (POS opens client-side first).
 
 // Listen for customer updates from Livewire (with resilient binding)
 if (!window.__posCustomerListenersBound) {
@@ -2845,10 +6775,6 @@ window.bindPosCustomerListeners = function() {
     if (window.__posCustomerListenersBound) {
         return true;
     }
-    if (typeof Livewire === 'undefined' || !Livewire.on) {
-        return false;
-    }
-
     const handleCustomerUpdate = (event) => {
         // Support both direct payload and wrapped payload shapes
         const payload = (event && event.customer) ? event : (event && event[0] ? event[0] : null);
@@ -2879,8 +6805,17 @@ window.bindPosCustomerListeners = function() {
         }
     };
 
-    Livewire.on('customerSelected', handleCustomerUpdate);
-    Livewire.on('customerAdded', handleCustomerUpdate);
+    if (!window.__posAjaxCustomerListenerBound) {
+        window.addEventListener('pos-customer-updated', function (event) {
+            handleCustomerUpdate({ customer: event.detail?.customer || null });
+        });
+        window.__posAjaxCustomerListenerBound = true;
+    }
+
+    if (typeof Livewire !== 'undefined' && Livewire.on) {
+        Livewire.on('customerSelected', handleCustomerUpdate);
+        Livewire.on('customerAdded', handleCustomerUpdate);
+    }
     window.__posCustomerListenersBound = true;
     return true;
 };
@@ -2901,6 +6836,23 @@ window.bindPosCustomerListeners = function() {
 document.addEventListener('livewire:navigated', function() {
     window.bindPosCustomerListeners?.();
 });
+
+window.clearSelectedCustomer = function() {
+    if (!window.posState) {
+        return;
+    }
+
+    window.posState.customerId = null;
+    window.posState.customer = null;
+    window.resetLoyaltyRedemption?.();
+    window.refreshAutoStampPreviews?.();
+    updateCustomerDisplay(null);
+
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    window.persistPosDraftCart?.();
+};
 
 /**
  * Update customer display in all views (kot_items, order_items, order_detail)
@@ -2925,16 +6877,32 @@ function updateCustomerDisplay(customer) {
             return;
         }
 
-        if (customer && customer.id) {
+        const hasCustomerIdentity = !!(
+            customer &&
+            (
+                customer.id ||
+                (typeof customer.name === 'string' && customer.name.trim() !== '') ||
+                (typeof customer.phone === 'string' && customer.phone.trim() !== '') ||
+                (typeof customer.email === 'string' && customer.email.trim() !== '')
+            )
+        );
+
+        if (hasCustomerIdentity) {
             // Update customer name
             if (customerNameElement) {
-                customerNameElement.textContent = customer.name;
+                const name = customer && typeof customer.name === 'string' ? customer.name.trim() : '';
+                const phone = customer && typeof customer.phone === 'string' ? customer.phone.trim() : '';
+                const email = customer && typeof customer.email === 'string' ? customer.email.trim() : '';
+                customerNameElement.textContent = name || phone || email || '';
             }
 
-            // Update edit button onclick if it exists
+            // Update edit button onclick if it exists (always pass order id on Livewire POS — see layouts/app showAddCustomerModal)
             const editButton = customerInfoSection.querySelector('button[onclick*="showAddCustomerModal"]');
             if (editButton) {
-                editButton.setAttribute('onclick', `showAddCustomerModal(${customer.id})`);
+                var __cid = (customer && customer.id) ? JSON.stringify(customer.id) : 'null';
+                var __oid = (typeof window.getCurrentPosOrderId === 'function') ? window.getCurrentPosOrderId() : null;
+                var __oidLit = (__oid === null || __oid === undefined) ? 'null' : String(__oid);
+                editButton.setAttribute('onclick', 'window.showAddCustomerModal(' + __cid + ', ' + __oidLit + ', true)');
             }
 
             // Show customer info, hide add customer section
@@ -2951,10 +6919,6 @@ function updateCustomerDisplay(customer) {
         }
     });
 
-    // Show success message
-    if (customer && customer.id) {
-        showToast('success', 'Customer updated successfully');
-    }
 }
 
 /**
@@ -2995,16 +6959,12 @@ function updateTableDisplay(table) {
         } else {
             // Hide table info, show set table button
             tableInfoSection.style.display = 'none';
-            setTableSection.style.display = 'block';
+            setTableSection.style.display = 'inline-flex';
 
             console.log(`Cleared table display in container ${index}`);
         }
     });
 
-    // Show success message
-    if (table && table.id) {
-        showToast('success', 'Table updated successfully');
-    }
 }
 
 
@@ -3027,59 +6987,118 @@ window.showAddDiscountModal = function() {
     if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
         // Block manual discount when loyalty discount is active (mirror SaaS / Livewire behavior)
         if ((window.posState.loyaltyDiscountAmount || 0) > 0) {
-            window.showToast?.('error', '{{ __("Loyalty discount already applied.") }}');
+            window.showToast?.('error', @json(__('Loyalty discount already applied.')));
             return;
         }
 
-        // Reset discount form
-        $('#discountType').val(window.posState.discountType || 'fixed');
-        $('#discountValue').val(window.posState.discountValue || '');
+        const currentType = window.posState.discountType || '';
+        const currentValue = parseFloat(window.posState.discountValue || 0);
+        const isTaxInclusive = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }});
+        const defaultApplyOn = isTaxInclusive ? 'total' : 'sub_total';
+        const currentApplyOn = (window.posState.discountApplyOn || defaultApplyOn).toString();
+        const hasCurrentDiscount = currentValue > 0;
+        const applyOnWrapper = document.getElementById('discountApplyOnWrapper');
+
+        // Default to percent mode for preset discount selection.
+        $('#discountType').val(hasCurrentDiscount ? (currentType || 'percent') : 'percent');
+        $('#discountValue').val(hasCurrentDiscount ? currentValue : '5');
+        if (!isTaxInclusive) {
+            // For exclusive tax, discount is always applied on subtotal.
+            window.posState.discountApplyOn = 'sub_total';
+            $('#discountApplyOn').val('sub_total');
+        } else {
+            $('#discountApplyOn').val(['sub_total', 'total'].includes(currentApplyOn) ? currentApplyOn : defaultApplyOn);
+        }
+        if (applyOnWrapper) {
+            applyOnWrapper.style.display = isTaxInclusive ? '' : 'none';
+        }
+        $('#discountValueError').hide().text('');
+        if (typeof window.syncDiscountPresetSelection === 'function') {
+            window.syncDiscountPresetSelection();
+        }
+        if (typeof window.updateDiscountModalPreview === 'function') {
+            window.updateDiscountModalPreview();
+        }
         $('#discountModal').show();
     }
 };
 
-window.removeCurrentDiscount = function() {
-    // When viewing order detail (billed/payment_due), clear discount via API and update UI without reload
-    const orderId = (window.posState && (window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id))) || null;
-    const showOrderDetail = window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true');
-    if (orderId && showOrderDetail) {
-        if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-            return;
-        }
-        const updateDiscountUrl = "{{ route('ajax.pos.update-order-discount', ['orderId' => 0]) }}".replace(/\/orders\/0\//, '/orders/' + orderId + '/');
-        $.easyAjax({
-            url: updateDiscountUrl,
-            type: 'POST',
-            data: {
-                _token: '{{ csrf_token() }}',
-                discount_type: '',
-                discount_value: 0
-            },
-            success: function(response) {
-                if (response.success) {
-                    if (typeof showToast === 'function') showToast('success', response.message);
-                    // Ensure bill payload cannot carry stale discount values.
-                    if (window.posState) {
-                        window.posState.discountType = null;
-                        window.posState.discountValue = null;
-                        window.posState.discountAmount = 0;
-                    }
-                    if (response.order && typeof window.updateOrderDetailTotalsFromResponse === 'function') {
-                        window.updateOrderDetailTotalsFromResponse(response.order, null);
-                    }
-                }
-            },
-            error: function(xhr) {
-                const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : '{{ __("messages.somethingWentWrong") }}';
-                if (typeof showToast === 'function') showToast('error', msg); else alert(msg);
-            }
-        });
+window.syncDiscountPresetSelection = function() {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         return;
     }
 
+    const selectedType = $('#discountType').val();
+    const selectedValue = parseFloat($('#discountValue').val() || 0);
+    const isPercent = selectedType === 'percent';
+    const percentValue = isPercent ? selectedValue : 0;
+    const presets = [5, 10, 20, 30, 40, 50];
+
+    $('.discount-preset-btn').each(function() {
+        const btnValue = parseFloat($(this).data('discountPercent'));
+        const isSelected = isPercent && presets.includes(percentValue) && btnValue === percentValue;
+        $(this).toggleClass('bg-skin-base text-white border-skin-base', isSelected);
+    });
+};
+
+window.updateDiscountModalPreview = function() {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined' || !window.posState) {
+        return;
+    }
+
+    const formatMoney = function(v) {
+        if (typeof window.formatCurrency === 'function') {
+            return window.formatCurrency(v);
+        }
+        return '$' + Number(v || 0).toFixed(2);
+    };
+
+    const inputValue = parseFloat($('#discountValue').val() || 0);
+    const discountType = ($('#discountType').val() || 'percent').toString();
+    const isTaxInclusive = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }});
+    const defaultApplyOn = isTaxInclusive ? 'total' : 'sub_total';
+    const discountApplyOn = isTaxInclusive
+        ? ($('#discountApplyOn').val() || defaultApplyOn).toString()
+        : 'sub_total';
+
+    const currentDiscountAmount = parseFloat(window.posState.discountAmount || 0);
+    const currentApplyOn = ((window.posState.discountApplyOn || defaultApplyOn) + '').toLowerCase();
+
+    // Undo current applied discount so modal preview starts from current pre-discount numbers.
+    // subTotal in POS state is already the pre-discount subtotal.
+    // Do not add current discount again, otherwise preview base inflates.
+    const baseSubTotal = Math.max(0, parseFloat(window.posState.subTotal || 0));
+    const baseTotal = Math.max(0, parseFloat(window.posState.total || 0) + currentDiscountAmount);
+
+    const baseForDiscount = discountApplyOn === 'sub_total' ? baseSubTotal : baseTotal;
+    let previewDiscount = 0;
+    if (inputValue > 0) {
+        if (discountType === 'percent') {
+            previewDiscount = (baseForDiscount * inputValue) / 100;
+        } else {
+            previewDiscount = Math.min(inputValue, baseForDiscount);
+        }
+    }
+    previewDiscount = Math.max(0, previewDiscount);
+
+    // Keep subtotal preview as the original pre-discount subtotal.
+    // Discount impact is represented separately in Discount/Total rows.
+    const previewSubTotal = baseSubTotal;
+    const previewTotal = Math.max(0, baseTotal - previewDiscount);
+
+    $('#discountPreviewSubTotal').text(formatMoney(previewSubTotal));
+    $('#discountPreviewAmount').text('-' + formatMoney(previewDiscount));
+    $('#discountPreviewTotal').text(formatMoney(previewTotal));
+};
+
+window.removeCurrentDiscount = function() {
     window.posState.discountType = null;
     window.posState.discountValue = null;
     window.posState.discountAmount = 0;
+    window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+        ? 'total'
+        : 'sub_total';
+    window.__posSkipCustomerDisplayUpdateOnce = true;
     if (typeof window.calculateTotal === 'function') {
         window.calculateTotal();
     }
@@ -3097,6 +7116,7 @@ window.updateOrderDetailTotalsFromResponse = function(order, discountInfo) {
     var discountRow = document.getElementById('discount-row');
     var discountTypeDisplay = document.getElementById('discount-type-display');
     var discountAmountEl = document.getElementById('discount-display');
+    var taxableAmountEl = document.getElementById('taxable-amount-display');
     var taxEl = document.getElementById('order-detail-total-tax') || document.getElementById('total-tax-display');
     var totalEl = document.getElementById('order-detail-total') || document.getElementById('total-display');
 
@@ -3113,7 +7133,9 @@ window.updateOrderDetailTotalsFromResponse = function(order, discountInfo) {
     }
 
     if (discountRow) {
-        var hasDiscount = parseFloat(order.discount_amount || 0) > 0;
+        var hasDiscount = typeof window.posOrderDiscountIsApplied === 'function'
+            ? window.posOrderDiscountIsApplied(order.discount_amount)
+            : parseFloat(order.discount_amount || 0) > 0;
         discountRow.style.display = hasDiscount ? 'flex' : 'none';
 
         if (discountTypeDisplay && resolvedDiscountType && hasDiscount) {
@@ -3129,6 +7151,10 @@ window.updateOrderDetailTotalsFromResponse = function(order, discountInfo) {
 
     if (taxEl && order.total_tax_amount_formatted !== undefined) taxEl.textContent = order.total_tax_amount_formatted;
     if (totalEl && order.total_formatted !== undefined) totalEl.textContent = order.total_formatted;
+    if (taxableAmountEl && typeof window.formatCurrency === 'function') {
+        var taxableAmount = Math.max(0, (parseFloat(order.sub_total || 0) - parseFloat(order.discount_amount || 0)));
+        taxableAmountEl.textContent = window.formatCurrency(taxableAmount);
+    }
 
     // Update per-tax rows (order-level tax mode) when tax base changes
     var taxBaseNumber = parseFloat(order.tax_base || 0);
@@ -3148,6 +7174,7 @@ window.updateOrderDetailTotalsFromResponse = function(order, discountInfo) {
         window.posState.discountAmount = parseFloat(order.discount_amount) || 0;
         window.posState.totalTaxAmount = parseFloat(order.total_tax_amount) || 0;
         window.posState.total = parseFloat(order.total) || 0;
+        window.posState.discountApplyOn = order.discount_apply_on || ((window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }}) ? 'total' : 'sub_total');
         if (order.tax_base !== undefined) {
             window.posState.taxBase = parseFloat(order.tax_base) || 0;
         }
@@ -3169,12 +7196,14 @@ window.removeExtraCharge = function(chargeId, orderType) {
 
     // Check if user has permission
     @if (!user_can('Update Order'))
-        alert('@lang("messages.permissionDenied")');
+        alert(@json(__('messages.permissionDenied')));
         return;
     @endif
 
     const doRemove = function() {
-        const orderId = (window.posState && (window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id))) || {{ optional($orderDetail)->id ?? 'null' }};
+        const orderId = typeof window.getCurrentPosOrderId === 'function'
+            ? window.getCurrentPosOrderId()
+            : null;
 
         // If there's an existing order (order detail view), update via API and reload to show new totals
         if (orderId && window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true')) {
@@ -3189,7 +7218,7 @@ window.removeExtraCharge = function(chargeId, orderType) {
                 success: function(response) {
                     if (response.success) {
                         if (typeof showToast === 'function') {
-                            showToast('success', response.message || '{{ __("messages.extraChargeRemoved") }}');
+                            showToast('success', response.message || @json(__('messages.extraChargeRemoved')));
                         }
                         // Keep billing payload in sync: removed charge must not be posted again.
                         if (window.posConfig && Array.isArray(window.posConfig.extraCharges)) {
@@ -3210,7 +7239,7 @@ window.removeExtraCharge = function(chargeId, orderType) {
                     }
                 },
                 error: function(xhr) {
-                    const error = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : '{{ __("messages.somethingWentWrong") }}';
+                    const error = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : @json(__('messages.somethingWentWrong'));
                     if (typeof showToast === 'function') {
                         showToast('error', error);
                     } else {
@@ -3250,7 +7279,7 @@ window.removeExtraCharge = function(chargeId, orderType) {
 
                 // Show success message
                 if (typeof window.showToast === 'function') {
-                    window.showToast('success', '@lang("messages.extraChargeRemoved")');
+                    window.showToast('success', @json(__('messages.extraChargeRemoved')));
                 }
             } else {
                 console.warn('Extra charge not found:', chargeId);
@@ -3260,10 +7289,10 @@ window.removeExtraCharge = function(chargeId, orderType) {
 
     if (typeof Swal !== 'undefined') {
         Swal.fire({
-            title: '@lang("messages.removeExtraCharge")?',
-            text: '@lang("messages.removeExtraChargeMessage")',
+            title: @json(__('messages.removeExtraCharge') . '?'),
+            text: @json(__('messages.removeExtraChargeMessage')),
             showCancelButton: true,
-            confirmButtonText: '@lang("modules.order.remove")',
+            confirmButtonText: @json(__('modules.order.remove')),
         }).then((result) => {
             if (result.isConfirmed) {
                 doRemove();
@@ -3271,18 +7300,134 @@ window.removeExtraCharge = function(chargeId, orderType) {
         });
     } else {
         // Fallback to native confirm
-        if (confirm('@lang("messages.removeExtraCharge")')) {
+        if (confirm(@json(__('messages.removeExtraCharge')))) {
             doRemove();
         }
     }
 };
 
+window.__clearPosCartStateNow = function() {
+    window.posState.orderItemList = {};
+    window.posState.orderItemQty = {};
+    window.posState.orderItemAmount = {};
+    window.posState.orderItemVariation = {};
+    window.posState.itemModifiersSelected = {};
+    window.posState.orderItemModifiersPrice = {};
+    window.posState.itemNotes = {};
+    window.posState.orderItemTaxDetails = {};
+    window.posState.subTotal = 0;
+    window.posState.total = 0;
+    window.posState.discountAmount = 0;
+    window.posState.discountType = null;
+    window.posState.discountValue = null;
+    window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+        ? 'total'
+        : 'sub_total';
+    window.posState.discountedTotal = 0;
+    window.posState.taxBase = 0;
+    window.posState.deliveryFee = 0;
+    window.posState.tipAmount = 0;
+    window.posState.totalTaxAmount = 0;
+    window.posState.orderNote = null;
+    window.posState.loyaltyPointsRedeemed = 0;
+    window.posState.loyaltyDiscountAmount = 0;
+    window.posState.stampDiscountAmount = 0;
+    window.posState.hasFreeStampItems = false;
+    window.currentKotId = null;
+    window.clearPersistedPosDraftCart?.();
+
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
+    }
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+
+    if (typeof window.flushCustomerDisplayUpdate === 'function') {
+        window.flushCustomerDisplayUpdate();
+    }
+};
+
+// Clear cart lines/totals while keeping selected order context (table/customer/order type).
+window.clearPosCartOnly = function(anchorEl) {
+    const proceed = function() {
+        window.__clearPosCartStateNow?.();
+    };
+
+    if (typeof window.openPosSimpleConfirm === 'function') {
+        window.openPosSimpleConfirm(@json(__('messages.posClearCartConfirm')), proceed, { anchorEl: anchorEl });
+    } else if (window.confirm(@json(__('messages.posClearCartConfirm')))) {
+        proceed();
+    }
+};
+
+function __posShouldShowFreshNewOrderEmptyHint() {
+    if (!window.posState) {
+        return false;
+    }
+    if (window.posState.__posOfflineAppendToQueuedOrder) {
+        return false;
+    }
+    var path = typeof window.location !== 'undefined' ? String(window.location.pathname || '') : '';
+    if (path.indexOf('/pos/kot/') !== -1) {
+        return false;
+    }
+    var oid = parseInt(
+        window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id) || 0,
+        10
+    );
+    return !(Number.isFinite(oid) && oid > 0);
+}
+
+window.__posBuildEmptyCartPlaceholderHtml = function() {
+    var showHint = __posShouldShowFreshNewOrderEmptyHint();
+    var title = @json(__('messages.posEmptyCartNoItems'));
+    var hint = @json(__('messages.posEmptyCartNewOrderHint'));
+    var hintHtml = showHint
+        ? '<p class="mt-2 max-w-sm mx-auto text-sm leading-snug text-gray-500 dark:text-gray-400 px-2">' + hint + '</p>'
+        : '';
+    return (
+        '<div class="h-full min-h-[18rem] flex items-center justify-center text-center text-gray-500 dark:text-gray-400">' +
+            '<div class="flex flex-col items-center justify-center">' +
+                '<svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />' +
+                '</svg>' +
+                '<div class="text-gray-500 dark:text-gray-400 text-base">' + title + '</div>' +
+                hintHtml +
+            '</div>' +
+        '</div>'
+    );
+};
+
+window.__posBuildOrderPanelLoaderHtml = function() {
+    var loadingText = @json(__('app.loading'));
+    return (
+        '<div class="h-full min-h-[18rem] flex items-center justify-center">' +
+            '<div class="inline-flex items-center gap-3 text-gray-600 dark:text-gray-300">' +
+                '<svg class="animate-spin h-5 w-5 text-skin-base" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">' +
+                    '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                    '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>' +
+                '</svg>' +
+                '<span class="text-sm font-medium">' + loadingText + '...</span>' +
+            '</div>' +
+        '</div>'
+    );
+};
+
 // Reset POS State Function
-window.resetPosState = function() {
+// options.skipMenuReload: when true (e.g. "New order"), do not refetch the product grid / category UI on the
+// left — only cart + order panel state; the right panel is refreshed via refreshOrderPanelsFromServer in startNewOrder.
+window.resetPosState = function(options) {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
         return;
     }
+
+    var opts = options && typeof options === 'object' ? options : {};
+    var skipMenuReload = opts.skipMenuReload === true;
 
     // Clear cart
     window.posState.orderItemList = {};
@@ -3297,11 +7442,18 @@ window.resetPosState = function() {
     window.posState.discountAmount = 0;
     window.posState.discountType = null;
     window.posState.discountValue = null;
+    window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+        ? 'total'
+        : 'sub_total';
     window.posState.discountedTotal = 0;
+    window.posState.taxBase = 0;
     window.posState.deliveryFee = 0;
     window.posState.tipAmount = 0;
     window.posState.totalTaxAmount = 0;
     window.posState.orderItemTaxDetails = {};
+    window.posState.customerId = null;
+    window.posState.customer = null;
+    window.clearPersistedPosDraftCart?.();
     window.posState.orderNote = null;
     window.posState.orderID = null;
     window.posState.orderDetail = null;
@@ -3309,6 +7461,16 @@ window.resetPosState = function() {
     window.posState.orderNumber = '';
     window.posState.formattedOrderNumber = '';
     window.posState.orderStatus = 'confirmed';
+    window.posState.__posOfflineAppendToQueuedOrder = false;
+    // Keep currently selected order type context on "New Order" (do not force modal/default type).
+    window.posState.orderTypeId = window.posState.orderTypeId || null;
+    window.posState.orderTypeSlug = window.posState.orderTypeSlug || '';
+    window.posState.orderType = window.posState.orderType || '';
+    window.posState.selectedDeliveryApp = window.posState.selectedDeliveryApp ?? null;
+    window.posState.selectedDeliveryExecutive = window.posState.selectedDeliveryExecutive ?? null;
+    window.posState.deliveryDate = window.posState.deliveryDate || '';
+    window.posState.deliveryTime = window.posState.deliveryTime || '';
+    window.posState.deliveryDateTime = window.posState.deliveryDateTime || '';
     // Reset loyalty points and stamps context for new KOT / fresh cart
     window.posState.loyaltyPointsRedeemed = 0;
     window.posState.loyaltyDiscountAmount = 0;
@@ -3316,36 +7478,50 @@ window.resetPosState = function() {
     window.posState.hasFreeStampItems = false;
     window.currentKotId = null;
 
-    // Reset menu filters
-    if (window.menuFilters) {
-        window.menuFilters.menuId = null;
-        window.menuFilters.categoryId = null;
-        window.menuFilters.search = '';
-        // Keep the original limit value
-        if (!window.menuFilters.originalLimit) {
-            window.menuFilters.originalLimit = window.menuFilters.limit || 75;
+    if (!skipMenuReload) {
+        // Reset menu filters (left column)
+        if (window.menuFilters) {
+            window.menuFilters.menuId = null;
+            window.menuFilters.categoryId = null;
+            window.menuFilters.search = '';
+            // Keep the original limit value
+            if (!window.menuFilters.originalLimit) {
+                window.menuFilters.originalLimit = window.menuFilters.limit || 75;
+            }
+            window.menuFilters.limit = window.menuFilters.originalLimit;
+        } else {
+            // Initialize menuFilters if it doesn't exist
+            window.menuFilters = {
+                menuId: null,
+                categoryId: null,
+                search: '',
+                limit: 75
+            };
         }
-        window.menuFilters.limit = window.menuFilters.originalLimit;
-    } else {
-        // Initialize menuFilters if it doesn't exist
-        window.menuFilters = {
-            menuId: null,
-            categoryId: null,
-            search: '',
-            limit: 75
-        };
+
+        // Clear menu selection UI
+        if (typeof window.updateMenuSelection === 'function') {
+            window.updateMenuSelection(null);
+        }
+
+        // Clear category selection
+        $('#category-filter').val('');
+
+        // Clear search input
+        $('#products-search').val('');
     }
 
-    // Clear menu selection UI
-    if (typeof window.updateMenuSelection === 'function') {
-        window.updateMenuSelection(null);
+    if (typeof window.updateCustomerDisplay === 'function') {
+        window.updateCustomerDisplay(null);
+    } else if (typeof updateCustomerDisplay === 'function') {
+        updateCustomerDisplay(null);
     }
-
-    // Clear category selection
-    $('#category-filter').val('');
-
-    // Clear search input
-    $('#products-search').val('');
+    if (typeof window.flushCustomerDisplayUpdate === 'function') {
+        window.flushCustomerDisplayUpdate();
+    }
+    if (typeof window.updatePosOrderTypeUiLabels === 'function') {
+        window.updatePosOrderTypeUiLabels();
+    }
 
     // Force clear the order items container immediately - try multiple selectors
     let $orderItemsContainer = $('#order-items-container .flex.flex-col.rounded.gap-1');
@@ -3365,16 +7541,11 @@ window.resetPosState = function() {
 
     // Clear the container if found
     if ($orderItemsContainer.length > 0) {
-        $orderItemsContainer.html(`
-            <div class="text-center text-gray-500 dark:text-gray-400 mt-4">
-                <div class="flex flex-col items-center justify-center">
-                    <svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <div class="text-gray-500 dark:text-gray-400 text-base">No items added</div>
-                </div>
-            </div>
-        `);
+        var emptyCartHtml =
+            typeof window.__posBuildEmptyCartPlaceholderHtml === 'function'
+                ? window.__posBuildEmptyCartPlaceholderHtml()
+                : '';
+        $orderItemsContainer.html(emptyCartHtml);
     } else {
         // If container not found, try to clear all items with data-item-key attribute
         $('#order-items-container [data-item-key]').remove();
@@ -3393,19 +7564,169 @@ window.resetPosState = function() {
         }
     }, 50);
 
-    // Reload menu items via AJAX to show all items
-    if (typeof window.loadMenuItems === 'function') {
-        window.loadMenuItems();
+    if (!skipMenuReload) {
+        // Reload menu items via AJAX to show all items
+        if (typeof window.loadMenuItems === 'function') {
+            window.loadMenuItems();
+        }
+
+        // Update category counts
+        if (typeof window.updateCategoryCounts === 'function') {
+            window.updateCategoryCounts();
+        }
     }
 
-    // Update category counts
-    if (typeof window.updateCategoryCounts === 'function') {
-        window.updateCategoryCounts();
-    }
-
-    // Dispatch reset event if Livewire is available
-    if (typeof Livewire !== 'undefined') {
+    // Dispatch reset event if Livewire is available (full reset only; "New order" keeps left column unchanged)
+    if (!skipMenuReload && typeof Livewire !== 'undefined') {
         Livewire.dispatch('resetPos');
+    }
+};
+
+// Public action for starting a fresh order from the POS UI.
+window.startNewOrder = function() {
+    window.__posForceFreshOrder = true;
+    window.__posInitialServerOrderId = null;
+    const targetUrl = @json(route('pos.index'));
+    const preservedOrderType = {
+        orderTypeId: window.posState ? window.posState.orderTypeId : null,
+        orderTypeSlug: window.posState ? window.posState.orderTypeSlug : '',
+        selectedDeliveryApp: window.posState ? (window.posState.selectedDeliveryApp ?? null) : null,
+        selectedDeliveryExecutive: window.posState ? (window.posState.selectedDeliveryExecutive ?? null) : null,
+        deliveryDate: window.posState ? (window.posState.deliveryDate || '') : '',
+        deliveryTime: window.posState ? (window.posState.deliveryTime || '') : '',
+        deliveryDateTime: window.posState ? (window.posState.deliveryDateTime || '') : ''
+    };
+
+    if (typeof window.__posClearOfflineQueueSession === 'function') {
+        window.__posClearOfflineQueueSession();
+    }
+
+    // Keep SPA behavior (no full app reload), but move URL to /pos first so
+    // empty-cart hint logic treats this as a fresh order page immediately.
+    if (window.history && typeof window.history.replaceState === 'function') {
+        try {
+            const parsedTargetUrl = new URL(targetUrl, window.location.origin);
+            const nextPath = parsedTargetUrl.pathname + parsedTargetUrl.search + parsedTargetUrl.hash;
+            window.history.replaceState(window.history.state || {}, document.title, nextPath);
+        } catch (e) {
+            // ignore URL parsing errors and continue with state reset
+        }
+    }
+
+    if (typeof window.resetPosState === 'function') {
+        window.resetPosState({ skipMenuReload: true });
+    }
+
+    // Immediately hide stale order-detail controls/content while fresh panel loads.
+    const orderPanel = document.getElementById('order-items-container');
+    if (orderPanel) {
+        orderPanel.innerHTML = window.__posBuildOrderPanelLoaderHtml
+            ? window.__posBuildOrderPanelLoaderHtml()
+            : '<div class="h-full min-h-[18rem] flex items-center justify-center text-gray-500">@lang("app.loading")...</div>';
+    }
+
+    // Render totals/cart state instantly in current DOM (if relevant nodes still exist).
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
+    }
+
+    // Pull full fresh-order panel from /pos (no hard reload).
+    if (typeof window.refreshOrderPanelsFromServer === 'function') {
+        window.refreshOrderPanelsFromServer({
+            url: targetUrl,
+            onSuccess: function() {
+                if (!window.posState) {
+                    return;
+                }
+                // Re-apply preserved order type after panel refresh so UI and validation
+                // stay in sync (prevents showing Dine In while logic still uses Delivery).
+                if (preservedOrderType.orderTypeId && preservedOrderType.orderTypeSlug) {
+                    if (typeof window.applyPosOrderTypeSelection === 'function') {
+                        window.applyPosOrderTypeSelection(
+                            preservedOrderType.orderTypeId,
+                            preservedOrderType.orderTypeSlug,
+                            preservedOrderType.selectedDeliveryApp
+                        );
+                    } else {
+                        window.posState.orderTypeId = preservedOrderType.orderTypeId;
+                        window.posState.orderTypeSlug = preservedOrderType.orderTypeSlug;
+                    }
+                }
+
+                window.posState.selectedDeliveryExecutive = preservedOrderType.selectedDeliveryExecutive;
+                window.posState.deliveryDate = preservedOrderType.deliveryDate;
+                window.posState.deliveryTime = preservedOrderType.deliveryTime;
+                window.posState.deliveryDateTime = preservedOrderType.deliveryDateTime;
+
+                if (typeof window.updatePosOrderTypeUiLabels === 'function') {
+                    window.updatePosOrderTypeUiLabels();
+                }
+                if (typeof window.calculateTotal === 'function') {
+                    window.calculateTotal();
+                }
+            }
+        });
+    } else if (preservedOrderType.orderTypeId && preservedOrderType.orderTypeSlug) {
+        if (typeof window.applyPosOrderTypeSelection === 'function') {
+            window.applyPosOrderTypeSelection(
+                preservedOrderType.orderTypeId,
+                preservedOrderType.orderTypeSlug,
+                preservedOrderType.selectedDeliveryApp
+            );
+        }
+    }
+};
+
+/**
+ * Remove specific cart line keys (used after offline KOT/draft queue on an existing order).
+ */
+window.removePosCartLinesByKeys = function(keys) {
+    if (!keys || !keys.length || !window.posState) {
+        return;
+    }
+    keys.forEach(function(key) {
+        if (!key) {
+            return;
+        }
+        if (window.posState.orderItemList) {
+            delete window.posState.orderItemList[key];
+        }
+        if (window.posState.orderItemQty) {
+            delete window.posState.orderItemQty[key];
+        }
+        if (window.posState.orderItemVariation) {
+            delete window.posState.orderItemVariation[key];
+        }
+        if (window.posState.orderItemAmount) {
+            delete window.posState.orderItemAmount[key];
+        }
+        if (window.posState.itemModifiersSelected) {
+            delete window.posState.itemModifiersSelected[key];
+        }
+        if (window.posState.orderItemModifiersPrice) {
+            delete window.posState.orderItemModifiersPrice[key];
+        }
+        if (window.posState.itemNotes) {
+            delete window.posState.itemNotes[key];
+        }
+        if (window.posState.orderItemTaxDetails) {
+            delete window.posState.orderItemTaxDetails[key];
+        }
+        if (window.posState.orderItemIds) {
+            delete window.posState.orderItemIds[key];
+        }
+    });
+    if (typeof window.calculateTotal === 'function') {
+        window.calculateTotal();
+    }
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
+    }
+    if (typeof window.updateTotalsDisplay === 'function') {
+        window.updateTotalsDisplay();
     }
 };
 
@@ -3434,6 +7755,55 @@ window.saveKotNote = function() {
     if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
         const note = $('#orderNote').val();
         window.posState.orderNote = note;
+
+        const orderId = typeof window.getCurrentPosOrderId === 'function'
+            ? window.getCurrentPosOrderId()
+            : null;
+        const showOrderDetail = !!(window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true'));
+
+        // If we are editing an existing server-backed order (order detail/KOT view), persist note immediately.
+        if (orderId && showOrderDetail) {
+            const updateNoteUrl = "{{ route('ajax.pos.update-order-note', ['orderId' => 0]) }}".replace(/\/orders\/0\/update-note/, '/orders/' + orderId + '/update-note');
+            const runPosAjax = function(options) {
+                if (typeof $.easyAjax === 'function') {
+                    return $.easyAjax(options);
+                }
+                return $.ajax({
+                    url: options.url,
+                    type: options.type || 'GET',
+                    data: options.data || {},
+                    dataType: options.dataType || 'json',
+                    success: options.success,
+                    error: options.error
+                });
+            };
+
+            runPosAjax({
+                url: updateNoteUrl,
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    order_note: note
+                },
+                success: function(response) {
+                    if (response && response.success) {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('success', response.message || @json(__('messages.updatedSuccessfully')));
+                        }
+                    } else {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('error', (response && response.message) ? response.message : 'Failed to save note');
+                        }
+                    }
+                },
+                error: function() {
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('error', 'Failed to save note');
+                    }
+                }
+            });
+        }
+
         if (typeof window.closeKotNoteModal === 'function') {
             window.closeKotNoteModal();
         }
@@ -3510,18 +7880,39 @@ window.saveDiscount = function() {
 
     const discountValue = parseFloat($('#discountValue').val()) || 0;
     const discountType = $('#discountType').val();
+    const isTaxInclusive = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }});
+    const defaultApplyOn = isTaxInclusive ? 'total' : 'sub_total';
+    const discountApplyOn = isTaxInclusive
+        ? ($('#discountApplyOn').val() || defaultApplyOn).toString()
+        : 'sub_total';
 
-    if (discountValue < 0) {
+    if (discountValue <= 0) {
         $('#discountValueError').text('Discount value must be positive').show();
         return;
     }
 
-    // When viewing order detail (billed/payment_due), persist discount via API and update UI without reload
-    const orderId = (window.posState && (window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id))) || null;
-    const showOrderDetail = window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true');
+    const orderId = typeof window.getCurrentPosOrderId === 'function'
+        ? window.getCurrentPosOrderId()
+        : null;
+    const showOrderDetail = !!(window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true'));
+
+    // For server-backed order detail/KOT pages, persist discount via API and only patch totals.
     if (orderId && showOrderDetail) {
-        const updateDiscountUrl = "{{ route('ajax.pos.update-order-discount', ['orderId' => 0]) }}".replace(/\/orders\/0\//, '/orders/' + orderId + '/');
-        $.easyAjax({
+        const updateDiscountUrl = "{{ route('ajax.pos.update-order-discount', ['orderId' => 0]) }}".replace(/\/orders\/0\/update-discount/, '/orders/' + orderId + '/update-discount');
+        const runPosAjax = function(options) {
+            if (typeof $.easyAjax === 'function') {
+                return $.easyAjax(options);
+            }
+            return $.ajax({
+                url: options.url,
+                type: options.type || 'GET',
+                data: options.data || {},
+                dataType: options.dataType || 'json',
+                success: options.success,
+                error: options.error
+            });
+        };
+        runPosAjax({
             url: updateDiscountUrl,
             type: 'POST',
             data: {
@@ -3531,16 +7922,25 @@ window.saveDiscount = function() {
             },
             success: function(response) {
                 if (response.success) {
-                    if (typeof showToast === 'function') showToast('success', response.message);
-                    if (typeof window.closeDiscountModal === 'function') window.closeDiscountModal();
-                    if (typeof window.updateOrderDetailTotalsFromResponse === 'function') {
-                        window.updateOrderDetailTotalsFromResponse(response.order, discountValue > 0 ? { type: discountType, value: discountValue } : null);
+                    if (response.order && typeof window.updateOrderDetailTotalsFromResponse === 'function') {
+                        window.updateOrderDetailTotalsFromResponse(response.order, {
+                            type: discountType,
+                            value: discountValue
+                        });
+                    }
+                    if (typeof window.closeDiscountModal === 'function') {
+                        window.closeDiscountModal();
+                    }
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('success', response.message || @json(__('messages.discountApplied')));
                     }
                 }
             },
             error: function(xhr) {
-                const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : '{{ __("messages.somethingWentWrong") }}';
-                if (typeof showToast === 'function') showToast('error', msg); else alert(msg);
+                const msg = xhr.responseJSON && xhr.responseJSON.message
+                    ? xhr.responseJSON.message
+                    : @json(__('messages.somethingWentWrong'));
+                $('#discountValueError').text(msg).show();
             }
         });
         return;
@@ -3548,24 +7948,50 @@ window.saveDiscount = function() {
 
     window.posState.discountValue = discountValue;
     window.posState.discountType = discountType;
+    window.posState.discountApplyOn = ['sub_total', 'total'].includes(discountApplyOn) ? discountApplyOn : defaultApplyOn;
+    // Recomputed by calculateTotal using selected discount base.
+    window.posState.discountAmount = 0;
 
-    // Calculate discount amount
-    if (discountType === 'percent') {
-        window.posState.discountAmount = (window.posState.subTotal * discountValue) / 100;
-    } else {
-        window.posState.discountAmount = Math.min(discountValue, window.posState.subTotal);
-    }
-
+    window.__posSkipCustomerDisplayUpdateOnce = true;
     if (typeof window.calculateTotal === 'function') {
         window.calculateTotal();
     }
     if (typeof window.closeDiscountModal === 'function') {
         window.closeDiscountModal();
     }
-    if (typeof window.updateOrderItems === 'function') {
-        window.updateOrderItems();
+    // Keep discount/tax UI fully local; avoid server refresh until action buttons save.
+    if (typeof window.updateOrderItemsContainer === 'function') {
+        window.updateOrderItemsContainer();
     }
 };
+
+if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+    $(document).on('click', '.discount-preset-btn', function() {
+        const percent = parseFloat($(this).data('discountPercent') || 0);
+        if (percent <= 0) {
+            return;
+        }
+
+        $('#discountType').val('percent');
+        $('#discountValue').val(percent);
+        $('#discountValueError').hide().text('');
+        if (typeof window.syncDiscountPresetSelection === 'function') {
+            window.syncDiscountPresetSelection();
+        }
+        if (typeof window.updateDiscountModalPreview === 'function') {
+            window.updateDiscountModalPreview();
+        }
+    });
+
+    $(document).on('change keyup input', '#discountType, #discountValue, #discountApplyOn', function() {
+        if (typeof window.syncDiscountPresetSelection === 'function') {
+            window.syncDiscountPresetSelection();
+        }
+        if (typeof window.updateDiscountModalPreview === 'function') {
+            window.updateDiscountModalPreview();
+        }
+    });
+}
 
 // Load Functions
 window.loadExtraCharges = function(orderTypeSlug) {
@@ -3607,8 +8033,20 @@ window.loadOrderItems = function() {
         success: function(response) {
             // Update order items container using jQuery
             $('#order-items-container').html($(response).find('#order-items-container').html());
+            if (typeof window.initPosAssigneeSearchableSelects === 'function') {
+                window.initPosAssigneeSearchableSelects();
+            }
+            if (typeof window.resetPosOrderPanelScroll === 'function') {
+                window.resetPosOrderPanelScroll();
+            }
             if (typeof window.setGlobalOrderActionLock === 'function' && (window.__posOrderActionInProgress || window.__posPrintOrderInProgress)) {
                 window.setGlobalOrderActionLock(true);
+            }
+            if (typeof window.__posSyncNewCartOrderNumberAheadOfOfflineQueue === 'function') {
+                window.__posSyncNewCartOrderNumberAheadOfOfflineQueue();
+            }
+            if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+                window.__posUpdateRunningOrderBanner();
             }
         }
     });
@@ -3635,12 +8073,24 @@ window.refreshOrderPanelsFromServer = function(options = {}) {
             const $newPanel = $(html).find('#order-items-container');
             if ($newPanel.length) {
                 $('#order-items-container').html($newPanel.html());
+                if (typeof window.initPosAssigneeSearchableSelects === 'function') {
+                    window.initPosAssigneeSearchableSelects();
+                }
+                if (typeof window.resetPosOrderPanelScroll === 'function') {
+                    window.resetPosOrderPanelScroll();
+                }
                 if (typeof window.setGlobalOrderActionLock === 'function' && (window.__posOrderActionInProgress || window.__posPrintOrderInProgress)) {
                     window.setGlobalOrderActionLock(true);
                 }
                 // Keep order_items totals in sync after partial refresh.
                 if (document.getElementById('subtotal-display') && typeof window.calculateTotal === 'function') {
                     window.calculateTotal();
+                }
+                if (typeof window.__posSyncNewCartOrderNumberAheadOfOfflineQueue === 'function') {
+                    window.__posSyncNewCartOrderNumberAheadOfOfflineQueue();
+                }
+                if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+                    window.__posUpdateRunningOrderBanner();
                 }
                 if (typeof options.onSuccess === 'function') {
                     options.onSuccess();
@@ -3661,6 +8111,19 @@ window.refreshOrderPanelsFromServer = function(options = {}) {
         complete: function() {
             window.__refreshOrderPanelsInProgress = false;
         }
+    });
+};
+
+window.resetPosOrderPanelScroll = function() {
+    const panel = document.getElementById('order-items-container');
+    if (!panel) {
+        return;
+    }
+
+    panel.scrollTop = 0;
+    const scrollAreas = panel.querySelectorAll('.overflow-y-auto');
+    scrollAreas.forEach(function(area) {
+        area.scrollTop = 0;
     });
 };
 
@@ -3771,21 +8234,31 @@ window.calculateTotal = function() {
     let totalTaxAmount = 0;
     let orderItemTaxDetails = {};
 
-    // If cart is empty, reset status
+    // If cart is empty, reset status (including tax base so customer display clears GST lines)
     if (!window.posState.orderItemList || Object.keys(window.posState.orderItemList).length === 0) {
         window.posState.total = 0;
         window.posState.subTotal = 0;
+        window.posState.discountedTotal = 0;
+        window.posState.taxBase = 0;
         window.posState.totalTaxAmount = 0;
         window.posState.orderItemTaxDetails = {};
         window.posState.totalsPreCalculated = false;
         if (typeof window.updateTotalsDisplay === 'function') {
             window.updateTotalsDisplay();
         }
+        if (window.__posSkipCustomerDisplayUpdateOnce) {
+            window.__posSkipCustomerDisplayUpdateOnce = false;
+        } else if (typeof window.flushCustomerDisplayUpdate === 'function') {
+            window.flushCustomerDisplayUpdate();
+        } else if (typeof updateCustomerDisplayCache === 'function') {
+            updateCustomerDisplayCache();
+        }
+        window.persistPosDraftCart?.();
         return;
     }
 
     // Get configuration
-    const taxMode = window.posConfig?.taxMode || '{{ $taxMode ?? "order" }}';
+    const taxMode = window.posConfig?.taxMode || @json($taxMode ?? 'order');
     const isInclusive = window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }};
     const taxes = window.posConfig?.taxes || [];
 
@@ -3912,6 +8385,9 @@ window.calculateTotal = function() {
 
     window.posState.subTotal = subTotal;
     window.posState.orderItemTaxDetails = orderItemTaxDetails;
+    // Use subtotal as the discount/total base so final math follows:
+    // taxable = subtotal - discount.
+    total = subTotal;
     let discountedTotal = total;
 
     // Apply discounts
@@ -3922,13 +8398,22 @@ window.calculateTotal = function() {
     const loyaltyPointsRedeemed = parseInt(window.posState.loyaltyPointsRedeemed || 0);
     const loyaltyDiscountAmount = parseFloat(window.posState.loyaltyDiscountAmount || 0);
 
+    const discountApplyOn = ((window.posState.discountApplyOn || ((window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }}) ? 'total' : 'sub_total')) + '').toLowerCase() === 'total'
+        ? 'total'
+        : 'sub_total';
+    const discountBase = subTotal;
     if (discountValue > 0 && discountType) {
-        if (discountType === 'percent') {
-            window.posState.discountAmount = Math.round((subTotal * discountValue) / 100 * 100) / 100;
-        } else if (discountType === 'fixed') {
-            window.posState.discountAmount = Math.min(discountValue, subTotal);
+        if (discountApplyOn === 'sub_total') {
+            if (discountType === 'percent') {
+                window.posState.discountAmount = Math.round((discountBase * discountValue) / 100 * 100) / 100;
+            } else if (discountType === 'fixed') {
+                window.posState.discountAmount = Math.min(discountValue, discountBase);
+            }
+            total -= window.posState.discountAmount;
+        } else {
+            // For total-level discount, apply after full total is computed (tax/charges/tip/delivery included).
+            window.posState.discountAmount = 0;
         }
-        total -= window.posState.discountAmount;
     } else {
         window.posState.discountAmount = 0;
     }
@@ -3939,6 +8424,9 @@ window.calculateTotal = function() {
         window.posState.discountType = '';
         window.posState.discountValue = 0;
         window.posState.discountAmount = 0;
+        window.posState.discountApplyOn = (window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }})
+            ? 'total'
+            : 'sub_total';
         total -= loyaltyDiscountAmount;
     }
 
@@ -3975,8 +8463,55 @@ window.calculateTotal = function() {
         extraCharges.length > 0 &&
         Object.keys(window.posState.orderItemAmount).length > 0;
 
+    const currentOrderTypeSlug = String(window.posState.orderType || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+
+    const normalizeOrderTypes = function(rawTypes) {
+        let list = [];
+        if (Array.isArray(rawTypes)) {
+            list = rawTypes;
+        } else if (typeof rawTypes === 'string') {
+            const s = rawTypes.trim();
+            if (!s) {
+                return [];
+            }
+            try {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed)) {
+                    list = parsed;
+                } else {
+                    list = s.split(',');
+                }
+            } catch (e) {
+                list = s.split(',');
+            }
+        } else if (rawTypes && typeof rawTypes === 'object') {
+            list = Object.values(rawTypes);
+        }
+
+        return list
+            .map(function(v) {
+                return String(v || '').trim().toLowerCase().replace(/\s+/g, '_');
+            })
+            .filter(Boolean);
+    };
+
+    const isChargeApplicableForOrderType = function(charge, orderTypeSlug) {
+        const allowedTypes = normalizeOrderTypes(charge?.order_types);
+        if (!allowedTypes.length) {
+            return true;
+        }
+        return !!orderTypeSlug && allowedTypes.includes(orderTypeSlug);
+    };
+
     if (shouldApplyCharges) {
         for (const charge of extraCharges) {
+            if (!isChargeApplicableForOrderType(charge, currentOrderTypeSlug)) {
+                continue;
+            }
+
             let chargeAmount = 0;
             if (charge.charge_type === 'percent') {
                 chargeAmount = (parseFloat(charge.charge_value || 0) / 100) * discountedTotal;
@@ -3988,9 +8523,8 @@ window.calculateTotal = function() {
         }
     }
 
-    // Step 3: Calculate tax_base based on setting
-    const includeChargesInTaxBase = window.posConfig?.includeChargesInTaxBase ?? true;
-    let taxBase = includeChargesInTaxBase ? discountedTotal + serviceTotal : discountedTotal;
+    // Step 3: Tax base equals taxable amount (subtotal - discount), excluding charges.
+    let taxBase = discountedTotal;
     window.posState.taxBase = taxBase;
 
     // Step 4: Calculate taxes on tax_base
@@ -3999,12 +8533,21 @@ window.calculateTotal = function() {
     if (taxMode === 'order') {
         // Order-level taxation
         if (taxes && taxes.length > 0) {
+            const totalTaxPercent = taxes.reduce(function(sum, tax) {
+                return sum + (parseFloat(tax.tax_percent || 0) || 0);
+            }, 0);
+
             for (const tax of taxes) {
                 const taxPercent = parseFloat(tax.tax_percent || 0);
-                const taxAmount = (taxPercent / 100) * taxBase;
+                let taxAmount = 0;
+                if (isInclusive) {
+                    taxAmount = totalTaxPercent > 0 ? ((taxBase * taxPercent) / (100 + totalTaxPercent)) : 0;
+                } else {
+                    taxAmount = (taxPercent / 100) * taxBase;
+                }
                 totalTaxAmount += taxAmount;
-                total += taxAmount;
             }
+            total += totalTaxAmount;
         }
     } else if (taxMode === 'item') {
         // Item-level taxation
@@ -4022,27 +8565,149 @@ window.calculateTotal = function() {
             }
         }
 
+        // When order-level discount exists in item-tax mode, reduce item taxes proportionally
+        // so effective tax is computed on discounted balance.
+        const discountedTaxableBase = Math.max(
+            0,
+            (subTotal || 0) - (window.posState.discountAmount || 0) - (loyaltyPointsRedeemed > 0 ? loyaltyDiscountAmount : 0)
+        );
+        const itemTaxDiscountFactor = (subTotal > 0)
+            ? Math.max(0, Math.min(1, discountedTaxableBase / subTotal))
+            : 1;
+
+        if (itemTaxDiscountFactor < 1) {
+            totalInclusiveTax *= itemTaxDiscountFactor;
+            totalExclusiveTax *= itemTaxDiscountFactor;
+
+            // Keep per-item breakup in sync with the discounted tax totals.
+            for (const key in orderItemTaxDetails) {
+                const taxDetail = orderItemTaxDetails[key];
+                if (!taxDetail || typeof taxDetail !== 'object') continue;
+
+                taxDetail.tax_amount = (Number(taxDetail.tax_amount || 0) * itemTaxDiscountFactor);
+                if (taxDetail.tax_breakup && typeof taxDetail.tax_breakup === 'object') {
+                    Object.keys(taxDetail.tax_breakup).forEach(function(taxName) {
+                        const entry = taxDetail.tax_breakup[taxName];
+                        if (!entry || typeof entry !== 'object') return;
+                        entry.amount = Number(entry.amount || 0) * itemTaxDiscountFactor;
+                    });
+                }
+            }
+        }
+
         totalTaxAmount = totalInclusiveTax + totalExclusiveTax;
 
-        // For exclusive taxes, add them to the total
-        if (totalExclusiveTax > 0) {
-            total += totalExclusiveTax;
+        // Add tax to total (POS expectation: final total = taxable + tax).
+        if (totalTaxAmount > 0) {
+            total += totalTaxAmount;
         }
     }
 
     window.posState.totalTaxAmount = totalTaxAmount;
 
     // Add tip and delivery fees
-    const tipAmount = parseFloat(window.posState.tipAmount || 0);
+    const showOrderDetail = !!(window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true'));
+    const tipAmount = showOrderDetail ? (parseFloat(window.posState.tipAmount || 0) || 0) : 0;
     const deliveryFee = parseFloat(window.posState.deliveryFee || 0);
+    const currentOrderType = String(window.posState.orderType || '').toLowerCase().replace(/\s+/g, '_');
+    const isDeliveryOrder = currentOrderType === 'delivery';
 
     if (tipAmount > 0) {
         total += tipAmount;
     }
 
-    if (deliveryFee > 0) {
+    if (isDeliveryOrder && deliveryFee > 0) {
         total += deliveryFee;
     }
+
+    if (discountApplyOn === 'total' && discountValue > 0 && discountType) {
+        const preDiscountGrandTotal = Math.max(0, total);
+        if (discountType === 'percent') {
+            window.posState.discountAmount = Math.round((preDiscountGrandTotal * discountValue) / 100 * 100) / 100;
+        } else if (discountType === 'fixed') {
+            window.posState.discountAmount = Math.min(discountValue, preDiscountGrandTotal);
+        }
+
+        total = Math.max(0, preDiscountGrandTotal - window.posState.discountAmount);
+
+        // Reverse taxable base from discounted grand total.
+        if (taxMode === 'order' || taxMode === 'item') {
+            const applicableCharges = (extraCharges || []).filter(function(charge) {
+                return isChargeApplicableForOrderType(charge, currentOrderTypeSlug);
+            });
+            const percentChargeFactor = applicableCharges.reduce(function(sum, charge) {
+                if (charge.charge_type === 'percent') {
+                    return sum + (parseFloat(charge.charge_value || 0) / 100);
+                }
+                return sum;
+            }, 0);
+            const fixedChargeTotal = applicableCharges.reduce(function(sum, charge) {
+                if (charge.charge_type !== 'percent') {
+                    return sum + parseFloat(charge.charge_value || 0);
+                }
+                return sum;
+            }, 0);
+            let totalTaxPercent = (taxes || []).reduce(function(sum, tax) {
+                return sum + (parseFloat(tax.tax_percent || 0) || 0);
+            }, 0);
+            if (!(totalTaxPercent > 0) && taxMode === 'item') {
+                const percentSet = new Set();
+                Object.keys(orderItemTaxDetails || {}).forEach(function(key) {
+                    const detail = orderItemTaxDetails[key] || {};
+                    const p = Number(detail.tax_percent || 0);
+                    if (p > 0) {
+                        percentSet.add(p);
+                    }
+                });
+                totalTaxPercent = Array.from(percentSet).reduce(function(sum, p) {
+                    return sum + p;
+                }, 0);
+            }
+            const fixedTail = (tipAmount > 0 ? tipAmount : 0)
+                + ((isDeliveryOrder && deliveryFee > 0) ? deliveryFee : 0)
+                + fixedChargeTotal;
+            const baseAfterFixed = Math.max(0, total - fixedTail);
+            // Inclusive tax means discounted total is already tax-inclusive.
+            // So reverse taxable base from total WITHOUT adding tax factor to divisor.
+            const taxFactor = isInclusive
+                ? 0
+                : (totalTaxPercent / 100);
+            const divisor = Math.max(0.000001, 1 + percentChargeFactor + taxFactor);
+            const discountedTaxInclusiveAmount = baseAfterFixed / divisor;
+            totalTaxAmount = isInclusive
+                ? (totalTaxPercent > 0 ? ((discountedTaxInclusiveAmount * totalTaxPercent) / (100 + totalTaxPercent)) : 0)
+                : ((totalTaxPercent / 100) * discountedTaxInclusiveAmount);
+            taxBase = isInclusive
+                ? Math.max(0, discountedTaxInclusiveAmount - totalTaxAmount)
+                : discountedTaxInclusiveAmount;
+            discountedTotal = discountedTaxInclusiveAmount;
+            serviceTotal = fixedChargeTotal + (percentChargeFactor * discountedTaxInclusiveAmount);
+            subTotal = Math.max(0, discountedTaxInclusiveAmount + window.posState.discountAmount);
+            window.posState.subTotal = Math.round(subTotal * 100) / 100;
+            window.posState.discountedTotal = Math.round(discountedTotal * 100) / 100;
+            window.posState.taxBase = Math.round(taxBase * 100) / 100;
+            window.posState.totalTaxAmount = Math.round(totalTaxAmount * 100) / 100;
+
+            // Keep item tax rows in sync when item mode is active.
+            if (taxMode === 'item' && subTotal > 0) {
+                const ratio = Math.max(0, Math.min(1, discountedTaxInclusiveAmount / subTotal));
+                for (const key in orderItemTaxDetails) {
+                    const taxDetail = orderItemTaxDetails[key];
+                    if (!taxDetail || typeof taxDetail !== 'object') continue;
+                    taxDetail.tax_amount = Number(taxDetail.tax_amount || 0) * ratio;
+                    if (taxDetail.tax_breakup && typeof taxDetail.tax_breakup === 'object') {
+                        Object.keys(taxDetail.tax_breakup).forEach(function(taxName) {
+                            const entry = taxDetail.tax_breakup[taxName];
+                            if (!entry || typeof entry !== 'object') return;
+                            entry.amount = Number(entry.amount || 0) * ratio;
+                        });
+                    }
+                }
+                window.posState.orderItemTaxDetails = orderItemTaxDetails;
+            }
+        }
+    }
+
 
     // Update state
     window.posState.total = Math.round(total * 100) / 100;
@@ -4055,25 +8720,38 @@ window.calculateTotal = function() {
         window.updateTotalsDisplay();
     }
 
-    updateCustomerDisplayCache();
+    if (window.__posSkipCustomerDisplayUpdateOnce) {
+        window.__posSkipCustomerDisplayUpdateOnce = false;
+    } else {
+        updateCustomerDisplayCache();
+    }
+    window.persistPosDraftCart?.();
 };
 
-// Debounce timer for customer display updates
-let customerDisplayUpdateTimer = null;
+// Debounce timer for customer display updates (SPA-safe across Livewire.navigate swaps)
+window.customerDisplayUpdateTimer = window.customerDisplayUpdateTimer || null;
 
 // Update customer display cache - mirrors Livewire Pos.php calculateTotal() pattern
 // Debounced to reduce server calls while maintaining real-time feel
 function updateCustomerDisplayCache() {
     // Clear existing timer
-    if (customerDisplayUpdateTimer) {
-        clearTimeout(customerDisplayUpdateTimer);
+    if (window.customerDisplayUpdateTimer) {
+        clearTimeout(window.customerDisplayUpdateTimer);
     }
 
     // Debounce: wait 300ms after last change before updating
-    customerDisplayUpdateTimer = setTimeout(function() {
+    window.customerDisplayUpdateTimer = setTimeout(function() {
         sendCustomerDisplayUpdate();
     }, 300);
 }
+
+window.flushCustomerDisplayUpdate = function() {
+    if (window.customerDisplayUpdateTimer) {
+        clearTimeout(window.customerDisplayUpdateTimer);
+        window.customerDisplayUpdateTimer = null;
+    }
+    sendCustomerDisplayUpdate();
+};
 
 function sendCustomerDisplayUpdate() {
     // Prepare items for customer display (matching Livewire getCustomerDisplayItems())
@@ -4115,36 +8793,77 @@ function sendCustomerDisplayUpdate() {
                 price: variation.price
             } : null,
             modifiers: modifiers,
-            notes: window.posState.itemNotes?.[key] || null
+            notes: window.posState.itemNotes?.[key] || null,
+            eu_allergen_keys: (function() {
+                var raw = Array.isArray(item.eu_allergen_keys) ? item.eu_allergen_keys : [];
+                var order = (window.posConfig && window.posConfig.posEuAllergenKeyOrder) || [];
+                if (!order.length) {
+                    return [];
+                }
+                var allowed = {};
+                order.forEach(function(k) {
+                    allowed[k] = true;
+                });
+                return raw.filter(function(k) {
+                    return typeof k === 'string' && allowed[k];
+                });
+            })(),
+            dietary_labels: (function() {
+                var raw = Array.isArray(item.dietary_labels) ? item.dietary_labels : [];
+                var order = (window.posConfig && window.posConfig.posDietaryLabelOrder) || [];
+                if (!order.length) {
+                    return [];
+                }
+                var allowed = {};
+                order.forEach(function(k) {
+                    allowed[k] = true;
+                });
+                return raw.filter(function(k) {
+                    return typeof k === 'string' && allowed[k];
+                });
+            })()
         });
     }
 
     // Prepare taxes for display (matching Livewire pattern)
     const taxes = window.posConfig?.taxes || [];
-    const taxesDisplay = taxes.map(function(tax) {
-        const taxPercent = parseFloat(tax.tax_percent || 0);
-        const taxAmount = (taxPercent / 100) * (window.posState.discountedTotal || 0);
-        return {
-            name: tax.tax_name,
-            percent: taxPercent,
-            amount: taxAmount
-        };
-    });
+    const cartIsEmpty = displayItems.length === 0;
+    const totalDisplayTaxPercent = taxes.reduce(function(sum, tax) {
+        return sum + (parseFloat(tax.tax_percent || 0) || 0);
+    }, 0);
+    const displayTaxBase = cartIsEmpty
+        ? 0
+        : (parseFloat(window.posState.taxBase ?? window.posState.discountedTotal ?? 0) || 0);
+    const taxesDisplay = cartIsEmpty
+        ? []
+        : taxes.map(function(tax) {
+            const taxPercent = parseFloat(tax.tax_percent || 0);
+            const taxAmount = (window.posConfig?.taxInclusive ?? false)
+                ? (totalDisplayTaxPercent > 0 ? ((displayTaxBase * taxPercent) / (100 + totalDisplayTaxPercent)) : 0)
+                : ((taxPercent / 100) * displayTaxBase);
+            return {
+                name: tax.tax_name,
+                percent: taxPercent,
+                amount: taxAmount
+            };
+        });
 
     // Prepare extra charges for display (matching Livewire pattern)
     const extraCharges = window.posConfig?.extraCharges || [];
-    const chargesDisplay = extraCharges.map(function(charge) {
-        let amount = 0;
-        if (charge.charge_type === 'percent') {
-            amount = (parseFloat(charge.charge_value || 0) / 100) * (window.posState.discountedTotal || 0);
-        } else {
-            amount = parseFloat(charge.charge_value || 0);
-        }
-        return {
-            name: charge.charge_name || charge.name,
-            amount: amount
-        };
-    });
+    const chargesDisplay = cartIsEmpty
+        ? []
+        : extraCharges.map(function(charge) {
+            let amount = 0;
+            if (charge.charge_type === 'percent') {
+                amount = (parseFloat(charge.charge_value || 0) / 100) * (window.posState.discountedTotal || 0);
+            } else {
+                amount = parseFloat(charge.charge_value || 0);
+            }
+            return {
+                name: charge.charge_name || charge.name,
+                amount: amount
+            };
+        });
 
     // Call API to update customer display cache (matching Livewire pattern)
     // Uses server Cache + Pusher broadcast for multi-device support
@@ -4178,6 +8897,8 @@ function sendCustomerDisplayUpdate() {
     });
 }
 
+window.sendCustomerDisplayUpdate = sendCustomerDisplayUpdate;
+
 window.updateTotalsDisplay = function() {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
@@ -4185,9 +8906,9 @@ window.updateTotalsDisplay = function() {
     }
 
     // Use posConfig for configuration
-    const currencySymbol = window.posConfig?.currencySymbol || '{{ $restaurant->currency->currency_symbol ?? "$" }}';
-    const currencyCode = window.posConfig?.currencyCode || '{{ $restaurant->currency->currency_code ?? "USD" }}';
-    const taxMode = window.posConfig?.taxMode || '{{ $taxMode ?? "order" }}';
+    const currencySymbol = window.posConfig?.currencySymbol || @json($restaurant->currency->currency_symbol ?? '$');
+    const currencyCode = window.posConfig?.currencyCode || @json($restaurant->currency->currency_code ?? 'USD');
+    const taxMode = window.posConfig?.taxMode || @json($taxMode ?? 'order');
     const isInclusive = window.posConfig?.taxInclusive ?? {{ $restaurant->tax_inclusive ?? 0 ? 'true' : 'false' }};
     const extraCharges = window.posConfig?.extraCharges || [];
     const hasItems = Object.keys(window.posState.orderItemList || {}).length > 0;
@@ -4249,19 +8970,28 @@ window.updateTotalsDisplay = function() {
         }
     }
 
-    // Update/show discount row (hide if loyalty discount is active)
+    // Update/show discount row (hide if loyalty discount is active or rounded discount is 0)
     const loyaltyActive = (window.posState.loyaltyDiscountAmount || 0) > 0;
-    if (!loyaltyActive && window.posState.discountAmount > 0) {
+    const discApplied = typeof window.posOrderDiscountIsApplied === 'function'
+        ? window.posOrderDiscountIsApplied(window.posState.discountAmount)
+        : Number(window.posState.discountAmount || 0) > 0;
+    if (!loyaltyActive && discApplied) {
         let discountTypeText = '';
         if (window.posState.discountType === 'percent') {
             discountTypeText = ` (${window.posState.discountValue}%)`;
         }
         $('#discount-type-display').text(discountTypeText);
         $('#discount-display').text('-' + window.formatCurrency(window.posState.discountAmount));
-        $('#discount-row').show();
+        $('#discount-row').css('display', 'flex');
     } else {
         $('#discount-row').hide();
     }
+
+    const taxableAmount = (window.posState.discountApplyOn === 'total')
+        ? Math.max(0, parseFloat(window.posState.taxBase || 0))
+        : Math.max(0, (parseFloat(window.posState.subTotal || 0) - parseFloat(window.posState.discountAmount || 0)));
+    $('#taxable-amount-display').text(window.formatCurrency(taxableAmount));
+    $('#taxable-amount-row').toggle(hasItems);
 
     // Loyalty discount row (tt parity): show and update when loyalty applied in session
     const $loyaltyRowJs = $('#loyalty-discount-row-js');
@@ -4288,7 +9018,7 @@ window.updateTotalsDisplay = function() {
 
     // Update delivery fee note
     if (window.posState.deliveryFee == 0) {
-        $('#delivery-fee-note').text('(@lang("modules.delivery.freeDelivery"))').show();
+        $('#delivery-fee-note').text('(' + @json(__('modules.delivery.freeDelivery')) + ')').show();
     } else {
         $('#delivery-fee-note').hide();
     }
@@ -4305,14 +9035,48 @@ window.updateTotalsDisplay = function() {
 
     // Update extra charges (handle both Blade-rendered and dynamically loaded)
     // Skip rendering charges for fresh new KOT screen to avoid double-charging in UI.
-    if (!isFreshKotContext && extraCharges && extraCharges.length > 0 && Object.keys(window.posState.orderItemAmount).length > 0) {
+    const currentOrderTypeSlugForDisplay = String(window.posState.orderType || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+    const applicableExtraCharges = (extraCharges || []).filter(function(charge) {
+        const rawTypes = charge?.order_types;
+        let allowedTypes = [];
+        if (Array.isArray(rawTypes)) {
+            allowedTypes = rawTypes;
+        } else if (typeof rawTypes === 'string') {
+            const s = rawTypes.trim();
+            if (s) {
+                try {
+                    const parsed = JSON.parse(s);
+                    allowedTypes = Array.isArray(parsed) ? parsed : s.split(',');
+                } catch (e) {
+                    allowedTypes = s.split(',');
+                }
+            }
+        } else if (rawTypes && typeof rawTypes === 'object') {
+            allowedTypes = Object.values(rawTypes);
+        }
+
+        const normalized = allowedTypes
+            .map(function(v) {
+                return String(v || '').trim().toLowerCase().replace(/\s+/g, '_');
+            })
+            .filter(Boolean);
+
+        return normalized.length === 0
+            ? true
+            : (currentOrderTypeSlugForDisplay && normalized.includes(currentOrderTypeSlugForDisplay));
+    });
+
+    if (!isFreshKotContext && applicableExtraCharges.length > 0 && Object.keys(window.posState.orderItemAmount).length > 0) {
         // Check if charges exist in DOM (Blade rendered) or need to be created (dynamically loaded)
         const existingCharges = $('#extra-charges-container [data-charge-id]').length;
 
         if (existingCharges === 0) {
             // Charges were loaded dynamically - need to build HTML
             let chargesHtml = '';
-            extraCharges.forEach(charge => {
+            applicableExtraCharges.forEach(charge => {
                 let chargeAmount = 0;
                 const chargeValue = parseFloat(charge.charge_value || 0);
 
@@ -4325,7 +9089,7 @@ window.updateTotalsDisplay = function() {
                 const percentText = charge.charge_type === 'percent' ? ` (${chargeValue}%)` : '';
                 const deleteButton = @json(user_can('Update Order'))
                     ? `<span class="text-red-500 hover:scale-110 active:scale-100 cursor-pointer"
-                            onclick="removeExtraCharge(${charge.id}, '{{ $orderType ?? '' }}')">
+                            onclick="removeExtraCharge(${charge.id}, {{ \Illuminate\Support\Js::from($orderType ?? '') }})">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                                 <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1" clip-rule="evenodd"/>
                             </svg>
@@ -4350,7 +9114,7 @@ window.updateTotalsDisplay = function() {
             $('#extra-charges-container').html(chargesHtml).show();
         } else {
             // Charges exist - just update amounts
-            extraCharges.forEach(charge => {
+            applicableExtraCharges.forEach(charge => {
                 let chargeAmount = 0;
                 const chargeValue = parseFloat(charge.charge_value || 0);
 
@@ -4414,14 +9178,33 @@ window.updateTotalsDisplay = function() {
 
     // Update taxes based on tax mode
     if (taxMode === 'order') {
-        // Order-level taxes - rebuild from config
-        const taxes = window.posConfig?.taxes || [];
+        // Order-level taxes - rebuild from config; fallback to DOM rows when config list is empty.
+        let taxes = window.posConfig?.taxes || [];
+        if ((!Array.isArray(taxes) || taxes.length === 0)) {
+            taxes = [];
+            $('#order-taxes-container [data-tax-percent]').each(function() {
+                const $row = $(this);
+                const name = String($row.attr('data-tax-name') || '').trim();
+                const percent = parseFloat($row.attr('data-tax-percent') || 0);
+                if (name && !Number.isNaN(percent)) {
+                    taxes.push({ tax_name: name, tax_percent: percent });
+                }
+            });
+        }
         let orderTaxesHtml = '';
 
         if (taxes && taxes.length > 0) {
+            const totalTaxPercent = taxes.reduce(function(sum, tax) {
+                return sum + (parseFloat(tax.tax_percent || 0) || 0);
+            }, 0);
             for (const tax of taxes) {
                 const taxPercent = parseFloat(tax.tax_percent || 0);
-                const taxAmount = hasItems ? ((taxPercent / 100) * (window.posState.taxBase || window.posState.discountedTotal || 0)) : 0;
+                const taxBase = (window.posState.taxBase || window.posState.discountedTotal || 0);
+                const taxAmount = hasItems
+                    ? (isInclusive
+                        ? (totalTaxPercent > 0 ? ((taxBase * taxPercent) / (100 + totalTaxPercent)) : 0)
+                        : ((taxPercent / 100) * taxBase))
+                    : 0;
 
                 orderTaxesHtml += `
                     <div class="flex justify-between text-gray-500 text-xs dark:text-neutral-400"
@@ -4484,13 +9267,12 @@ window.updateTotalsDisplay = function() {
 
         if (shouldShowTotalTax) {
             const taxInclusiveText = isInclusive
-                ? '@lang("modules.settings.taxInclusive")'
-                : '@lang("modules.settings.taxExclusive")';
+                ? @json(__('modules.settings.taxInclusive'))
+                : @json(__('modules.settings.taxExclusive'));
 
             itemTaxesHtml += `
                 <div class="flex justify-between text-gray-500 text-xs dark:text-neutral-400">
-                    <div>
-                        @lang('modules.order.totalTax')
+                    <div>` + @json(__('modules.order.totalTax')) + `
                         <span class="text-xs text-gray-400">(${taxInclusiveText})</span>
                     </div>
                     <div id="total-tax-display">${window.formatCurrency(window.posState.totalTaxAmount || 0)}</div>
@@ -4501,10 +9283,54 @@ window.updateTotalsDisplay = function() {
         $('#item-taxes-container').html(itemTaxesHtml);
     }
 
+    // Keep aggregate tax display in sync for templates that render this row.
+    $('#total-tax-display').text(window.formatCurrency(window.posState.totalTaxAmount || 0));
+
     // Update total
     $('#total-display').text(window.formatCurrency(window.posState.total || 0));
 
+    (function syncPosMobileCartSummary() {
+        if (typeof jQuery === 'undefined') {
+            return;
+        }
+        var $badge = $('#pos-menu-fab-cart-badge');
+        var n = itemCount;
+        var totalStr = window.formatCurrency(window.posState.total || 0);
+        try {
+            window.dispatchEvent(new CustomEvent('pos-cart-summary-sync', { detail: { count: n } }));
+        } catch (e) { /* ignore */ }
+        if ($('#pos-mobile-cart-summary-text').length) {
+            $('#pos-mobile-cart-summary-text').text(n + ' \u00b7 ' + totalStr);
+        }
+        if ($badge.length) {
+            if (n > 0) {
+                $badge.text(n > 99 ? '99+' : String(n)).removeClass('hidden').addClass('inline-flex');
+            } else {
+                $badge.addClass('hidden').removeClass('inline-flex').text('0');
+            }
+        }
+    })();
+
 };
+
+(function initPosMobileCartSummaryClick() {
+    if (window.__posMobileCartSummaryClickBound) {
+        return;
+    }
+    window.__posMobileCartSummaryClickBound = true;
+    if (typeof jQuery === 'undefined') {
+        return;
+    }
+    $(document).on('click', '#pos-mobile-cart-summary', function () {
+        try {
+            window.dispatchEvent(new CustomEvent('pos-focus-cart'));
+        } catch (e) { /* ignore */ }
+        var el = document.getElementById('order-items-container');
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+})();
 
 @php
     // Use the same formatter settings as `currency_format()` in `app/Helper/start.php`.
@@ -4561,6 +9387,14 @@ window.formatCurrency = function(amount) {
     }
 };
 
+// Match PHP `round($amount, no_of_decimal) > 0` so tiny float noise does not keep the discount row visible.
+window.posOrderDiscountIsApplied = function(amount) {
+    const noOfDecimal = parseInt(@json($no_of_decimal), 10) || 0;
+    const n = Number(amount || 0);
+    const rounded = parseFloat(n.toFixed(noOfDecimal));
+    return rounded > 0;
+};
+
 window.updateOrderItems = function() {
     // Recalculate total and update display
     if (typeof window.calculateTotal === 'function') {
@@ -4571,6 +9405,74 @@ window.updateOrderItems = function() {
         window.updateOrderItemsContainer();
     }
 };
+
+// Refresh taxes from server (online) so new tax settings appear without manual cache clear.
+window.refreshPosTaxesFromServer = function(force = false) {
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        return;
+    }
+    if (!window.__posIsEffectiveOnline()) {
+        return;
+    }
+    if (window.__posTaxRefreshInProgress) {
+        return;
+    }
+
+    const now = Date.now();
+    const refreshGapMs = 60 * 1000; // avoid repeated calls within 1 minute
+    if (!force && window.__posTaxLastRefreshAt && (now - window.__posTaxLastRefreshAt) < refreshGapMs) {
+        return;
+    }
+
+    window.__posTaxRefreshInProgress = true;
+    $.ajax({
+        url: "{{ url('/ajax/pos/taxes') }}",
+        type: "GET",
+        success: function(response) {
+            const incomingTaxes = Array.isArray(response) ? response : [];
+            const normalized = incomingTaxes
+                .map(function(tax) {
+                    return {
+                        id: tax?.id ?? null,
+                        tax_name: tax?.tax_name || tax?.name || '',
+                        tax_percent: parseFloat(tax?.tax_percent ?? tax?.percent ?? 0) || 0
+                    };
+                })
+                .filter(function(tax) {
+                    return !!tax.tax_name;
+                });
+
+            if (!window.posConfig) {
+                window.posConfig = {};
+            }
+            window.posConfig.taxes = normalized;
+            window.__posTaxLastRefreshAt = Date.now();
+
+            if (typeof window.calculateTotal === 'function') {
+                window.calculateTotal();
+            } else if (typeof window.updateTotalsDisplay === 'function') {
+                window.updateTotalsDisplay();
+            }
+        },
+        complete: function() {
+            window.__posTaxRefreshInProgress = false;
+        }
+    });
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        window.refreshPosTaxesFromServer?.();
+    });
+} else {
+    window.refreshPosTaxesFromServer?.();
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', function() {
+        window.refreshPosTaxesFromServer?.(true);
+    });
+}
 
 window.getMenuItemTaxesFromInput = function($input) {
     if (!$input || !$input.length) {
@@ -4635,10 +9537,14 @@ window.addCartItemClientSide = function(menuItemId) {
         return;
     }
 
+    if (window.__multiposBlocksPosInteraction) {
+        return;
+    }
+
     const orderID = window.posState.orderID;
 
     if ((orderID && !window.posState.canUpdateOrder) || (!orderID && !window.posState.canCreateOrder)) {
-        window.showToast('error', '@lang("messages.permissionDenied")');
+        window.showToast('error', @json(__('messages.permissionDenied')));
         return;
     }
 
@@ -4648,17 +9554,20 @@ window.addCartItemClientSide = function(menuItemId) {
         $orderStats = getRestaurantOrderStats(branch()->id);
     @endphp
     @if (!$orderStats['unlimited'] && $orderStats['current_count'] >= $orderStats['order_limit'])
-        window.showToast('error', '@lang("messages.orderLimitReached")');
+        window.showToast('error', @json(__('messages.orderLimitReached')));
         return;
     @endif
 
-    // Prevent adding items to finalized or KOT orders
+    // Prevent adding items to finalized or KOT orders (only when URL is in order-detail mode — avoids stale posState after SPA nav)
     if (orderID && window.posState.orderDetail) {
         const status = window.posState.orderDetail.status;
         if (['billed', 'paid', 'payment_due'].includes(status)) {
             return;
         }
-        if (window.posState.showOrderDetail === true && status === 'kot') {
+        const urlParams = new URLSearchParams(window.location.search || '');
+        const urlShowOrderDetail = urlParams.get('show-order-detail') === 'true';
+        const showOd = window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true';
+        if (showOd && urlShowOrderDetail && status === 'kot') {
             window.showNewKotRequiredModal();
             return;
         }
@@ -4671,6 +9580,29 @@ window.addCartItemClientSide = function(menuItemId) {
         return;
     }
 
+    const rawInStock = $input.attr('data-item-in-stock');
+    const isInStock = !(
+        rawInStock === '0' ||
+        rawInStock === 'false' ||
+        rawInStock === false ||
+        rawInStock === 0
+    );
+    if (!isInStock) {
+        window.showToast('error', @json(__('messages.outOfStock')));
+        return;
+    }
+
+    const variationsCountRaw = $input.attr('data-variations-count');
+    const modifiersCountRaw = $input.attr('data-modifiers-count');
+    const parsedVariationsCount = Number.parseInt(
+        variationsCountRaw ?? $input.data('variationsCount') ?? $input.data('variations-count'),
+        10
+    );
+    const parsedModifiersCount = Number.parseInt(
+        modifiersCountRaw ?? $input.data('modifiersCount') ?? $input.data('modifiers-count'),
+        10
+    );
+
     const itemData = {
         id: parseInt($input.data('item-id')),
         name: $input.data('item-name'),
@@ -4678,9 +9610,23 @@ window.addCartItemClientSide = function(menuItemId) {
         price: parseFloat($input.data('item-price')),
         image: $input.data('item-image'),
         taxes: window.getMenuItemTaxesFromInput($input),
-        variationsCount: parseInt($input.data('variations-count')) || 0,
-        modifiersCount: parseInt($input.data('modifiers-count')) || 0
+        variationsCount: Number.isFinite(parsedVariationsCount) ? parsedVariationsCount : 0,
+        modifiersCount: Number.isFinite(parsedModifiersCount) ? parsedModifiersCount : 0
     };
+
+    const euFromInput = typeof window.__posGetEuAllergenKeysFromMenuInput === 'function'
+        ? window.__posGetEuAllergenKeysFromMenuInput($input)
+        : [];
+    if (euFromInput.length) {
+        itemData.eu_allergen_keys = euFromInput;
+    }
+
+    const dietaryFromInput = typeof window.__posGetDietaryLabelsFromMenuInput === 'function'
+        ? window.__posGetDietaryLabelsFromMenuInput($input)
+        : [];
+    if (dietaryFromInput.length) {
+        itemData.dietary_labels = dietaryFromInput;
+    }
 
     // Hard fallback for item-wise tax mode: always pick backend-indexed taxes by menu id.
     if (
@@ -4781,6 +9727,11 @@ window.addCartItemClientSide = function(menuItemId) {
     // Update the UI
     window.updateOrderItemsContainer();
 
+    // Auto-scroll cart to show latest added item.
+    if (typeof window.scrollPosCartToLatest === 'function') {
+        window.scrollPosCartToLatest();
+    }
+
     // Recalculate totals
     if (typeof window.calculateTotal === 'function') {
         window.calculateTotal();
@@ -4815,6 +9766,9 @@ window.updateOrderItemsContainer = function() {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         return;
     }
+    if (typeof window.initPosIconTooltips === 'function') {
+        window.initPosIconTooltips(document);
+    }
 
     // Find ALL item containers that should be populated by JS
     // This includes both kot_items.blade.php and order_items.blade.php containers
@@ -4837,27 +9791,25 @@ window.updateOrderItemsContainer = function() {
         }
     }
 
-    if (!window.posState.orderItemList || Object.keys(window.posState.orderItemList).length === 0) {
+        if (!window.posState.orderItemList || Object.keys(window.posState.orderItemList).length === 0) {
         // Empty cart - clear all containers
         itemsContainers.each(function() {
             const $container = $(this);
             // Only show empty state in the main kot_items container (without data-kot-id)
             if (!$container.attr('data-kot-id')) {
-                $container.html(`
-                    <div class="text-center text-gray-500 dark:text-gray-400 mt-4">
-                        <div class="flex flex-col items-center justify-center">
-                            <svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                            <div class="text-gray-500 dark:text-gray-400 text-base">No items added</div>
-                        </div>
-                    </div>
-                `);
+                $container.html(
+                    typeof window.__posBuildEmptyCartPlaceholderHtml === 'function'
+                        ? window.__posBuildEmptyCartPlaceholderHtml()
+                        : ''
+                );
             } else {
                 // For KOT-specific containers, just clear them
                 $container.empty();
             }
         });
+        if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+            window.__posUpdateRunningOrderBanner();
+        }
         return;
     }
 
@@ -4905,16 +9857,11 @@ window.updateOrderItemsContainer = function() {
             // No items for this container
             if (!kotId) {
                 // Show empty state only in main container
-                $container.html(`
-                    <div class="text-center text-gray-500 dark:text-gray-400 mt-4">
-                        <div class="flex flex-col items-center justify-center">
-                            <svg class="w-12 h-12 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                            <div class="text-gray-500 dark:text-gray-400 text-base">No items added</div>
-                        </div>
-                    </div>
-                `);
+                $container.html(
+                    typeof window.__posBuildEmptyCartPlaceholderHtml === 'function'
+                        ? window.__posBuildEmptyCartPlaceholderHtml()
+                        : ''
+                );
             } else {
                 $container.empty();
             }
@@ -4955,7 +9902,8 @@ window.updateOrderItemsContainer = function() {
 
         // Build HTML for items
         let html = '';
-        itemKeys.forEach(key => {
+        itemKeys.forEach((key, idx) => {
+            const serialNumber = idx + 1;
             const item = window.posState.orderItemList[key];
             const qty = window.posState.orderItemQty[key] || 1;
             const amount = window.posState.orderItemAmount[key] || 0;
@@ -4976,14 +9924,15 @@ window.updateOrderItemsContainer = function() {
             const hasStampDiscount = !isFreeStampItem && stampDiscountAmount > 0.01;
             const cardClasses = isFreeStampItem
                 ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-                : (hasStampDiscount ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-100 dark:border-gray-700');
+                : (hasStampDiscount ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 dark:bg-blue-900/20' : 'border-gray-100 dark:border-gray-700');
 
             html += `
-            <div class="border ${cardClasses} rounded-md p-2 flex flex-col gap-2" data-item-key="${key}">
+            <div class="${cardClasses} flex flex-col gap-1 border-b pb-1 border-gray-200 dark:border-gray-700" data-item-key="${key}">
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center justify-between">
                         <div class="flex flex-col gap-1">
                             <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs font-bold text-gray-800 dark:text-white">${serialNumber}.</span>
                                 <span class="text-gray-900 dark:text-white text-xs">${item.item_name || item.name || 'Item'}</span>
                                 ${isFreeStampItem ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">${freeItemLabel}</span>` : ''}
                                 ${hasStampDiscount ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">${stampDiscountLabel} (-${window.formatCurrency(stampDiscountAmount)})</span>` : ''}
@@ -5027,29 +9976,30 @@ window.updateOrderItemsContainer = function() {
                         </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 justify-between">
+                <div class="flex items-center gap-2 w-full min-h-[2.25rem]">
                     ${
                         isFreeStampItem
-                            ? `<div class="text-xs text-gray-500 dark:text-gray-400">@lang('app.qty') ${qty}</div>`
-                            : `<div class="relative inline-flex items-center max-w-[7rem]">
+                            ? `<div class="text-xs text-gray-500 dark:text-gray-400 shrink-0">${@json(__('app.qty'))} ${qty}</div>`
+                            : `<div class="relative inline-flex items-center max-w-[7rem] shrink-0">
                                     <button type="button" onclick="decreaseQty('${key}')"
-                                        class="bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-md p-3 h-8 relative">
+                                        class="bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-s-md p-2 h-6 relative">
                                         <svg class="w-2 h-2 text-gray-900 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
                                             <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h16" />
                                         </svg>
                                     </button>
                                     <input type="text" value="${qty}"
                                         onchange="updateQtyInput('${key}', this.value)"
-                                        class="min-w-10 bg-white border-x-0 border-gray-300 h-8 text-center text-gray-900 text-sm block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                        class="min-w-10 bg-white border-x-0 border-gray-300 h-6 text-center text-gray-900 text-sm block w-full py-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                                         min="1" oninput="this.value = this.value.replace(/[^0-9]/g, '')" />
                                     <button type="button" onclick="increaseQty('${key}')"
-                                        class="bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-md p-3 h-8 relative">
+                                        class="bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 hover:bg-gray-200 border border-gray-300 rounded-e-md p-2 h-6 relative">
                                         <svg class="w-2 h-2 text-gray-900 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 18">
                                             <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1v16M1 9h16" />
                                         </svg>
                                     </button>
                                </div>`
                     }
+                    <div class="flex flex-1 min-w-0 justify-center items-center gap-2 flex-wrap px-1">
                     <div class="flex-shrink-0">
                         ${note ? `
                             <button type="button" onclick="showItemNote('${key}')"
@@ -5074,9 +10024,12 @@ window.updateOrderItemsContainer = function() {
                             </button>
                         `}
                     </div>
-                    <div>
+                    ${typeof window.__posBuildAllergenIconsHtml === 'function' ? window.__posBuildAllergenIconsHtml(item.eu_allergen_keys, { inActionRow: true }) : ''}
+                    ${typeof window.__posBuildDietaryLabelsHtml === 'function' ? window.__posBuildDietaryLabelsHtml(item.dietary_labels, { inActionRow: true }) : ''}
+                    </div>
+                    <div class="shrink-0">
                         <button type="button" onclick="removeCartItem('${key}')"
-                            class="rounded text-gray-800 dark:text-gray-400 border dark:border-gray-500 hover:bg-gray-200 dark:hover:bg-gray-900/20 p-2 relative">
+                            class="rounded text-gray-800 dark:text-gray-400 border dark:border-gray-500 hover:bg-gray-200 dark:hover:bg-gray-900/20 p-1 relative">
                             <svg class="w-4 h-4 text-gray-700 dark:text-gray-200" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                                 <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1" clip-rule="evenodd" />
                             </svg>
@@ -5084,6 +10037,7 @@ window.updateOrderItemsContainer = function() {
                     </div>
                 </div>
             </div>
+
         `;
         });
 
@@ -5093,6 +10047,10 @@ window.updateOrderItemsContainer = function() {
 
     // Keep runtime free-item truth in sync for subtotal badge logic.
     window.posState.hasFreeStampItems = detectedFreeStampItems;
+
+    if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+        window.__posUpdateRunningOrderBanner();
+    }
 };
 
 // Show item note (placeholder - can be implemented later)
@@ -5243,6 +10201,49 @@ window.updateQtyInput = function(itemKey, newQty) {
 /**
  * Handle delete cart item - routes to appropriate delete function based on item type
  */
+window.__posGetApproxVisibleItemCount = function() {
+    var domRows = document.querySelectorAll('tr[data-order-item-id]');
+    if (domRows && domRows.length) {
+        return domRows.length;
+    }
+    try {
+        return Object.keys((window.posState && window.posState.orderItemList) || {}).length;
+    } catch (e) {
+        return 0;
+    }
+};
+
+window.__posConfirmDeleteItem = function(isLastItem, onConfirm) {
+    var defaultTitle = @json(__('modules.order.deleteOrderItem') . '?');
+    var defaultText = @json(__('modules.order.deleteOrderItemMessage'));
+    var lastItemTitle = @json(__('modules.order.deleteOrder') . '?');
+    var lastItemText = @json('This is the last item. Deleting it will delete this order and you will need to create a new order.');
+    var title = isLastItem ? lastItemTitle : defaultTitle;
+    var text = isLastItem ? lastItemText : defaultText;
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: isLastItem ? 'warning' : 'question',
+            showCancelButton: true,
+            confirmButtonText: @json(__('app.delete')),
+        }).then(function(result) {
+            if (result.isConfirmed && typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        });
+        return;
+    }
+
+    var fallbackText = isLastItem
+        ? @json('This is the last item. Deleting it will delete this order. Continue?')
+        : @json(__('messages.confirmDeleteItem'));
+    if (confirm(fallbackText) && typeof onConfirm === 'function') {
+        onConfirm();
+    }
+};
+
 window.deleteCartItemHandler = function(itemKey) {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
@@ -5256,7 +10257,9 @@ window.deleteCartItemHandler = function(itemKey) {
     const parts = itemKey.split('_');
 
     // Get order ID from posState
-    const orderId = window.posState?.orderID || window.posState?.orderDetail?.id || {{ optional($orderDetail)->id ?? 'null' }};
+    const orderId = typeof window.getCurrentPosOrderId === 'function'
+        ? window.getCurrentPosOrderId()
+        : null;
 
     // Check if it's a draft order item (format: order_item_123)
     if (parts.length >= 3 && parts[0] === 'order' && parts[1] === 'item') {
@@ -5280,7 +10283,7 @@ window.deleteCartItemHandler = function(itemKey) {
         }
 
         const doDelete = function() {
-            $.easyAjax({
+            window.__posRunAjax({
                 url: '/ajax/pos/delete-cart-item',
                 type: 'POST',
                 data: {
@@ -5294,9 +10297,15 @@ window.deleteCartItemHandler = function(itemKey) {
                             window.showToast('success', response.message);
                         }
 
-                        // If order was deleted, redirect
+                        // If order was deleted, same reset as "New order" (no full reload).
                         if (response.order_deleted && response.redirect) {
-                            setTimeout(() => window.location.href = response.redirect, 500);
+                            setTimeout(function() {
+                                if (typeof window.startNewOrder === 'function') {
+                                    window.startNewOrder();
+                                } else {
+                                    window.location.href = response.redirect;
+                                }
+                            }, 500);
                         } else {
                             window.removeItemKeyFromPosState(itemKey);
                             var showOrderDetail = window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true');
@@ -5323,23 +10332,8 @@ window.deleteCartItemHandler = function(itemKey) {
             });
         };
 
-        // Show confirmation dialog
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: @json(__('modules.order.deleteOrderItem') . '?'),
-                text: @json(__('modules.order.deleteOrderItemMessage')),
-                showCancelButton: true,
-                confirmButtonText: '@lang("app.delete")',
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    doDelete();
-                }
-            });
-        } else {
-            if (confirm('@lang("messages.confirmDeleteItem")')) {
-                doDelete();
-            }
-        }
+        var isLastItem = window.__posGetApproxVisibleItemCount() <= 1;
+        window.__posConfirmDeleteItem(isLastItem, doDelete);
         return;
     }
 
@@ -5443,6 +10437,7 @@ window.removeCartItem = function(itemKey) {
         window.updateOrderItemsContainer?.();
         window.calculateTotal?.();
     }
+    window.persistPosDraftCart?.();
 };
 
 // Add item to cart function (kept for backward compatibility)
@@ -5492,9 +10487,17 @@ window.addItemToCart = function(menuItem) {
     // Update the UI
     window.updateOrderItemsContainer();
 
+    // Auto-scroll cart to show latest added item.
+    if (typeof window.scrollPosCartToLatest === 'function') {
+        window.scrollPosCartToLatest();
+    }
+
     // Recalculate totals
     if (typeof window.calculateTotal === 'function') {
         window.calculateTotal();
+    }
+    if (typeof window.playBeep === 'function') {
+        window.playBeep();
     }
     window.autoApplyStampPreviewForItem?.(itemKey);
 
@@ -5519,6 +10522,10 @@ window.addItemToCart = function(menuItem) {
 window.addCartItemToPos = function(menuItemId, variationsCount, modifierGroupsCount) {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
+        return;
+    }
+
+    if (window.__multiposBlocksPosInteraction) {
         return;
     }
 
@@ -5558,17 +10565,43 @@ window.addCartItemToPos = function(menuItemId, variationsCount, modifierGroupsCo
 };
 
 /**
+ * Close the new KOT required modal (defined before showNewKotRequiredModal so inline onclick always works even if script halts later).
+ */
+window.closeNewKotRequiredModal = function() {
+    if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+        $('#newKotRequiredModal').remove();
+    }
+};
+
+/**
+ * Navigate to new KOT page (remove show-order-detail parameter)
+ */
+window.navigateToNewKot = function(url) {
+    window.location.href = url;
+};
+
+/**
  * Show modal when user tries to add item in order detail view
  * Requires creating a new KOT first
  * Includes permission and order limit validation
  */
 window.showNewKotRequiredModal = function() {
 
-    const hasOrderId = window.posState.orderID && window.posState.orderID !== null;
-    const orderStatus = window.posState.orderDetail.status || '';
+    if (window.__multiposBlocksPosInteraction) {
+        return;
+    }
 
-    // Check if order status is 'kot' (cannot add items to KOT status orders)
-    if (hasOrderId && orderStatus === 'kot') {
+    const hasOrderId = window.posState.orderID && window.posState.orderID !== null;
+    const orderStatus = (window.posState.orderDetail && window.posState.orderDetail.status) || '';
+    let urlShowDetail = false;
+    try {
+        urlShowDetail = new URLSearchParams(window.location.search || '').get('show-order-detail') === 'true';
+    } catch (e) {
+        urlShowDetail = false;
+    }
+
+    // Only when URL is in order-detail mode (avoids false positives from stale posState)
+    if (hasOrderId && orderStatus === 'kot' && urlShowDetail) {
         const newKotUrl = window.location.href.replace(/[?&]show-order-detail=true/g, '');
 
         const modalHtml = `
@@ -5608,20 +10641,6 @@ window.showNewKotRequiredModal = function() {
     }
 };
 
-/**
- * Close the new KOT required modal
- */
-window.closeNewKotRequiredModal = function() {
-    $('#newKotRequiredModal').remove();
-};
-
-/**
- * Navigate to new KOT page (remove show-order-detail parameter)
- */
-window.navigateToNewKot = function(url) {
-    window.location.href = url;
-};
-
 // Show variation modal
 window.showVariationModal = function(menuItemId) {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
@@ -5642,6 +10661,9 @@ window.showVariationModal = function(menuItemId) {
             },
             success: function(response) {
                 if (response.success) {
+                    window.posState.pendingVariations = Array.isArray(response.variations)
+                        ? response.variations
+                        : [];
                     // Populate and show variation modal
                     $('#variationModalContent').html(response.html);
                     $('#variationModal').show();
@@ -5653,6 +10675,51 @@ window.showVariationModal = function(menuItemId) {
 
 // Handle variation selection
 window.selectVariation = function(variationId, menuItemId) {
+    const selectedVariationId = Number.parseInt(variationId, 10);
+    const resolveSelectedVariation = function(variationsList) {
+        if (!Array.isArray(variationsList) || !variationsList.length) {
+            return null;
+        }
+        const idAsString = String(variationId);
+        return variationsList.find((v) => {
+            const vidNum = Number.parseInt(v && v.id, 10);
+            if (Number.isFinite(selectedVariationId) && Number.isFinite(vidNum)) {
+                return vidNum === selectedVariationId;
+            }
+            return String(v && v.id) === idAsString;
+        }) || null;
+    };
+
+    const applySelectedVariation = function(variation) {
+        if (!variation) {
+            return;
+        }
+        // Check if item has modifiers
+        const menuItem = window.posState.pendingMenuItem || {};
+        const modifiersCount = menuItem.modifiersCount || 0;
+
+        if (modifiersCount > 0) {
+            // Show modifiers modal with variation
+            window.posState.pendingVariation = {
+                id: Number.parseInt(variation.id, 10) || selectedVariationId || variationId,
+                variation: variation.variation,
+                price: parseFloat(variation.price) || 0
+            };
+            window.closeVariationModal();
+            window.showModifiersModal(menuItemId, Number.parseInt(variation.id, 10) || selectedVariationId || variationId);
+        } else {
+            // Add to cart directly with variation
+            window.addItemWithVariation(menuItemId, variation);
+            window.closeVariationModal();
+        }
+    };
+
+    const cachedVariation = resolveSelectedVariation(window.posState.pendingVariations);
+    if (cachedVariation) {
+        applySelectedVariation(cachedVariation);
+        return;
+    }
+
     // Get variation data from API
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         return;
@@ -5667,43 +10734,222 @@ window.selectVariation = function(variationId, menuItemId) {
         },
         success: function(response) {
             if (response.success && response.variations) {
-                const variation = response.variations.find(v => v.id === variationId);
-                if (variation) {
-                    // Check if item has modifiers
-                    const menuItem = window.posState.pendingMenuItem || {};
-                    const modifiersCount = menuItem.modifiersCount || 0;
-
-                    if (modifiersCount > 0) {
-                        // Show modifiers modal with variation
-                        window.posState.pendingVariation = {
-                            id: variationId,
-                            variation: variation.variation,
-                            price: parseFloat(variation.price) || 0
-                        };
-                        window.closeVariationModal();
-                        window.showModifiersModal(menuItemId, variationId);
-                    } else {
-                        // Add to cart directly with variation
-                        window.addItemWithVariation(menuItemId, variation);
-                        window.closeVariationModal();
-                    }
-                }
+                window.posState.pendingVariations = Array.isArray(response.variations)
+                    ? response.variations
+                    : [];
+                const variation = resolveSelectedVariation(response.variations);
+                applySelectedVariation(variation);
             }
         }
     });
 };
 
-// Show modifiers modal
+window.posEscapeHtmlModifiers = function(s) {
+    if (s === null || s === undefined) {
+        return '';
+    }
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+};
+
+window.resolvePosModifierGroupsFromCatalog = function(modifierCatalog, variationId) {
+    if (!modifierCatalog || typeof modifierCatalog !== 'object') {
+        return [];
+    }
+    const base = Array.isArray(modifierCatalog.base) ? modifierCatalog.base : [];
+    if (!variationId) {
+        return base.slice();
+    }
+    const vid = String(variationId);
+    const extra = modifierCatalog.by_variation && modifierCatalog.by_variation[vid]
+        ? modifierCatalog.by_variation[vid]
+        : (modifierCatalog.by_variation && modifierCatalog.by_variation[variationId]
+            ? modifierCatalog.by_variation[variationId]
+            : []);
+    const extraArr = Array.isArray(extra) ? extra : [];
+    return base.concat(extraArr);
+};
+
+window.mergePosModifierOptionsFromGroups = function(groups) {
+    window.posState.modifierOptions = window.posState.modifierOptions || {};
+    (groups || []).forEach(function(g) {
+        (g.options || []).forEach(function(opt) {
+            window.posState.modifierOptions[String(opt.id)] = {
+                id: opt.id,
+                name: opt.name,
+                price: parseFloat(opt.price) || 0,
+                groupId: g.id
+            };
+        });
+    });
+};
+
+window.buildPosModifiersModalHtml = function(catalogItem, groups, menuItemId, variationId) {
+    const i18n = window.__posModifiersModalI18n || {};
+    const escAttr = typeof window.posEscapeHtmlModifiers === 'function'
+        ? window.posEscapeHtmlModifiers
+        : function(s) {
+            if (s === null || s === undefined) {
+                return '';
+            }
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        };
+    const fmt = typeof window.formatCurrency === 'function'
+        ? window.formatCurrency
+        : function(n) { return String(n); };
+    const hideImg = window.posConfig && window.posConfig.hideMenuItemImageOnPos;
+    const iconBase = (window.__posMenuItemIconBase || '').replace(/\/$/, '');
+    const typeIcon = catalogItem.type && iconBase
+        ? (iconBase + '/' + catalogItem.type + '.svg')
+        : '';
+    let variationLabel = '';
+    if (variationId && window.posState && window.posState.pendingVariation) {
+        const pv = window.posState.pendingVariation;
+        if (String(pv.id) === String(variationId) && pv.variation) {
+            variationLabel = ' <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ms-1">(' + escAttr(pv.variation) + ')</span>';
+        }
+    }
+    const photoUrl = catalogItem.item_photo_url || '';
+    const headerImg = (!hideImg && photoUrl)
+        ? '<img class="w-14 h-14 rounded-lg object-cover shrink-0" src="' + escAttr(photoUrl) + '" alt="">'
+        : '';
+    const typeImg = typeIcon
+        ? '<img src="' + escAttr(typeIcon) + '" class="h-4 mr-2" alt="">'
+        : '';
+
+    let groupsHtml = '';
+    (groups || []).forEach(function(mod) {
+        const gid = mod.id;
+        const req = mod.is_required ? '<span class="text-red-500 text-xs">*</span>' : '';
+        const allowMulti = !!mod.allow_multiple_selection;
+        let rows = '';
+        (mod.options || []).forEach(function(opt) {
+            if (opt.is_available) {
+                const inputClick = allowMulti
+                    ? ' onclick="event.stopPropagation()"'
+                    : ' onclick="event.stopPropagation(); handleSingleSelection(' + gid + ', ' + opt.id + ')"';
+                const priceStr = opt.price ? fmt(parseFloat(opt.price) || 0) : '—';
+                rows +=
+                    '<div role="button" tabindex="0" class="flex items-center gap-2 sm:gap-3 px-2.5 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/60 border-b border-gray-100 dark:border-gray-600/80 last:border-b-0"' +
+                    ' onclick="if (event.target.tagName !== \'INPUT\') { var el = this.querySelector(\'input[value=\\\'" + opt.id + "\\\']\'); if (el) el.click(); }"' +
+                    ' onkeydown="if (event.key===\' \') { event.preventDefault(); var el = this.querySelector(\'input[value=\\\'" + opt.id + "\\\']\'); if (el) el.click(); }">' +
+                    '<span class="min-w-0 flex-1 text-sm text-gray-900 dark:text-white leading-snug">' + escAttr(opt.name) + '</span>' +
+                    '<span class="shrink-0 text-xs sm:text-sm tabular-nums text-gray-600 dark:text-gray-300 w-[4.25rem] sm:w-24 text-right">' + priceStr + '</span>' +
+                    '<span class="shrink-0 w-9 flex justify-end">' +
+                    '<input type="checkbox" name="modifier_group_' + gid + '" value="' + opt.id + '"' +
+                    ' data-modifier-group-id="' + gid + '"' +
+                    ' data-modifier-option-id="' + opt.id + '"' +
+                    ' data-modifier-price="' + (parseFloat(opt.price) || 0) + '"' +
+                    ' data-modifier-name="' + escAttr(opt.name) + '"' +
+                    ' class="modifier-option-checkbox w-4 h-4 rounded border-gray-300 focus:ring-skin-base text-skin-base"' +
+                    inputClick + ' />' +
+                    '</span></div>';
+            } else {
+                rows +=
+                    '<div class="flex items-center gap-2 px-2.5 py-1.5 border-b border-gray-100 dark:border-gray-600/80 last:border-b-0 opacity-75">' +
+                    '<span class="min-w-0 flex-1 text-sm text-gray-700 dark:text-gray-300">' + escAttr(opt.name) + '</span>' +
+                    '<span class="shrink-0 text-xs tabular-nums text-gray-500 w-[4.25rem] sm:w-24 text-right">—</span>' +
+                    '<span class="shrink-0 w-9 flex justify-end"><span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/80 dark:text-red-200">' + escAttr(i18n.notAvailable || '') + '</span></span>' +
+                    '</div>';
+            }
+        });
+        const reqErr = (i18n.requiredGroupTpl || '').split(':name').join(escAttr(mod.name));
+        groupsHtml += '<details open class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-900/40 overflow-hidden" data-modifier-group-id="' + gid + '" data-is-required="' + (mod.is_required ? '1' : '0') + '">' +
+            '<summary class="flex items-start gap-2 cursor-pointer select-none list-none px-3 py-2 bg-gray-100/90 dark:bg-gray-700/80 hover:bg-gray-200/90 dark:hover:bg-gray-600/80 [&::-webkit-details-marker]:hidden">' +
+            '<div class="min-w-0 flex-1 text-left">' +
+            '<div class="text-sm font-semibold text-gray-900 dark:text-white leading-tight">' + escAttr(mod.name) + req + '</div>' +
+            (mod.description ? '<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">' + escAttr(mod.description) + '</div>' : '') +
+            '</div>' +
+            '<svg class="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0 mt-0.5 details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>' +
+            '</summary>' +
+            '<div class="bg-white dark:bg-gray-800">' +
+            '<div class="hidden sm:flex items-center gap-2 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700">' +
+            '<span class="min-w-0 flex-1">' + escAttr(i18n.optionName || '') + '</span>' +
+            '<span class="shrink-0 w-[4.25rem] sm:w-24 text-right">' + escAttr(i18n.setPrice || '') + '</span>' +
+            '<span class="shrink-0 w-9 text-right">' + escAttr(i18n.select || '') + '</span>' +
+            '</div>' +
+            rows +
+            '</div>' +
+            '<div id="required-error-' + gid + '" class="px-2.5 py-1.5 text-red-600 text-xs hidden bg-red-50/50 dark:bg-red-950/20">' + reqErr +             '</div></details>';
+    });
+
+    const catalogAllergenIcons =
+        typeof window.__posBuildAllergenIconsHtml === 'function'
+            ? window.__posBuildAllergenIconsHtml(catalogItem.eu_allergen_keys || [], {})
+            : '';
+    const catalogDietaryIcons =
+        typeof window.__posBuildDietaryLabelsHtml === 'function'
+            ? window.__posBuildDietaryLabelsHtml(catalogItem.dietary_labels || [], {})
+            : '';
+    const catalogMetaIcons =
+        catalogAllergenIcons || catalogDietaryIcons
+            ? '<div class="flex flex-wrap items-center gap-2 mt-1">' +
+                catalogAllergenIcons +
+                catalogDietaryIcons +
+                '</div>'
+            : '';
+
+    const itemHeader =
+        '<div class="shrink-0 flex gap-3 pb-3 mb-1 border-b border-gray-200 dark:border-gray-700">' +
+        headerImg +
+        '<div class="min-w-0 flex-1 flex flex-col justify-center gap-0.5">' +
+        '<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">' +
+        '<span class="inline-flex items-center min-w-0 text-sm font-semibold text-gray-900 dark:text-white">' + typeImg + '<span class="truncate">' + escAttr(catalogItem.item_name || '') + '</span>' + variationLabel + '</span>' +
+        '<span class="text-xs font-semibold tabular-nums text-skin-base dark:text-skin-base shrink-0 sm:ml-auto">' + fmt(parseFloat(catalogItem.price) || 0) + '</span>' +
+        '</div>' +
+        (catalogItem.description ? '<p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-snug">' + escAttr(catalogItem.description) + '</p>' : '') +
+        catalogMetaIcons +
+        '</div></div>';
+
+    return '<div class="flex flex-col h-full min-h-0">' +
+        '<div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-3 pb-2 space-y-2.5">' +
+        itemHeader +
+        groupsHtml +
+        '</div>' +
+        '<div class="shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">' +
+        '<button type="button" onclick="closeModifiersModal()" class="inline-flex justify-center items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700">' + escAttr(i18n.cancel || 'Cancel') + '</button>' +
+        '<button type="button" onclick="saveModifiers(' + menuItemId + ', ' + (variationId ? variationId : 'null') + ')" class="inline-flex justify-center items-center px-4 py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">' + escAttr(i18n.save || 'Save') + '</button>' +
+        '</div></div>';
+};
+
+// Show modifiers modal (client catalog: no extra AJAX; fallback to server HTML for legacy slices)
 window.showModifiersModal = function(menuItemId, variationId) {
     if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
         console.error('jQuery is not loaded');
         return;
     }
-    // Store menu item ID and variation ID for later use
     window.posState.pendingMenuItemId = menuItemId;
     window.posState.pendingVariationId = variationId || null;
 
-    // Load modifiers and show modal
+    const useCatalog = window.__posMenuClientSideCatalog && Array.isArray(window.posMenuClientCatalog);
+    let catalogItem = null;
+    if (useCatalog) {
+        catalogItem = window.posMenuClientCatalog.find(function(it) {
+            return String(it.id) === String(menuItemId);
+        });
+    }
+
+    if (useCatalog && catalogItem) {
+        const mc = catalogItem.modifier_catalog && typeof catalogItem.modifier_catalog === 'object'
+            ? catalogItem.modifier_catalog
+            : { base: [], by_variation: {} };
+        const groups = window.resolvePosModifierGroupsFromCatalog(mc, variationId);
+        if (groups && groups.length > 0) {
+            window.mergePosModifierOptionsFromGroups(groups);
+            const html = window.buildPosModifiersModalHtml(catalogItem, groups, menuItemId, variationId || null);
+            $('#modifiersModalContent').html(html);
+            $('#modifiersModal').show();
+            return;
+        }
+    }
+
     if (typeof $.easyAjax === 'function') {
         $.easyAjax({
             url: "{{ route('ajax.pos.menu-item-modifiers', ['id' => ':id']) }}".replace(':id', menuItemId),
@@ -5715,14 +10961,12 @@ window.showModifiersModal = function(menuItemId, variationId) {
             },
             success: function(response) {
                 if (response.success) {
-                    // Store modifier options data for later use
                     if (response.modifier_options) {
                         window.posState.modifierOptions = window.posState.modifierOptions || {};
-                        Object.keys(response.modifier_options).forEach(optionId => {
+                        Object.keys(response.modifier_options).forEach(function(optionId) {
                             window.posState.modifierOptions[optionId] = response.modifier_options[optionId];
                         });
                     }
-                    // Populate and show modifiers modal
                     $('#modifiersModalContent').html(response.html);
                     $('#modifiersModal').show();
                 }
@@ -5803,6 +11047,20 @@ window.saveModifiers = function(menuItemId, variationId) {
         taxes: window.getMenuItemTaxesFromInput($input)
     };
 
+    const euFromInputModifiers = typeof window.__posGetEuAllergenKeysFromMenuInput === 'function'
+        ? window.__posGetEuAllergenKeysFromMenuInput($input)
+        : [];
+    if (euFromInputModifiers.length) {
+        itemData.eu_allergen_keys = euFromInputModifiers;
+    }
+
+    const dietaryFromInputModifiers = typeof window.__posGetDietaryLabelsFromMenuInput === 'function'
+        ? window.__posGetDietaryLabelsFromMenuInput($input)
+        : [];
+    if (dietaryFromInputModifiers.length) {
+        itemData.dietary_labels = dietaryFromInputModifiers;
+    }
+
     // Add to cart with variation and modifiers
     window.addItemWithVariationAndModifiers(itemData, variationId, selectedModifiers, modifierPrice, modifierOptionsData);
 
@@ -5826,6 +11084,20 @@ window.addItemWithVariation = function(menuItemId, variation) {
         image: $input.data('item-image'),
         taxes: window.getMenuItemTaxesFromInput($input)
     };
+
+    const euFromInputVariation = typeof window.__posGetEuAllergenKeysFromMenuInput === 'function'
+        ? window.__posGetEuAllergenKeysFromMenuInput($input)
+        : [];
+    if (euFromInputVariation.length) {
+        itemData.eu_allergen_keys = euFromInputVariation;
+    }
+
+    const dietaryFromInputVariation = typeof window.__posGetDietaryLabelsFromMenuInput === 'function'
+        ? window.__posGetDietaryLabelsFromMenuInput($input)
+        : [];
+    if (dietaryFromInputVariation.length) {
+        itemData.dietary_labels = dietaryFromInputVariation;
+    }
 
     // Initialize state if needed
     if (!window.posState.orderItemList) {
@@ -5861,6 +11133,11 @@ window.addItemWithVariation = function(menuItemId, variation) {
 
     // Update UI
     window.updateOrderItemsContainer();
+
+    // Auto-scroll cart to show latest added item.
+    if (typeof window.scrollPosCartToLatest === 'function') {
+        window.scrollPosCartToLatest();
+    }
 
     // Recalculate totals
     if (typeof window.calculateTotal === 'function') {
@@ -5959,6 +11236,11 @@ window.addItemWithVariationAndModifiers = function(itemData, variationId, modifi
     // Update UI
     window.updateOrderItemsContainer();
 
+    // Auto-scroll cart to show latest added item.
+    if (typeof window.scrollPosCartToLatest === 'function') {
+        window.scrollPosCartToLatest();
+    }
+
     // Recalculate totals
     if (typeof window.calculateTotal === 'function') {
         window.calculateTotal();
@@ -6005,13 +11287,13 @@ window.confirmDifferentCustomer = function() {
 };
 
 window.showTableChangeConfirmationModal = function() {
+    // Open table modal client-side only (no request on open).
+    if (typeof window.openTableChangeConfirmation === 'function') {
+        window.openTableChangeConfirmation();
+        return;
+    }
     if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
         $('#tableChangeModal').show();
-
-        // Refresh the SetTable component data
-        if (typeof Livewire !== 'undefined') {
-            Livewire.dispatch('refreshSetTableComponent');
-        }
     }
 };
 
@@ -6027,20 +11309,7 @@ window.closeTableChangeConfirmationModal = function() {
 
 // cancelTableChange / confirmTableChange are defined below with full behavior (avoid duplicate stubs).
 
-// Listen for Livewire order type selection event
 if (typeof Livewire !== 'undefined') {
-    // Listen for setOrderTypeChoice event
-    Livewire.on('setOrderTypeChoice', (event) => {
-        const orderTypeId = event.orderTypeId || event[0]?.orderTypeId;
-        const orderTypeSlug = event.orderTypeSlug || event[0]?.orderTypeSlug;
-        const deliveryPlatform = event.deliveryPlatform || event[0]?.deliveryPlatform || null;
-
-        if (orderTypeId && orderTypeSlug) {
-            redirectToPOS(orderTypeId, orderTypeSlug, deliveryPlatform);
-        }
-    });
-
-    // Wait for Livewire to initialize
     document.addEventListener('livewire:initialized', () => {
         // Listen for the setTable event from Livewire SetTable component
         Livewire.on('setTable', (event) => {
@@ -6060,6 +11329,13 @@ if (typeof Livewire !== 'undefined') {
             if (event && event.table) {
                 window.posState.tableId = event.table.id;
                 window.posState.tableNo = event.table.table_code;
+                if (event.table.seating_capacity != null && event.table.seating_capacity !== '') {
+                    const sc = parseInt(event.table.seating_capacity, 10);
+                    window.posState.tableSeatingCapacity = (!Number.isNaN(sc) && sc > 0) ? sc : null;
+                }
+                if (typeof window.__posClampPaxToTableCapacity === 'function') {
+                    window.__posClampPaxToTableCapacity({ silent: false });
+                }
 
                 // Update the UI without full reload
                 if (typeof updateTableDisplay === 'function') {
@@ -6076,15 +11352,34 @@ if (typeof Livewire !== 'undefined') {
             console.log('Table selected:', tableId, tableCode);
         });
 
-        // Close order detail modal
-         const component = Livewire.all().find(c => c.name === 'order.order-detail');
-        if (!component) return;
-
-        let wasOpen = component.$wire.showOrderDetail;
-        component.$wire.$watch('showOrderDetail', (isOpen) => {
-            if (wasOpen && !isOpen) window.location.reload();
-            wasOpen = isOpen;
-        });
+        // Order detail slide-over closed: do not full-reload the POS (backdrop / close felt broken).
+        // Sync JS state and drop ?show-order-detail=true from the URL when present so totals / KOT
+        // context match the address bar without tearing down the whole page.
+        const orderDetailLw = Livewire.all().find((c) => c.name === 'order.order-detail');
+        if (orderDetailLw) {
+            let wasOrderDetailOpen = !!orderDetailLw.$wire.showOrderDetail;
+            orderDetailLw.$wire.$watch('showOrderDetail', (isOpen) => {
+                if (wasOrderDetailOpen && !isOpen) {
+                    if (window.posState) {
+                        window.posState.showOrderDetail = false;
+                    }
+                    try {
+                        const href = window.location.href;
+                        if (!/[?&]show-order-detail=true(?:&|$)/.test(href)) {
+                            wasOrderDetailOpen = !!isOpen;
+                            return;
+                        }
+                        const next = new URL(href);
+                        next.searchParams.delete('show-order-detail');
+                        const nextUrl = next.pathname + (next.search || '') + next.hash;
+                        window.history.replaceState(window.history.state || {}, document.title, nextUrl);
+                    } catch (e) {
+                        console.warn('Could not strip show-order-detail from URL', e);
+                    }
+                }
+                wasOrderDetailOpen = !!isOpen;
+            });
+        }
     });
 }
 
@@ -6101,6 +11396,26 @@ function saveTableSelectionViaAPI(table) {
     const orderId = typeof window.getCurrentPosOrderId === 'function'
         ? window.getCurrentPosOrderId()
         : (window.posState?.orderID || window.posState?.orderDetail?.id || null);
+
+    // New order (no server order id yet): persist selected table only in local state.
+    if (!orderId) {
+        window.posState.tableId = table.id;
+        window.posState.tableNo = table.table_code;
+        if (table.seating_capacity != null && table.seating_capacity !== '') {
+            const sc = parseInt(table.seating_capacity, 10);
+            window.posState.tableSeatingCapacity = (!Number.isNaN(sc) && sc > 0) ? sc : null;
+        }
+        const rs = parseInt(table.seats_left, 10);
+        window.posState.tableRemainingSeats = !Number.isNaN(rs) && rs >= 0 ? rs : null;
+        if (typeof updateTableDisplay === 'function') {
+            updateTableDisplay(table);
+        }
+        if (typeof window.__posClampPaxToTableCapacity === 'function') {
+            window.__posClampPaxToTableCapacity({ silent: false });
+        }
+        window.closeTableChangeModal();
+        return;
+    }
 
     // Show loading state
     const $modal = $('#tableChangeModal');
@@ -6120,6 +11435,12 @@ function saveTableSelectionViaAPI(table) {
                 // Update posState
                 window.posState.tableId = table.id;
                 window.posState.tableNo = table.table_code;
+                if (table.seating_capacity != null && table.seating_capacity !== '') {
+                    const sc = parseInt(table.seating_capacity, 10);
+                    window.posState.tableSeatingCapacity = (!Number.isNaN(sc) && sc > 0) ? sc : null;
+                }
+                const rs = parseInt(table.seats_left, 10);
+                window.posState.tableRemainingSeats = !Number.isNaN(rs) && rs >= 0 ? rs : null;
                 if (orderId && !window.posState.orderID) {
                     window.posState.orderID = orderId;
                 }
@@ -6129,16 +11450,13 @@ function saveTableSelectionViaAPI(table) {
                     updateTableDisplay(table);
                 }
 
+                if (typeof window.__posClampPaxToTableCapacity === 'function') {
+                    window.__posClampPaxToTableCapacity({ silent: false });
+                }
+
                 // Close the modal
                 window.closeTableChangeModal();
 
-                // Show success message
-                window.showToast('success', response.message || @json(__('messages.tableLocked', ['table' => ''])));
-
-                // Refresh the SetTable component to update lock status
-                if (typeof Livewire !== 'undefined') {
-                    Livewire.dispatch('refreshSetTableComponent');
-                }
             }
         },
         error: function(xhr) {
@@ -6236,7 +11554,7 @@ window.showMergeTableModal = function() {
                                 });
                             }
 
-                            orderInfo = `${itemCount} @lang('modules.menu.items')`;
+                            orderInfo = `${itemCount} ${@json(__('modules.menu.items'))}`;
                         }
 
                         const statusClass = isCurrentTable ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : '';
@@ -6260,7 +11578,7 @@ window.showMergeTableModal = function() {
                                         <div class="flex-1">
                                             <div class="font-semibold text-gray-900 dark:text-white select-none">
                                                 ${table.table_code}
-                                                ${isCurrentTable ? '<span class="text-xs text-blue-600 dark:text-blue-400 ml-2">(@lang("modules.order.currentTable"))</span>' : ''}
+                                                ${isCurrentTable ? '<span class="text-xs text-blue-600 dark:text-blue-400 ml-2">(' + @json(__('modules.order.currentTable')) + ')</span>' : ''}
                                             </div>
                                             ${orderInfo ? `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${orderInfo}</div>` : ''}
                                         </div>
@@ -6278,7 +11596,7 @@ window.showMergeTableModal = function() {
                             </div>
                             <div id="selectedTablesCount" class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800" style="display: none;">
                                 <p class="text-sm text-blue-700 dark:text-blue-300">
-                                    <strong id="selectedCount">0</strong> @lang('modules.order.tablesSelectedForMerge')
+                                    <strong id="selectedCount">0</strong> ` + @json(__('modules.order.tablesSelectedForMerge')) + `
                                 </p>
                             </div>
                         </div>
@@ -6385,7 +11703,7 @@ window.mergeSelectedTables = function() {
         success: function(response) {
             if (response.success) {
                 window.closeMergeTableModal();
-                window.showToast('success', response.message || '@lang("modules.order.tablesmergedSuccessfully")');
+                window.showToast('success', response.message || @json(__('modules.order.tablesmergedSuccessfully')));
                 const shouldReload = response?.data?.reload_required === true;
                 if (shouldReload) {
                     // Merge payload is stored in session and consumed on next page load.
@@ -6412,13 +11730,8 @@ window.mergeSelectedTables = function() {
 
 // Ensure table modal always loads data when opened from POS
 window.showTableModal = function() {
-    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
-        return;
-    }
-    $('#tableModal').show();
-    // Load available tables content
-    if (typeof loadAvailableTables === 'function') {
-        loadAvailableTables();
+    if (typeof window.openTableChangeConfirmation === 'function') {
+        window.openTableChangeConfirmation();
     }
 };
 
@@ -6443,7 +11756,7 @@ window.updatePickupTime = function(value) {
 window.confirmCancelOrder = function() {
     const orderID = window.posState ? window.posState.orderID : null;
     if (!orderID) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
 
@@ -6452,29 +11765,21 @@ window.confirmCancelOrder = function() {
         return;
     }
 
-    // You can show a modal to get cancel reason here
-    // For now, just confirm and cancel
-    if (confirm('@lang("modules.order.cancelOrderMessage")')) {
-        $.easyAjax({
-            url: "{{ route('ajax.pos.cancel-order', ['id' => '__ORDER_ID__']) }}".replace('__ORDER_ID__', orderID),
-            type: "POST",
-            data: {
-                cancel_reason_text: 'Cancelled from POS',
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                if (response.success) {
-                    window.location.href = "{{ route('pos.index') }}";
-                }
-            }
-        });
+    if (typeof window.showCancelOrderModal === 'function') {
+        window.showCancelOrderModal();
+        return;
+    }
+
+    // Fallback only if modal handler is unavailable.
+    if (confirm(@json(__('modules.order.cancelOrderMessage')))) {
+        window.cancelOrder();
     }
 };
 
 window.confirmDeleteOrder = function() {
     const orderID = window.posState ? window.posState.orderID : null;
     if (!orderID) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
 
@@ -6483,8 +11788,8 @@ window.confirmDeleteOrder = function() {
         return;
     }
 
-    if (confirm(@json(__('modules.order.deleteOrderMessage')))) {
-        $.easyAjax({
+    const doDelete = function() {
+        window.__posRunAjax({
             url: "{{ route('ajax.pos.delete-order', ['id' => '__ORDER_ID__']) }}".replace('__ORDER_ID__', orderID),
             type: "DELETE",
             data: {
@@ -6492,10 +11797,34 @@ window.confirmDeleteOrder = function() {
             },
             success: function(response) {
                 if (response.success) {
-                    window.location.href = "{{ route('pos.index') }}";
+                    // Same SPA reset as the "New order" button (no full page reload).
+                    if (typeof window.startNewOrder === 'function') {
+                        window.startNewOrder();
+                    } else {
+                        window.location.href = "{{ route('pos.index') }}";
+                    }
                 }
             }
         });
+    };
+
+    if (typeof window.openPosSimpleConfirm === 'function') {
+        window.openPosSimpleConfirm(@json(__('modules.order.deleteOrderMessage')), doDelete);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: @json(__('modules.order.deleteOrder') . '?'),
+            text: @json(__('modules.order.deleteOrderMessage')),
+            showCancelButton: true,
+            confirmButtonText: @json(__('app.delete')),
+            cancelButtonText: @json(__('app.cancel')),
+            icon: 'warning',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                doDelete();
+            }
+        });
+    } else if (confirm(@json(__('modules.order.deleteOrderMessage')))) {
+        doDelete();
     }
 };
 
@@ -6511,13 +11840,13 @@ function updateOrderStatusUI(newStatus) {
     let statuses;
     switch (orderType) {
         case 'delivery':
-            statuses = ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered'];
+            statuses = ['placed', 'confirmed', 'preparing', 'food_ready', 'picked_up', 'out_for_delivery', 'reached_destination', 'delivered', 'completed'];
             break;
         case 'pickup':
-            statuses = ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered'];
+            statuses = ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'delivered', 'completed'];
             break;
         default:
-            statuses = ['placed', 'confirmed', 'preparing', 'food_ready', 'served'];
+            statuses = ['placed', 'confirmed', 'preparing', 'food_ready', 'served', 'completed'];
     }
 
     const currentIndex = statuses.indexOf(newStatus);
@@ -6706,7 +12035,7 @@ window.deleteOrderItem = function(itemId, itemKey = null) {
     }
 
     const doDelete = function() {
-        $.easyAjax({
+        window.__posRunAjax({
             url: `/ajax/pos/orders/${orderId}/items/${itemId}`,
             type: 'DELETE',
             data: {
@@ -6726,34 +12055,52 @@ window.deleteOrderItem = function(itemId, itemKey = null) {
                         showToast('success', response.message);
                     }
 
-                    // If order was deleted, redirect
+                    // If order was deleted, same reset as "New order" (no full reload).
                     if (response.redirect) {
-                        window.location.href = response.redirect;
+                        if (typeof window.startNewOrder === 'function') {
+                            window.startNewOrder();
+                        } else {
+                            window.location.href = response.redirect;
+                        }
                         return;
                     }
-                    // Order detail view: update UI without reload
-                    var showOrderDetail = window.posState && (window.posState.showOrderDetail === true || window.posState.showOrderDetail === 'true');
-                    if (showOrderDetail && response.order) {
-                        var row = document.querySelector('tr[data-order-item-id="' + itemId + '"]');
-                        if (row) row.remove();
+                    // Always remove visible row immediately when present for live UI feedback.
+                    var row = document.querySelector('tr[data-order-item-id="' + itemId + '"]');
+                    if (row) {
+                        row.remove();
+                    }
+
+                    // Keep local state in sync for both detail and KOT cart panels.
+                    if (itemKey) {
+                        window.removeItemKeyFromPosState(itemKey);
+                    } else {
+                        window.removeOrderItemFromPosStateById(itemId);
+                    }
+
+                    if (typeof window.calculateTotal === 'function') {
+                        window.calculateTotal();
+                    }
+                    if (typeof window.updateOrderItemsContainer === 'function') {
+                        window.updateOrderItemsContainer();
+                    }
+
+                    if (response.order) {
                         var countEl = document.getElementById('order-detail-items-count');
-                        if (countEl && response.order.items_count !== undefined) countEl.textContent = response.order.items_count;
+                        if (countEl && response.order.items_count !== undefined) {
+                            countEl.textContent = response.order.items_count;
+                        }
                         if (typeof window.updateOrderDetailTotalsFromResponse === 'function') {
                             window.updateOrderDetailTotalsFromResponse(response.order, null);
                         }
-                    } else {
-                        if (itemKey) {
-                            window.removeItemKeyFromPosState(itemKey);
-                        } else {
-                            window.removeOrderItemFromPosStateById(itemId);
+                        if (window.posState) {
+                            window.posState.orderDetail = response.order;
+                            window.posState.orderID = response.order.id || orderId;
+                            if (response.order.status && ['billed', 'paid', 'payment_due'].includes(response.order.status)) {
+                                window.posState.showOrderDetail = false;
+                            }
                         }
-
-                        if (typeof window.calculateTotal === 'function') {
-                            window.calculateTotal();
-                        }
-                        if (typeof window.updateOrderItemsContainer === 'function') {
-                            window.updateOrderItemsContainer();
-                        }
+                    } else if (typeof window.refreshOrderPanelsFromServer === 'function' && /\/pos\/kot\/\d+/.test((window.location && window.location.pathname) ? window.location.pathname : '')) {
+                        window.refreshOrderPanelsFromServer({ url: window.location.href });
                     }
                 }
             },
@@ -6764,24 +12111,8 @@ window.deleteOrderItem = function(itemId, itemKey = null) {
         });
     };
 
-    if (typeof Swal !== 'undefined') {
-
-        Swal.fire({
-            title: @json(__('modules.order.deleteOrderItem') . '?'),
-            text: @json(__('modules.order.deleteOrderItemMessage')),
-            showCancelButton: true,
-            confirmButtonText: @json(__('app.delete')),
-        }).then((result) => {
-            if (result.isConfirmed) {
-                doDelete();
-            }
-        });
-    } else {
-        // Fallback to native confirm
-        if (confirm('@lang("messages.confirmDeleteItem")')) {
-            doDelete();
-        }
-    }
+    const isLastItem = window.__posGetApproxVisibleItemCount() <= 1;
+    window.__posConfirmDeleteItem(isLastItem, doDelete);
 };
 
 // ============================
@@ -6792,9 +12123,13 @@ window.deleteOrderItem = function(itemId, itemKey = null) {
  * Open table change confirmation modal
  */
 window.openTableChangeConfirmation = function() {
-    $('#tableModal').show();
-    // Load available tables
-    loadAvailableTables();
+    if (window.Livewire && typeof window.Livewire.dispatch === 'function') {
+        window.Livewire.dispatch('refreshSetTableComponent');
+    }
+    if (typeof jQuery === 'undefined' || typeof $ === 'undefined') {
+        return;
+    }
+    $('#tableChangeModal').show();
 };
 
 /**
@@ -6817,22 +12152,34 @@ function renderTablesModal(tables) {
     let html = '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">';
 
     tables.forEach(table => {
-        const isOccupied = table.status === 'occupied';
+        const seatCap = Number(table.seating_capacity || 0);
+        const occupiedPax = Number(table.occupied_pax || 0);
+        const seatsLeft = seatCap > 0 ? Math.max(seatCap - occupiedPax, 0) : null;
+        const isBlocked = seatCap > 0 ? seatsLeft <= 0 : !!table.is_seat_blocked;
         const isCurrentTable = window.posState.tableId === table.id;
+        const tableStatusLabel = isCurrentTable
+            ? 'Current'
+            : (isBlocked ? 'Full' : ((table.available_status || 'available').toString().replace('_', ' ')));
+        const seatsMeta = seatCap > 0
+            ? `Remaining: ${seatsLeft} / ${seatCap}`
+            : 'Remaining: --';
 
         html += `
             <button type="button"
-                onclick="selectTable(${table.id}, '${table.table_code}')"
+                onclick="selectTable(${table.id}, ${JSON.stringify(table.table_code)}, ${table.seating_capacity != null ? Number(table.seating_capacity) : 'null'}, ${seatsLeft != null ? Number(seatsLeft) : 'null'})"
                 class="p-4 border-2 rounded-lg transition-all ${
                     isCurrentTable ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
-                    isOccupied ? 'border-red-300 bg-red-50 dark:bg-red-900/20 cursor-not-allowed opacity-60' :
+                    isBlocked ? 'border-red-300 bg-red-50 dark:bg-red-900/20 cursor-not-allowed opacity-60' :
                     'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
                 }"
-                ${isOccupied && !isCurrentTable ? 'disabled' : ''}>
+                ${isBlocked && !isCurrentTable ? 'disabled' : ''}>
                 <div class="text-center">
                     <div class="font-semibold text-lg">${table.table_code}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        ${isCurrentTable ? 'Current' : isOccupied ? 'Occupied' : 'Available'}
+                        ${tableStatusLabel}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        ${seatsMeta}
                     </div>
                 </div>
             </button>
@@ -6850,20 +12197,25 @@ function renderTablesModal(tables) {
 }
 
 /**
- * Select a table
+ * Select a table (optional seating_capacity from /ajax/pos/tables)
  */
-window.selectTable = function(tableId, tableCode) {
+window.selectTable = function(tableId, tableCode, seatingCapacity, seatsLeft) {
     // Check if this is a different table
     if (window.posState.tableId && window.posState.tableId !== tableId) {
         // Show confirmation modal
-        window.posState.pendingTable = { id: tableId, code: tableCode };
+        window.posState.pendingTable = {
+            id: tableId,
+            code: tableCode,
+            seating_capacity: seatingCapacity != null ? seatingCapacity : null,
+            seats_left: seatsLeft != null ? seatsLeft : null
+        };
         $('#pendingTableNo').text(tableCode);
         $('#currentTableNo').text(window.posState.tableNo || '--');
         closeTableModal();
         $('#showTableChangeConfirmationModal').show();
     } else {
         // Set the table directly
-        setTableForOrder(tableId, tableCode);
+        setTableForOrder(tableId, tableCode, seatingCapacity, seatsLeft);
         closeTableModal();
     }
 };
@@ -6871,7 +12223,26 @@ window.selectTable = function(tableId, tableCode) {
 /**
  * Set table for order
  */
-function setTableForOrder(tableId, tableCode) {
+function setTableForOrder(tableId, tableCode, seatingCapacity, seatsLeft) {
+    function applyTableSeatingCapacityFromArg(cap) {
+        if (cap === undefined || cap === null || cap === 'null' || cap === '') {
+            return;
+        }
+        const c = parseInt(cap, 10);
+        window.posState.tableSeatingCapacity = (!Number.isNaN(c) && c > 0) ? c : null;
+    }
+    function applyTableRemainingSeatsFromArg(remainingSeats) {
+        if (remainingSeats === undefined || remainingSeats === null || remainingSeats === 'null' || remainingSeats === '') {
+            window.posState.tableRemainingSeats = null;
+            return;
+        }
+        const r = parseInt(remainingSeats, 10);
+        window.posState.tableRemainingSeats = (!Number.isNaN(r) && r >= 0) ? r : null;
+    }
+
+    applyTableSeatingCapacityFromArg(seatingCapacity);
+    applyTableRemainingSeatsFromArg(seatsLeft);
+
     const orderId = typeof window.getCurrentPosOrderId === 'function'
         ? window.getCurrentPosOrderId()
         : (window.posState.orderID || window.posState.orderDetail?.id || null);
@@ -6880,6 +12251,9 @@ function setTableForOrder(tableId, tableCode) {
         // For new orders, just update the state
         window.posState.tableId = tableId;
         window.posState.tableNo = tableCode;
+        if (typeof window.__posClampPaxToTableCapacity === 'function') {
+            window.__posClampPaxToTableCapacity({ silent: false });
+        }
         closeTableModal();
         return;
     }
@@ -6902,6 +12276,9 @@ function setTableForOrder(tableId, tableCode) {
                 window.posState.tableNo = tableCode;
                 if (typeof updateTableDisplay === 'function') {
                     updateTableDisplay({ id: tableId, table_code: tableCode });
+                }
+                if (typeof window.__posClampPaxToTableCapacity === 'function') {
+                    window.__posClampPaxToTableCapacity({ silent: false });
                 }
             }
         },
@@ -6930,7 +12307,8 @@ window.cancelTableChange = function() {
  */
 window.confirmTableChange = function() {
     if (window.posState.pendingTable) {
-        setTableForOrder(window.posState.pendingTable.id, window.posState.pendingTable.code);
+        const pt = window.posState.pendingTable;
+        setTableForOrder(pt.id, pt.code, pt.seating_capacity, pt.seats_left);
         if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
             $('#showTableChangeConfirmationModal').hide();
         }
@@ -6966,7 +12344,7 @@ window.cancelOrder = function() {
     const cancelReasonText = $('#cancelReasonText').val();
 
     if (!orderId) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
 
@@ -7016,7 +12394,7 @@ window.printOrder = function(orderId, triggerButton = null) {
     }
     const id = orderId || (window.posState && window.posState.orderID) || null;
     if (!id) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
     window.__posPrintOrderInProgress = true;
@@ -7049,6 +12427,17 @@ window.printOrder = function(orderId, triggerButton = null) {
     setTimeout(releasePrintButton, 900);
 };
 
+if (typeof Livewire !== 'undefined' && typeof Livewire.on === 'function') {
+    Livewire.on('posPaymentCompletedPrint', (payload) => {
+        const data = Array.isArray(payload) ? payload[0] : payload;
+        const orderId = data?.id ?? null;
+        if (!orderId || typeof window.printOrder !== 'function') {
+            return;
+        }
+        setTimeout(() => window.printOrder(orderId), 120);
+    });
+}
+
 /**
  * Print KOT via AJAX (PosAjaxController::ajaxPrintKot). Pass kotId or uses currentKotId / last KOT on order.
  */
@@ -7065,7 +12454,7 @@ window.printKot = function(kotId) {
         }
     }
     if (!id) {
-        alert('@lang("modules.order.orderNotFound")');
+        alert(@json(__('modules.order.orderNotFound')));
         return;
     }
     const orderIdForPrint = window.posState && window.posState.orderID ? parseInt(window.posState.orderID, 10) : 0;
@@ -7077,7 +12466,9 @@ window.printKot = function(kotId) {
         window.ajaxPrintKotById(id);
         return;
     }
-    const orderId = window.posState.orderID || {{ optional($orderDetail)->id ?? 'null' }};
+    const orderId = typeof window.getCurrentPosOrderId === 'function'
+        ? window.getCurrentPosOrderId()
+        : null;
     const printUrl = '/pos/kot/' + (orderId || '');
     if (typeof window.printLocation === 'function') {
         window.printLocation(printUrl);
@@ -7104,11 +12495,466 @@ window.newKot = function() {
     try {
         window.posState.orderID = {{ $orderDetail->id }};
         window.posState.orderDetail = JSON.parse({!! json_encode(json_encode($orderDetail)) !!});
+        window.posState.orderStatus = @json($orderDetail->order_status->value);
         window.posState.orderStatus = '{{ $orderDetail->order_status->value }}';
+
+        // Persist Hotel room-service stay selection across "See order" / order detail view.
+        // This prevents Bill failing validation after navigating to order detail.
+        try {
+            const od = window.posState.orderDetail || {};
+            const ctxType = (od.context_type || '').toString();
+            const ctxId = parseInt(od.context_id || 0, 10);
+            if (ctxType === 'HOTEL_ROOM' && ctxId > 0) {
+                window.posState.selectedStayId = ctxId;
+                window.posState.selectedStayRoomNumber = od.context_room_number || window.posState.selectedStayRoomNumber || null;
+                window.posState.selectedStayNumber = od.context_stay_number || window.posState.selectedStayNumber || null;
+                window.posState.billTo = od.bill_to || window.posState.billTo || 'POST_TO_ROOM';
+
+                // Update small summary UI (if present) used by Hotel room-service selector.
+                if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                    if (od.context_room_number) {
+                        $('#ajax-room-stay-summary-room').text(od.context_room_number);
+                    }
+                    if (od.context_stay_number) {
+                        $('#ajax-room-stay-summary-stay').text(od.context_stay_number).removeClass('hidden');
+                    }
+                    if (typeof window.syncPosRoomServiceBillToSelect === 'function') {
+                        window.syncPosRoomServiceBillToSelect();
+                    }
+                    if (typeof window.syncSelectedHotelStaySummaryFromState === 'function') {
+                        window.syncSelectedHotelStaySummaryFromState();
+                    }
+                }
+            }
+        } catch (e2) {
+            // no-op
+        }
     } catch (e) {
         console.error('Error initializing order detail:', e);
     }
 @endif
+
+@php
+    $posOfflineInitLabels = [
+        'statusOffline' => __('messages.posOfflineStatusOffline'),
+        'statusSyncing' => __('messages.posOfflineStatusSyncing'),
+        'badgeTitleOnline' => __('messages.posOfflineBadgeTitleOnline'),
+        'badgeTitleOffline' => __('messages.posOfflineBadgeTitleOffline'),
+        'modalTitleOnline' => __('messages.posOfflineModalTitleOnline'),
+        'modalTitleOffline' => __('messages.posOfflineModalTitleOffline'),
+        'modalSubtitleOnlineTpl' => __('messages.posOfflineModalSubtitleOnline'),
+        'modalSubtitleOfflineTpl' => __('messages.posOfflineModalSubtitleOffline'),
+        'modalClose' => __('messages.posOfflineModalClose'),
+        'footerOnline' => __('messages.posOfflineFooterOnline'),
+        'footerOffline' => __('messages.posOfflineFooterOffline'),
+        'noPending' => __('messages.posOfflineNoPending'),
+        'orderNumberPrefix' => __('messages.posOfflineOrderLabel'),
+        'customerLabel' => __('messages.posOfflineCustomer'),
+        'tableLabel' => __('messages.posOfflineTable'),
+        'tableIdTpl' => __('messages.posOfflineTableId'),
+        'itemsLabel' => __('messages.posOfflineItems'),
+        'subtotalLabel' => __('messages.posOfflineSubtotal'),
+        'discountLabel' => __('messages.posOfflineDiscount'),
+        'totalLabel' => __('messages.posOfflineTotal'),
+        'actionsLabel' => __('messages.posOfflineActions'),
+        'itemCountTpl' => __('messages.posOfflineItemCount'),
+        'sessionExpired' => __('messages.posOfflineSessionExpired'),
+        'navGuardTitle' => __('messages.posOfflineNavGuardTitle'),
+        'navGuardBody' => __('messages.posOfflineNavGuardBody'),
+        'navGuardStay' => __('messages.posOfflineNavGuardStay'),
+        'navGuardLeave' => __('messages.posOfflineNavGuardLeave'),
+        'reloadBody' => __('messages.posOfflineReloadBody'),
+        'reloadProceed' => __('messages.posOfflineReloadProceed'),
+        'printKot' => __('messages.posOfflinePrintKot'),
+        'printBill' => __('messages.posOfflinePrintBill'),
+        'addNewKot' => __('modules.order.newKot'),
+        'newKotUnavailable' => __('messages.orderNotFound'),
+        'offlineOrderLoaded' => 'Offline order loaded. You can add a new KOT now.',
+        'printReceiptsLabel' => __('messages.posOfflinePrintReceiptsLabel'),
+        'offlinePaymentPending' => __('modules.order.payment'),
+        'offlinePaymentMethodLabel' => __('modules.order.method'),
+        'offlinePaymentDueLabel' => __('modules.order.dueAmount'),
+        'offlinePaymentTenderedLabel' => __('modules.order.amountPaid'),
+        'offlinePaymentChangeLabel' => __('modules.order.change'),
+        'payNowQueue' => __('messages.posOfflinePayNowQueue'),
+        'offlinePayHint' => __('messages.posOfflinePayHint'),
+        'offlinePaymentAttachedSection' => __('messages.posOfflinePaymentAttachedSection'),
+        'offlineQueuedPaymentTitle' => __('messages.posOfflineQueuedPaymentTitle'),
+        'offlineOrphanPaymentNote' => __('messages.posOfflineOrphanPaymentNote'),
+        'orderTypeMap' => [
+            'dine_in' => __('modules.order.dine_in'),
+            'delivery' => __('modules.order.delivery'),
+            'pickup' => __('modules.order.pickup'),
+            'room_service' => __('modules.order.room_service'),
+        ],
+    ];
+@endphp
+
+window.__posOfflineSyncToast = @json(__('messages.posOfflineSyncComplete'));
+window.addEventListener('load', function() {
+    if (window.PosOffline && typeof window.PosOffline.init === 'function') {
+        window.PosOffline.init({
+            saveOrderUrl: @json(route('ajax.pos.save-order')),
+            syncPaymentUrl: @json(route('ajax.pos.sync-offline-payment')),
+            currencyCode: (window.posConfig && window.posConfig.currencyCode) || 'USD',
+            currencySymbol: (window.posConfig && window.posConfig.currencySymbol) || '$',
+            navGuardLeaveUrl: @json(route('dashboard')),
+            labels: @json($posOfflineInitLabels),
+        });
+    }
+
+    window.__updatePosClearCacheButtonVisibility = function() {
+        var btn = document.getElementById('pos-clear-cache-btn');
+        if (!btn) {
+            return;
+        }
+        var online = true;
+        if (typeof window.__posIsEffectiveOnline === 'function') {
+            online = !!window.__posIsEffectiveOnline();
+        } else if (typeof navigator !== 'undefined') {
+            online = navigator.onLine !== false;
+        }
+        if (online) {
+            btn.classList.remove('hidden');
+        } else {
+            btn.classList.add('hidden');
+        }
+    };
+
+    var clearCacheBtn = document.getElementById('pos-clear-cache-btn');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', function() {
+            var proceed = function() {
+                var clearLocalPosCache = function() {
+                    try {
+                        // Keep server-backed order detail/cart view intact (e.g. /pos/kot/:id?show-order-detail=true).
+                        // Only clear in-memory cart state for fresh client-side carts.
+                        var hasServerBackedOrderView = !!(
+                            window.posState &&
+                            window.posState.orderID &&
+                            (window.posState.showOrderDetail || window.posState.orderDetail)
+                        );
+                        if (!hasServerBackedOrderView) {
+                            window.__clearPosCartStateNow?.();
+                        }
+                        for (var i = window.localStorage.length - 1; i >= 0; i--) {
+                            var k = window.localStorage.key(i);
+                            if (!k) continue;
+                            if (k.indexOf('pos_draft_cart_v1_') === 0 || k === 'pos_draft_cart_v1_1') {
+                                window.localStorage.removeItem(k);
+                            }
+                        }
+                        window.localStorage.clear();
+                    } catch (e) {
+                        // ignore
+                    }
+
+                    // Refetch POS data without full page reload.
+                    if (typeof window.syncPosTaxRevisionCache === 'function') {
+                        window.syncPosTaxRevisionCache();
+                    }
+                    if (typeof window.refreshPosTaxesFromServer === 'function') {
+                        window.refreshPosTaxesFromServer(true);
+                    }
+                    if (window.__posMenuClientSideCatalog && typeof window.reloadPosMenuCatalog === 'function') {
+                        window.reloadPosMenuCatalog();
+                    } else if (typeof window.loadMenuItems === 'function') {
+                        window.loadMenuItems();
+                    }
+                    if (typeof window.updateCategoryCounts === 'function') {
+                        window.updateCategoryCounts();
+                    }
+                    if (window.PosOffline && typeof window.PosOffline.refreshUI === 'function') {
+                        window.PosOffline.refreshUI();
+                    }
+                };
+
+                $.easyAjax({
+                    url: "{{ route('ajax.pos.clear-cache') }}",
+                    type: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function() {
+                        clearLocalPosCache();
+                    },
+                    error: function() {
+                        // Even if server cache clear fails, still clear local cache so user can continue.
+                        clearLocalPosCache();
+                    }
+                });
+            };
+            if (typeof window.openPosSimpleConfirm === 'function') {
+                window.openPosSimpleConfirm(@json(__('messages.posClearCacheConfirm')), proceed, { anchorEl: clearCacheBtn });
+            } else if (window.confirm(@json(__('messages.posClearCacheConfirm')))) {
+                proceed();
+            }
+        });
+    }
+    window.__updatePosClearCacheButtonVisibility();
+    window.addEventListener('online', window.__updatePosClearCacheButtonVisibility);
+    window.addEventListener('offline', window.__updatePosClearCacheButtonVisibility);
+    window.addEventListener('posOfflineRender', window.__updatePosClearCacheButtonVisibility);
+
+    window.__posUpdateOfflineTestToolbar = function() {
+        var tb = document.getElementById('pos-offline-test-toggle');
+        if (!tb) {
+            return;
+        }
+        var realOff = typeof navigator !== 'undefined' && navigator.onLine === false;
+        if (realOff) {
+            tb.disabled = true;
+            tb.textContent = @json(__('messages.posOfflineDebugBrowserOffline'));
+            tb.setAttribute('aria-pressed', 'false');
+            return;
+        }
+        tb.disabled = false;
+        if (window.__posForceOfflineTest) {
+            tb.textContent = @json(__('messages.posOfflineDebugUseNetwork'));
+            tb.setAttribute('aria-pressed', 'true');
+        } else {
+            tb.textContent = @json(__('messages.posOfflineDebugSimulate'));
+            tb.setAttribute('aria-pressed', 'false');
+        }
+    };
+    window.addEventListener('posOfflineRender', window.__posUpdateOfflineTestToolbar);
+    window.addEventListener('online', window.__posUpdateOfflineTestToolbar);
+    window.addEventListener('offline', window.__posUpdateOfflineTestToolbar);
+
+    window.addEventListener('posOfflineRender', function() {
+        if (typeof window.__posCachePlannedOrderSequence === 'function') {
+            window.__posCachePlannedOrderSequence();
+        }
+        if (typeof window.__posSyncNewCartOrderNumberAheadOfOfflineQueue === 'function') {
+            window.__posSyncNewCartOrderNumberAheadOfOfflineQueue();
+        }
+        if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+            window.__posUpdateRunningOrderBanner();
+        }
+    });
+
+    if (typeof window.__posCachePlannedOrderSequence === 'function') {
+        window.__posCachePlannedOrderSequence();
+    }
+    if (typeof window.__posSyncNewCartOrderNumberAheadOfOfflineQueue === 'function') {
+        window.__posSyncNewCartOrderNumberAheadOfOfflineQueue();
+    }
+    if (typeof window.__posUpdateRunningOrderBanner === 'function') {
+        window.__posUpdateRunningOrderBanner();
+    }
+
+    window.__initPosOfflineTestToolbarDrag = function() {
+        var toolbar = document.getElementById('pos-offline-test-toolbar');
+        var handle = document.getElementById('pos-offline-test-drag');
+        if (!toolbar || !handle) {
+            return;
+        }
+        if (toolbar.dataset.dragInit === '1') {
+            return;
+        }
+        toolbar.dataset.dragInit = '1';
+
+        var key = 'pos_offline_test_toolbar_pos_v1';
+        var clamp = function(v, min, max) {
+            return Math.max(min, Math.min(max, v));
+        };
+        var applyPosition = function(x, y) {
+            var pad = 6;
+            var maxX = Math.max(pad, window.innerWidth - toolbar.offsetWidth - pad);
+            var maxY = Math.max(pad, window.innerHeight - toolbar.offsetHeight - pad);
+            var left = clamp(Number(x) || pad, pad, maxX);
+            var top = clamp(Number(y) || pad, pad, maxY);
+            toolbar.style.left = left + 'px';
+            toolbar.style.top = top + 'px';
+            toolbar.style.right = 'auto';
+            toolbar.style.bottom = 'auto';
+            try {
+                window.localStorage.setItem(key, JSON.stringify({ left: left, top: top }));
+            } catch (e) {
+                // ignore
+            }
+        };
+        var applyMobileDefaultPosition = function() {
+            if (window.innerWidth >= 1024) {
+                return;
+            }
+            toolbar.style.left = '8px';
+            toolbar.style.top = 'auto';
+            toolbar.style.bottom = '5.25rem';
+            toolbar.style.right = 'auto';
+        };
+        var restorePosition = function() {
+            try {
+                var raw = window.localStorage.getItem(key);
+                if (!raw) {
+                    applyMobileDefaultPosition();
+                    return;
+                }
+                var p = JSON.parse(raw);
+                if (!p || typeof p.left === 'undefined' || typeof p.top === 'undefined') {
+                    applyMobileDefaultPosition();
+                    return;
+                }
+                requestAnimationFrame(function() {
+                    if (window.innerWidth < 1024) {
+                        var midY = window.innerHeight * 0.35;
+                        if (Number(p.top) > midY && Number(p.top) < window.innerHeight * 0.75) {
+                            applyMobileDefaultPosition();
+                            return;
+                        }
+                    }
+                    applyPosition(p.left, p.top);
+                });
+            } catch (e) {
+                applyMobileDefaultPosition();
+            }
+        };
+        restorePosition();
+
+        var dragging = false;
+        var offsetX = 0;
+        var offsetY = 0;
+        var onMove = function(clientX, clientY) {
+            if (!dragging) return;
+            applyPosition(clientX - offsetX, clientY - offsetY);
+        };
+        var stopDrag = function() {
+            dragging = false;
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('touchend', onTouchEnd);
+        };
+        var startDrag = function(clientX, clientY) {
+            var rect = toolbar.getBoundingClientRect();
+            offsetX = clientX - rect.left;
+            offsetY = clientY - rect.top;
+            dragging = true;
+            document.body.style.userSelect = 'none';
+        };
+        var onMouseMove = function(e) { onMove(e.clientX, e.clientY); };
+        var onMouseUp = function() { stopDrag(); };
+        var onTouchMove = function(e) {
+            if (!e.touches || !e.touches[0]) return;
+            onMove(e.touches[0].clientX, e.touches[0].clientY);
+        };
+        var onTouchEnd = function() { stopDrag(); };
+
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            startDrag(e.clientX, e.clientY);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+        handle.addEventListener('touchstart', function(e) {
+            if (!e.touches || !e.touches[0]) return;
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+            window.addEventListener('touchmove', onTouchMove, { passive: true });
+            window.addEventListener('touchend', onTouchEnd);
+        }, { passive: true });
+        window.addEventListener('resize', function() {
+            if (!toolbar.style.left || !toolbar.style.top) return;
+            applyPosition(parseFloat(toolbar.style.left), parseFloat(toolbar.style.top));
+        });
+    };
+
+    window.openPosSimpleConfirm = function(message, onConfirm, options) {
+        options = options || {};
+        var backdrop = document.getElementById('posSimpleConfirmBackdrop');
+        var modal = document.getElementById('posSimpleConfirmModal');
+        var msgEl = document.getElementById('posSimpleConfirmMessage');
+        var cancelBtn = document.getElementById('posSimpleConfirmCancel');
+        var okBtn = document.getElementById('posSimpleConfirmOk');
+        if (!modal || !msgEl || !cancelBtn || !okBtn) {
+            if (window.confirm(message || @json(__('app.confirm'))) && typeof onConfirm === 'function') {
+                onConfirm();
+            }
+            return;
+        }
+
+        msgEl.textContent = message || @json(__('app.confirm'));
+        if (backdrop) {
+            backdrop.classList.remove('hidden');
+        }
+        modal.classList.remove('hidden');
+
+        var positionPopover = function() {
+            var pad = 8;
+            var anchor = options.anchorEl || null;
+            var left = Math.max(pad, Math.floor((window.innerWidth - modal.offsetWidth) / 2));
+            var top = Math.max(pad, Math.floor((window.innerHeight - modal.offsetHeight) / 2));
+            if (anchor && typeof anchor.getBoundingClientRect === 'function') {
+                var r = anchor.getBoundingClientRect();
+                var preferredTop = r.bottom + 8;
+                var fallbackTop = r.top - modal.offsetHeight - 8;
+                top = (preferredTop + modal.offsetHeight <= window.innerHeight - pad)
+                    ? preferredTop
+                    : Math.max(pad, fallbackTop);
+                left = Math.min(
+                    Math.max(pad, r.right - modal.offsetWidth),
+                    Math.max(pad, window.innerWidth - modal.offsetWidth - pad)
+                );
+            }
+            modal.style.left = left + 'px';
+            modal.style.top = top + 'px';
+        };
+        requestAnimationFrame(positionPopover);
+
+        var close = function() {
+            if (backdrop) {
+                backdrop.classList.add('hidden');
+            }
+            modal.classList.add('hidden');
+            okBtn.removeEventListener('click', handleOk);
+            cancelBtn.removeEventListener('click', handleCancel);
+            if (backdrop) {
+                backdrop.removeEventListener('click', handleCancel);
+            }
+            document.removeEventListener('mousedown', handleOutside, true);
+            document.removeEventListener('keydown', handleEsc);
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+        var handleOk = function() {
+            close();
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+        var handleCancel = function() { close(); };
+        var handleOutside = function(e) {
+            if (!modal.contains(e.target)) close();
+        };
+        var handleEsc = function(e) { if (e.key === 'Escape') close(); };
+        var handleResize = function() { positionPopover(); };
+        var handleScroll = function() { positionPopover(); };
+
+        okBtn.addEventListener('click', handleOk);
+        cancelBtn.addEventListener('click', handleCancel);
+        if (backdrop) {
+            backdrop.addEventListener('click', handleCancel);
+        }
+        document.addEventListener('mousedown', handleOutside, true);
+        document.addEventListener('keydown', handleEsc);
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('scroll', handleScroll, true);
+    };
+
+    window.__initPosOfflineTestToolbarDrag();
+    var testBtn = document.getElementById('pos-offline-test-toggle');
+    if (testBtn) {
+        window.__posUpdateOfflineTestToolbar();
+        testBtn.addEventListener('click', function() {
+            if (!window.PosOffline || typeof window.PosOffline.setForceOfflineTest !== 'function') {
+                return;
+            }
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                return;
+            }
+            window.PosOffline.setForceOfflineTest(!window.__posForceOfflineTest);
+            window.__posUpdateOfflineTestToolbar();
+        });
+    }
+});
 
 </script>
 @endpush

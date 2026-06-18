@@ -23,6 +23,11 @@ class Reservation extends BaseModel
         return $this->belongsTo(Table::class);
     }
 
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

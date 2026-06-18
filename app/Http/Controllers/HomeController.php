@@ -195,24 +195,47 @@ class HomeController extends Controller
             ], 422);
         }
 
-        $googleMapApiKey = global_setting()->google_map_api_key;
+        $globalSetting = global_setting();
+        $mapProvider = $globalSetting->map_provider ?? 'google';
 
-        if (blank($googleMapApiKey)) {
-            return response()->json([
-                'status' => false,
-                'code' => 'GOOGLE_MAP_API_KEY_NOT_CONFIGURED',
-                'message' => __('messages.googleMapApiKeyMissingForDelivery'),
-            ], 422);
+        if ($mapProvider === 'google') {
+            $googleMapApiKey = $globalSetting->google_map_api_key;
+            if (blank($googleMapApiKey)) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 'GOOGLE_MAP_API_KEY_NOT_CONFIGURED',
+                    'message' => __('messages.googleMapApiKeyMissingForDelivery'),
+                ], 422);
+            }
         }
+
+        $plugins = ModuleFacade::all(); /* @phpstan-ignore-line */
+        $updateArray = [];
+        $updateArrayEnabled = [];
+
+        foreach ($plugins as $key => $plugin) {
+            $modulePath = $plugin->getPath();
+            $version = trim(File::get($modulePath . '/version.txt'));
+
+            if ($plugin->isEnabled()) {
+                $updateArrayEnabled[$key] = $version;
+            }
+
+            $updateArray[$key] = $version;
+        }
+
 
         return response()->json([
             'status' => true,
             'code' => 'VALIDATION_SUCCESSFUL',
             'message' => __('messages.partnerValidationSuccessful'),
+            'map_provider' => $mapProvider,
+            'module_enabled' => $updateArray,
             'restaurant' => [
                 'name' => global_setting()->name,
                 'theme_hex' => global_setting()->theme_hex,
                 'logo' => global_setting()->logoUrl,
+                'locale' => global_setting()->locale,
             ],
         ], 200);
     }

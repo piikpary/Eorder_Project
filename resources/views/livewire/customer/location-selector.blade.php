@@ -153,6 +153,7 @@
     @script
     <script>
         const MAP_API_KEY = atob('{{ base64_encode($mapApiKey) }}');
+        const MAP_PROVIDER = '{{ $mapProvider ?? 'google' }}';
 
         const STRINGS = {
             deliveryLocation: "@lang('modules.delivery.deliveryLocation')",
@@ -164,20 +165,64 @@
             locationPermissionDenied: "@lang('modules.delivery.locationPermissionDenied')",
         };
 
-        // Load Google Maps JS if not already loaded
-        if (!window.google || !google.maps) {
-            const script = document.createElement('script');
-            script.src = MAP_API_KEY
-                ? `https://maps.googleapis.com/maps/api/js?key=${MAP_API_KEY}&loading=async&libraries=places,geocoding,marker&callback=initDeliveryMap`
-                : `https://maps.googleapis.com/maps/api/js?&loading=async&libraries=places,geocoding,marker&callback=initDeliveryMap`;
-            script.async = true;
-            document.head.appendChild(script);
-        } else {
-            initDeliveryMap();
+        let deliveryMap, deliveryMarker, deliveryCircle;
+        let leafletMap = null, leafletMarker = null, leafletBranchMarker = null, leafletCircle = null;
+        let googleAutocompleteInstance = null;
+        let searchDebounce = null;
+        let mapInitialized = false;
+
+        bootstrapMap();
+
+        function bootstrapMap() {
+            if (MAP_PROVIDER === 'osm') {
+                loadLeafletAssets().then(() => initDeliveryMap());
+                return;
+            }
+
+            loadGoogleMaps().then(() => initDeliveryMap()).catch(() => {
+                loadLeafletAssets().then(() => initDeliveryMap());
+            });
         }
 
-        let deliveryMap, deliveryMarker, deliveryCircle, autocomplete;
-        let mapInitialized = false;
+        function loadGoogleMaps() {
+            return new Promise((resolve, reject) => {
+                if (window.google && google.maps) {
+                    resolve();
+                    return;
+                }
+
+                window.initDeliveryMap = () => resolve();
+                const script = document.createElement('script');
+                script.src = MAP_API_KEY
+                    ? `https://maps.googleapis.com/maps/api/js?key=${MAP_API_KEY}&loading=async&libraries=places,geocoding,marker&callback=initDeliveryMap`
+                    : `https://maps.googleapis.com/maps/api/js?&loading=async&libraries=places,geocoding,marker&callback=initDeliveryMap`;
+                script.async = true;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        function loadLeafletAssets() {
+            return new Promise((resolve) => {
+                if (window.L) {
+                    resolve();
+                    return;
+                }
+
+                if (!document.querySelector('link[data-map-provider="leaflet"]')) {
+                    const leafletCss = document.createElement('link');
+                    leafletCss.rel = 'stylesheet';
+                    leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                    leafletCss.setAttribute('data-map-provider', 'leaflet');
+                    document.head.appendChild(leafletCss);
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                script.onload = () => resolve();
+                document.head.appendChild(script);
+            });
+        }
 
         function initDeliveryMap() {
             Livewire.on('initDeliveryMap', (params) => {
@@ -197,6 +242,11 @@
                 defaultLat = @js($customerLat),
                 defaultLng = @js($customerLng)
             } = params?.[0] || {};
+
+            if (MAP_PROVIDER === 'osm') {
+                setupLeafletMap(branchLat, branchLng, maxKm, defaultLat, defaultLng);
+                return;
+            }
 
             deliveryMap = new google.maps.Map(el, {
                 center: { lat: defaultLat || branchLat, lng: defaultLng || branchLng },
@@ -235,53 +285,44 @@
                 title: STRINGS.shopLocation
             });
 
-            showInfoWindow(deliveryMarker);
-            addAutocomplete();
+            addGoogleAutocomplete(mountSearchInput());
             addMapEvents();
             drawDeliveryRange(branchLat, branchLng, maxKm);
             addCurrentLocationButton();
         }
 
-        function showInfoWindow(marker) {
-            const infoWindow = new google.maps.InfoWindow({
-                content: `
-                    <div class="text-center">
-                        <p class="text-sm font-medium text-gray-800">${STRINGS.deliveryLocation}</p>
-                        <p class="text-xs text-gray-500 mt-1">${STRINGS.dragToAdjust}</p>
-                    </div>`,
-                disableAutoPan: true,
-                pixelOffset: new google.maps.Size(0, -15),
+        function setupLeafletMap(branchLat, branchLng, maxKm, defaultLat, defaultLng) {
+            const centerLat = defaultLat || branchLat;
+            const centerLng = defaultLng || branchLng;
+
+            if (leafletMap) {
+                leafletMap.remove();
+                leafletMap = null;
+            }
+
+            leafletMap = L.map('delivery-map').setView([centerLat, centerLng], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(leafletMap);
+
+            leafletMarker = L.marker([centerLat, centerLng], { draggable: true, title: STRINGS.deliveryLocation }).addTo(leafletMap);
+            leafletBranchMarker = L.marker([branchLat, branchLng], { title: STRINGS.shopLocation }).addTo(leafletMap);
+
+            drawDeliveryRange(branchLat, branchLng, maxKm);
+            addOsmAutocomplete(mountSearchInput());
+            addCurrentLocationButton();
+
+            leafletMarker.on('dragend', async (e) => {
+                const p = e.target.getLatLng();
+                await updateLocation({ lat: p.lat, lng: p.lng }, true);
             });
 
-            // Remove close button when info window loads
-            google.maps.event.addListener(infoWindow, "domready", () => {
-                const closeButton = document.querySelector('.gm-ui-hover-effect');
-                if (closeButton) {
-                    closeButton.remove();
-                }
-            });
-
-            // Show info window by default
-            infoWindow.open(deliveryMap, marker);
-
-            google.maps.event.addListener(marker, 'dragend', () => {
-                infoWindow.open(deliveryMap, marker);
+            leafletMap.on('click', async (e) => {
+                await updateLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, true);
             });
         }
 
         function drawDeliveryRange(lat, lng, maxKm) {
-            deliveryCircle = new google.maps.Circle({
-                map: null,
-                center: { lat, lng },
-                radius: maxKm * 1000,
-                strokeColor: '#4CAF50',
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillColor: '#4CAF50',
-                fillOpacity: 0.1,
-                clickable: false
-            });
-
             const container = document.createElement('div');
             container.className = 'bg-white rounded-lg shadow-md p-1 m-2';
 
@@ -294,12 +335,48 @@
 
             toggle.addEventListener('click', () => {
                 visible = !visible;
-                deliveryCircle.setMap(visible ? deliveryMap : null);
+                if (MAP_PROVIDER === 'osm') {
+                    if (!leafletCircle) {
+                        leafletCircle = L.circle([lat, lng], {
+                            radius: maxKm * 1000,
+                            color: '#4CAF50',
+                            weight: 2,
+                            fillColor: '#4CAF50',
+                            fillOpacity: 0.1
+                        });
+                    }
+                    if (visible) {
+                        leafletCircle.addTo(leafletMap);
+                    } else {
+                        leafletMap.removeLayer(leafletCircle);
+                    }
+                } else {
+                    if (!deliveryCircle) {
+                        deliveryCircle = new google.maps.Circle({
+                            map: null,
+                            center: { lat, lng },
+                            radius: maxKm * 1000,
+                            strokeColor: '#4CAF50',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: '#4CAF50',
+                            fillOpacity: 0.1,
+                            clickable: false
+                        });
+                    }
+                    deliveryCircle.setMap(visible ? deliveryMap : null);
+                }
                 toggle.innerText = visible ? STRINGS.hideRange : STRINGS.showRange;
             });
 
             container.appendChild(toggle);
-            deliveryMap.controls[google.maps.ControlPosition.TOP_RIGHT].push(container);
+            if (MAP_PROVIDER === 'osm' && leafletMap) {
+                const customControl = L.control({ position: 'topright' });
+                customControl.onAdd = () => container;
+                customControl.addTo(leafletMap);
+            } else if (deliveryMap) {
+                deliveryMap.controls[google.maps.ControlPosition.TOP_RIGHT].push(container);
+            }
         }
 
         function addCurrentLocationButton() {
@@ -320,8 +397,7 @@
             navigator.geolocation.getCurrentPosition(
                 ({ coords: { latitude: lat, longitude: lng } }) => {
                 const coords = { lat, lng };
-                updateLocation(coords);
-                reverseGeocode(coords);
+                updateLocation(coords, true);
                 button.innerHTML = defaultSvg;
                 },
                 (error) => {
@@ -332,33 +408,100 @@
             );
             });
 
-            deliveryMap.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(button);
+            if (MAP_PROVIDER === 'osm' && leafletMap) {
+                const customControl = L.control({ position: 'bottomright' });
+                customControl.onAdd = () => button;
+                customControl.addTo(leafletMap);
+            } else if (deliveryMap) {
+                deliveryMap.controls[google.maps.ControlPosition.RIGHT_BOTTOM].push(button);
+            }
         }
 
-        function addAutocomplete() {
-            if (!window.placeAutocomplete) {
-                const locationSearchInput = document.getElementById('location-search');
-
-                window.placeAutocomplete = new google.maps.places.PlaceAutocompleteElement({
-                    inputElement: locationSearchInput,
-                });
-            }
-
+        function mountSearchInput() {
             const card = document.getElementById('place-autocomplete-card');
-            card.appendChild(placeAutocomplete);
+            if (!card) return null;
 
+            card.innerHTML = `
+                <div class="relative">
+                    <input id="location-search-input" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" placeholder="Search address..." autocomplete="off" />
+                    <div id="location-search-results" class="absolute z-[1300] mt-1 hidden w-full rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"></div>
+                </div>`;
+            return document.getElementById('location-search-input');
+        }
 
-            placeAutocomplete.addEventListener('gmp-select', async ({ placePrediction }) => {
-                const place = placePrediction.toPlace();
-                await place.fetchFields({ fields: ['formattedAddress', 'location'] });
-
-                const { location, formattedAddress } = place;
-
+        function addGoogleAutocomplete(inputElement) {
+            if (!inputElement || !window.google || !google.maps) return;
+            googleAutocompleteInstance = new google.maps.places.Autocomplete(inputElement, {
+                fields: ['geometry', 'formatted_address']
+            });
+            googleAutocompleteInstance.addListener('place_changed', () => {
+                const place = googleAutocompleteInstance.getPlace();
+                const location = place?.geometry?.location;
+                const formattedAddress = place?.formatted_address || '';
                 @this.set('selectedAddress', formattedAddress);
+                inputElement.value = formattedAddress;
+                if (location) updateLocation({ lat: location.lat(), lng: location.lng() });
+            });
+        }
 
-                if (location) {
-                    updateLocation(location);
+        function addOsmAutocomplete(inputElement) {
+            if (!inputElement) return;
+            const resultBox = document.getElementById('location-search-results');
+            if (!resultBox) return;
+
+            inputElement.addEventListener('input', (event) => {
+                const query = event.target.value?.trim();
+                clearTimeout(searchDebounce);
+                if (!query || query.length < 3) {
+                    resultBox.classList.add('hidden');
+                    resultBox.innerHTML = '';
+                    return;
                 }
+                searchDebounce = setTimeout(async () => {
+                    const results = await searchOsmAddress(query);
+                    renderOsmResults(results, resultBox, inputElement);
+                }, 400);
+            });
+        }
+
+        async function searchOsmAddress(query) {
+            const encoded = encodeURIComponent(query.replace(/\s+/g, ' ').trim());
+            const center = leafletMap ? leafletMap.getCenter() : null;
+            const latParam = center ? `&lat=${center.lat}` : '';
+            const lonParam = center ? `&lon=${center.lng}` : '';
+            const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=8&countrycodes=in&accept-language=en${latParam}${lonParam}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return [];
+                return await response.json();
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function renderOsmResults(results, resultBox, inputElement) {
+            if (!Array.isArray(results) || results.length === 0) {
+                resultBox.classList.remove('hidden');
+                resultBox.innerHTML = `<div class="px-3 py-2 text-sm text-gray-500 dark:text-gray-300">No locations found.</div>`;
+                return;
+            }
+            resultBox.innerHTML = results.map((item) => `
+                <button type="button" class="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700" data-lat="${item.lat}" data-lng="${item.lon}" data-label="${item.display_name}">
+                    ${item.display_name}
+                </button>
+            `).join('');
+            resultBox.classList.remove('hidden');
+            resultBox.querySelectorAll('button').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const lat = parseFloat(button.dataset.lat);
+                    const lng = parseFloat(button.dataset.lng);
+                    const label = button.dataset.label || '';
+                    inputElement.value = label;
+                    @this.set('selectedAddress', label);
+                    updateLocation({ lat, lng });
+                    resultBox.classList.add('hidden');
+                    resultBox.innerHTML = '';
+                });
             });
         }
 
@@ -375,12 +518,24 @@
             });
         }
 
-        function updateLocation(latLng) {
+        async function updateLocation(latLng, shouldReverseGeocode = false) {
             const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
             const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
 
-            deliveryMarker.position = { lat, lng };
-            deliveryMap.setCenter({ lat, lng });
+            if (MAP_PROVIDER === 'osm' && leafletMap && leafletMarker) {
+                leafletMarker.setLatLng([lat, lng]);
+                leafletMap.setView([lat, lng], leafletMap.getZoom());
+            } else {
+                deliveryMarker.position = { lat, lng };
+                deliveryMap.setCenter({ lat, lng });
+            }
+
+            if (MAP_PROVIDER === 'osm' && shouldReverseGeocode) {
+                const address = await reverseGeocodeOsm(lat, lng);
+                if (address) {
+                    @this.set('selectedAddress', address);
+                }
+            }
 
             Livewire.dispatch('locationSelected', {
                 lat,
@@ -390,12 +545,23 @@
         }
 
         function reverseGeocode(latLng) {
+            if (MAP_PROVIDER === 'osm') return;
             const geocoder = new google.maps.Geocoder();
             geocoder.geocode({ location: latLng }, (results, status) => {
                 if (status === 'OK' && results[0]) {
                     @this.set('selectedAddress', results[0].formatted_address);
                 }
             });
+        }
+
+        async function reverseGeocodeOsm(lat, lng) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+                const data = await response.json();
+                return data?.display_name || null;
+            } catch (error) {
+                return null;
+            }
         }
     </script>
     @endscript

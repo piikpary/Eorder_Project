@@ -3,8 +3,7 @@
 namespace App\Livewire\Forms;
 
 use App\Models\Table;
-use App\Models\User;
-use App\Scopes\BranchScope;
+use App\Services\Tables\TablesIndexCache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
@@ -32,16 +31,7 @@ class AssignWaiterToTableForm extends Component
 
     public function loadWaiters()
     {
-        $this->waiters = cache()->remember('waiters_' . restaurant()->id, 60 * 60 * 24, function () {
-            return User::withoutGlobalScope(BranchScope::class)
-                ->where(function ($q) {
-                    return $q->where('branch_id', branch()->id)
-                        ->orWhereNull('branch_id');
-                })
-                ->role('waiter_' . restaurant()->id)
-                ->where('restaurant_id', restaurant()->id)
-                ->get();
-        });
+        $this->waiters = \App\Services\Pos\PosWaitersCache::remember((int) restaurant()->id, (int) branch()->id);
     }
 
     public function initializeForm()
@@ -133,6 +123,8 @@ class AssignWaiterToTableForm extends Component
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        TablesIndexCache::forgetForBranch((int) branch()->id);
 
         $this->alert('success', __('messages.waiterAssignedSuccessfully'), [
             'toast' => true,

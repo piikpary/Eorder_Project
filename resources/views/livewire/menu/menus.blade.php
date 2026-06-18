@@ -1,19 +1,20 @@
 <div x-data="{ assignTableModalOpen: false }">
-    <div class="p-4 block sm:flex items-center justify-between ">
-        <div class="w-full mb-1">
-            <div class="mb-4">
+    <div class="p-3 sm:p-4 block sm:flex items-center justify-between">
+        <div class="w-full">
+            <div class="mb-2 sm:mb-4">
                 <h1 class="text-base font-semibold text-gray-900 dark:text-white">@lang('modules.menu.allMenus')</h1>
             </div>
-            <div class="items-center justify-between block sm:flex">
-                <div class="flex items-center mb-4 sm:mb-0">
-                    <form class="sm:pr-3" action="#" method="GET">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center">
+                    <form class="w-full sm:pr-3" action="#" method="GET">
                         <label for="products-search" class="sr-only">Search</label>
-                        <div class="relative w-48 mt-1 sm:w-64 xl:w-96">
+                        <div class="relative w-full mt-1 sm:w-64 xl:w-96">
                             <x-input id="menu_name" class="block mt-1 w-full" type="text" placeholder="{{ __('placeholders.searchMenus') }}" wire:model.live.debounce.500ms="search" />
                         </div>
                     </form>
                 </div>
-                <div class="inline-flex gap-x-4 mb-4 sm:mb-0">
+                <div class="inline-flex flex-wrap gap-2 sm:gap-x-4">
+                    <x-menu.copy-to-branches-button scope="menus" class="shrink-0" />
                     <x-secondary-link href="javascript:;" x-on:click.prevent="assignTableModalOpen = true">
                         @lang('modules.menu.assignTableToMenu')
                     </x-secondary-link>
@@ -32,13 +33,13 @@
         </div>
     </div>
 
-    <div class="flex flex-col my-4 px-4">
+    <div class="flex flex-col mt-2 sm:mt-3 px-3 sm:px-4">
         <!-- Card Section -->
-        <div class="flex items-center gap-3 mb-6 overflow-x-auto pb-1">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-5 sm:overflow-x-auto pb-1">
             @forelse ($menus as $item)
             <!-- Card -->
             <div @class([
-                'rounded-xl px-4 py-3 flex items-center gap-3 min-w-[220px] cursor-pointer shrink-0',
+                'rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-3 cursor-pointer w-full sm:min-w-[220px] sm:w-auto sm:shrink-0',
                 'bg-skin-base dark:bg-skin-base text-white' => ($menuId == $item->id),
                 'bg-white text-gray-800 dark:text-gray-200 group-hover:text-skin-base dark:bg-gray-700' => ($menuId != $item->id),
             ]) wire:key='menu-{{ $item->id . microtime() }}' wire:click='showMenuItems({{ $item->id }})'>
@@ -70,7 +71,7 @@
 
         @if ($menuItems)
         <div class="w-full">
-            <div class="my-4 flex items-center gap-4">
+            <div class="my-2 sm:my-4 flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-base font-semibold text-gray-900 dark:text-white">{{ $activeMenu->menu_name }}</h1>
 
                 @if(user_can('Update Menu'))
@@ -257,6 +258,8 @@
             </div>
         </div>
     </div>
+
+    <livewire:menu.copy-menu-to-branches />
 </div>
 
 

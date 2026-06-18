@@ -16,7 +16,10 @@
 
 </div>
 
-@if (!empty(global_setting()->vapid_public_key) && !empty(global_setting()->vapid_private_key))
+@if (
+    (!empty(global_setting()->vapid_public_key) && !empty(global_setting()->vapid_private_key))
+    || (pusherSettings()->beamer_status && !empty(pusherSettings()->instance_id))
+)
     <div id="notification-alert" class="px-4" x-cloak>
         <x-alert type="warning" icon="info-circle">
             <div class="flex items-center gap-2">
@@ -112,54 +115,6 @@
 </div>
 @endif
 
-<div class="grid">
-
-    <div class="p-4">
-
-        <div class="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-            @if (user_can('Show Order'))
-            @livewire('dashboard.todayOrderCount')
-            @endif
-
-            @if (user_can('Show Reports'))
-            @livewire('dashboard.todayEarnings')
-            @endif
-
-            @if (user_can('Show Customer'))
-            @livewire('dashboard.todayCustomerCount')
-            @endif
-
-            @if (user_can('Show Reports'))
-            @livewire('dashboard.averageDailyEarning')
-            @endif
-
-        </div>
-    </div>
-
-    <div class="grid w-full grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 p-4">
-        @if (user_can('Show Reports'))
-        <div class="grid w-full col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 p-5 dark:border-gray-700">
-            @livewire('dashboard.weeklySalesChart')
-        </div>
-        @endif
-
-        @if (user_can('Show Order'))
-        @livewire('dashboard.todayOrderList')
-        @endif
-
-    </div>
-
-    @if (user_can('Show Reports'))
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
-        @livewire('dashboard.todayPaymentMethodEarnings')
-
-        @livewire('dashboard.today-menu-item-earnings')
-
-        @livewire('dashboard.today-table-earnings')
-    </div>
-    @endif
-
-</div>
+@livewire('dashboard.restaurant-dashboard')
 
 @endsection

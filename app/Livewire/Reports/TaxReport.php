@@ -300,6 +300,42 @@ class TaxReport extends Component
     }
 
     /**
+     * Tax mode stored on the order (fallback: restaurant default).
+     */
+    private function resolveOrderTaxMode(Order $order): string
+    {
+        return $order->tax_mode ?? restaurant()->tax_mode ?? 'order';
+    }
+
+    /**
+     * Tax amount and breakdown for reporting: item-level OR order-level, never both.
+     */
+    private function computeOrderTaxForReport(Order $order): array
+    {
+        $orderTaxAmount = 0;
+        $orderTaxBreakdown = [];
+
+        if ($this->resolveOrderTaxMode($order) === 'item') {
+            foreach ($order->items as $item) {
+                $this->processItemTaxes($item, $orderTaxAmount, $orderTaxBreakdown, $order, false);
+            }
+        } else {
+            $this->processOrderTaxes($order, $orderTaxAmount, $orderTaxBreakdown);
+        }
+
+        if ($orderTaxAmount == 0 && isset($order->total_tax_amount) && $order->total_tax_amount > 0) {
+            $orderTaxAmount = (float) $order->total_tax_amount;
+        }
+
+        $orderTaxAmount = round($orderTaxAmount, 2);
+
+        return [
+            'tax_amount' => $orderTaxAmount,
+            'tax_breakdown' => $orderTaxBreakdown,
+        ];
+    }
+
+    /**
      * Get processed order details (cached)
      */
     private function getOrderDetails()
@@ -317,29 +353,12 @@ class TaxReport extends Component
         $orderDetails = [];
 
         foreach ($orders as $order) {
-            $orderTaxAmount = 0;
-            $orderTaxBreakdown = [];
-
-            // Process item-level taxes
-            foreach ($order->items as $item) {
-                $this->processItemTaxes($item, $orderTaxAmount, $orderTaxBreakdown, $order, false);
-            }
-
-            // Process order-level taxes
-            $this->processOrderTaxes($order, $orderTaxAmount, $orderTaxBreakdown);
-
-            // Fallback to total_tax_amount if no tax calculated
-            if ($orderTaxAmount == 0 && isset($order->total_tax_amount) && $order->total_tax_amount > 0) {
-                $orderTaxAmount = $order->total_tax_amount;
-            }
-
-            // Round order tax amount to 2 decimal places
-            $orderTaxAmount = round($orderTaxAmount, 2);
+            $computed = $this->computeOrderTaxForReport($order);
 
             $orderDetails[] = [
                 'order' => $order,
-                'tax_amount' => $orderTaxAmount,
-                'tax_breakdown' => $orderTaxBreakdown,
+                'tax_amount' => $computed['tax_amount'],
+                'tax_breakdown' => $computed['tax_breakdown'],
                 'subtotal' => $order->sub_total ?? 0,
                 'total' => $order->total ?? 0
             ];
@@ -481,6 +500,10 @@ class TaxReport extends Component
         foreach ($orderDetails as $orderDetail) {
             $order = $orderDetail['order'];
 
+            if ($this->resolveOrderTaxMode($order) !== 'item') {
+                continue;
+            }
+
             foreach ($order->items as $item) {
                 if ($item->tax_amount > 0) {
                     $dummyAmount = 0;
@@ -494,6 +517,14 @@ class TaxReport extends Component
         }
 
         return $itemTaxDetails;
+    }
+
+    /**
+     * Calculate total tax from normalized order details.
+     */
+    private function calculateTotalTaxFromOrderDetails(array $orderDetails): float
+    {
+        return round(array_sum(array_column($orderDetails, 'tax_amount')), 2);
     }
 
     public function openDateOrdersModal($date)
@@ -546,29 +577,12 @@ class TaxReport extends Component
         // Process orders using optimized methods
         $this->selectedDateOrders = [];
         foreach ($orders as $order) {
-            $orderTaxAmount = 0;
-            $orderTaxBreakdown = [];
-
-            // Process item-level taxes
-            foreach ($order->items as $item) {
-                $this->processItemTaxes($item, $orderTaxAmount, $orderTaxBreakdown, $order, false);
-            }
-
-            // Process order-level taxes
-            $this->processOrderTaxes($order, $orderTaxAmount, $orderTaxBreakdown);
-
-            // Fallback to total_tax_amount if no tax calculated
-            if ($orderTaxAmount == 0 && isset($order->total_tax_amount) && $order->total_tax_amount > 0) {
-                $orderTaxAmount = $order->total_tax_amount;
-            }
-
-            // Round order tax amount to 2 decimal places
-            $orderTaxAmount = round($orderTaxAmount, 2);
+            $computed = $this->computeOrderTaxForReport($order);
 
             $this->selectedDateOrders[] = [
                 'order' => $order,
-                'tax_amount' => $orderTaxAmount,
-                'tax_breakdown' => $orderTaxBreakdown,
+                'tax_amount' => $computed['tax_amount'],
+                'tax_breakdown' => $computed['tax_breakdown'],
                 'subtotal' => $order->sub_total ?? 0,
                 'total' => $order->total ?? 0
             ];
@@ -634,43 +648,21 @@ class TaxReport extends Component
         // Get item tax details
         $itemTaxDetails = $this->getItemTaxDetailsFromOrderDetails($orderDetails);
 
-        // Calculate overall totals efficiently - sum from breakdown to ensure accuracy
-        $totalTax = 0;
-        foreach ($taxBreakdown as $tax) {
-            $totalTax += $tax['total_amount'];
-        }
-        $totalTax = round($totalTax, 2);
+        // Calculate overall totals from per-order normalized tax values.
+        $totalTax = $this->calculateTotalTaxFromOrderDetails($orderDetails);
         $totalAmount = round(array_sum(array_column($orderDetails, 'total')), 2);
         $totalOrders = count($orderDetails);
         $totalItems = $orders->sum(function($order) {
             return $order->items->sum('quantity');
         });
 
-        // Calculate today's tax summary
-        $todayTaxTotal = 0;
+        // Calculate today's tax summary using the same per-order aggregation method.
+        $todayOrderDetails = [];
         foreach ($todayOrders as $todayOrder) {
-            $orderTax = $todayOrder->items->sum('tax_amount') ?? 0;
-
-            foreach ($todayOrder->taxes as $orderTaxRelation) {
-                $tax = $orderTaxRelation->tax;
-
-                // Skip if tax relationship is missing
-                if (!$tax) {
-                    continue;
-                }
-
-                $subtotal = $todayOrder->sub_total ?? 0;
-                $discountAmount = $todayOrder->discount_amount ?? 0;
-                $taxableAmount = $subtotal - $discountAmount;
-                $orderTax += round(($tax->tax_percent / 100) * $taxableAmount, 2);
-            }
-
-            if ($orderTax == 0 && isset($todayOrder->total_tax_amount) && $todayOrder->total_tax_amount > 0) {
-                $orderTax = $todayOrder->total_tax_amount;
-            }
-
-            $todayTaxTotal = round($todayTaxTotal + $orderTax, 2);
+            $computed = $this->computeOrderTaxForReport($todayOrder);
+            $todayOrderDetails[] = ['tax_amount' => $computed['tax_amount']];
         }
+        $todayTaxTotal = $this->calculateTotalTaxFromOrderDetails($todayOrderDetails);
         $todayOrdersCount = $todayOrders->count();
         $todayRevenue = $todayOrders->sum('total');
 

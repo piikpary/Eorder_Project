@@ -19,7 +19,6 @@ use App\Models\OrderItem;
 use App\Models\OrderType;
 use App\Models\Restaurant;
 use App\Models\OrderCharge;
-use App\Scopes\BranchScope;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Livewire\Attributes\On;
@@ -41,7 +40,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
+use App\Services\OrderWaiterResponseService;
+use App\Services\Pos\PosOrderTypeClientData;
+use App\Services\Pos\PosWaitersCache;
 use App\Services\RestaurantAvailabilityService;
+use App\Support\DietaryLabels;
+use App\Support\EuAnnexIiAllergens;
 
 class Pos extends Component
 {
@@ -318,16 +322,8 @@ class Pos extends Component
             $this->pickupTime = now($this->restaurant->timezone)->format('H:i');
         }
 
-        $this->users = cache()->remember('waiters_' . $this->restaurant->id, 60 * 60 * 24, function () {
-            return User::withoutGlobalScope(BranchScope::class)
-                ->where(function ($q) {
-                    return $q->where('branch_id', branch()->id)
-                        ->orWhereNull('branch_id');
-                })
-                ->role('waiter_' . $this->restaurant->id)
-                ->where('restaurant_id', $this->restaurant->id)
-                ->get();
-        });
+        $this->users = PosWaitersCache::remember((int) $this->restaurant->id, (int) branch()->id);
+        $this->users = PosWaitersCache::forPosActor($this->users, user(), (int) $this->restaurant->id);
 
         $this->taxMode = $this->restaurant->tax_mode;
 
@@ -338,7 +334,7 @@ class Pos extends Component
         $this->selectWaiter = user()->id;
 
         $this->deliveryExecutives = cache()->remember('delivery_executives_' . $this->restaurant->id, 60 * 60 * 24, function () {
-            return DeliveryExecutive::where('status', 'available')->where('is_online', true)->get();
+            return DeliveryExecutive::assignable()->get();
         });
 
         if ($this->tableOrderID) {
@@ -520,8 +516,14 @@ class Pos extends Component
                 }
             }
         }
-    }
 
+        $this->selectWaiter = PosWaitersCache::normalizeWaiterSelection(
+            $this->selectWaiter,
+            user(),
+            (int) $this->restaurant->id,
+            $this->users
+        );
+    }
 
     public function setOrderTypeChoice($value)
     {
@@ -968,6 +970,11 @@ class Pos extends Component
 
         // Recalculate with new settings
         $this->calculateTotal();
+
+        $this->js(
+            'if (window.posState) { window.posState.orderTypeId = null; window.posState.orderTypeSlug = null; window.posState.selectedDeliveryApp = null; }'
+            . ' if (typeof window.showPosOrderTypeModal === "function") { window.showPosOrderTypeModal(); }'
+        );
     }
 
     public function showTableOrder()
@@ -1221,6 +1228,11 @@ class Pos extends Component
 
     public function addCartItems($id, $variationCount, $modifierCount)
     {
+        $this->refreshMultiPosRegistrationState();
+        if ($this->shouldBlockPos) {
+            return;
+        }
+
         if (($this->orderID && !user_can('Update Order')) || (!$this->orderID && !user_can('Create Order'))) {
             return;
         }
@@ -1435,13 +1447,6 @@ class Pos extends Component
             // Sync waiter from table assignment if available
             $this->syncWaiterFromTableAssignment();
 
-            // Show success message
-            $this->alert('success', __('messages.tableLocked', ['table' => $table->table_code]), [
-                'toast' => true,
-                'position' => 'top-end',
-                'timer' => 3000,
-                'showCancelButton' => false,
-            ]);
         }
     }
 
@@ -1504,13 +1509,6 @@ class Pos extends Component
         // Sync waiter from table assignment if available
         $this->syncWaiterFromTableAssignment();
 
-        // Show success message
-        $this->alert('success', __('messages.tableLocked', ['table' => $table->table_code]), [
-            'toast' => true,
-            'position' => 'top-end',
-            'timer' => 3000,
-            'showCancelButton' => false,
-        ]);
     }
 
     public function cancelTableChange()
@@ -2514,6 +2512,7 @@ class Pos extends Component
         $this->total = 0;
         $this->subTotal = 0;
         $this->totalTaxAmount = 0;
+        $this->taxBase = 0;
 
         // If cart is empty and status was billed, reset to idle for new order
         if (empty($this->orderItemList) && $this->customerDisplayStatus === 'billed') {
@@ -2646,25 +2645,31 @@ class Pos extends Component
         $this->total = round($finalTotal, 2);
 
         // Calculate tax and charge amounts for display
-        $taxesForDisplay = $this->taxes->map(function ($tax) {
-            $amount = (($tax->tax_percent / 100) * $this->taxBase);
-            return [
-                'name' => $tax->tax_name,
-                'percent' => $tax->tax_percent,
-                'amount' => $amount,
-            ];
-        })->toArray();
-        $chargesForDisplay = $applicableCharges->map(function ($charge) {
-            return [
-                'name' => $charge->name,
-                'amount' => $charge->getAmount($this->discountedTotal),
-            ];
-        })->toArray();
+        $cartHasItems = ! empty($this->orderItemList);
+        $taxesForDisplay = $cartHasItems
+            ? $this->taxes->map(function ($tax) {
+                $amount = (($tax->tax_percent / 100) * $this->taxBase);
+
+                return [
+                    'name' => $tax->tax_name,
+                    'percent' => $tax->tax_percent,
+                    'amount' => $amount,
+                ];
+            })->toArray()
+            : [];
+        $chargesForDisplay = $cartHasItems
+            ? $applicableCharges->map(function ($charge) {
+                return [
+                    'name' => $charge->name,
+                    'amount' => $charge->getAmount($this->discountedTotal),
+                ];
+            })->toArray()
+            : [];
 
         $paymentGateway = restaurant()->paymentGateways;
         $qrCodeImageUrl = $paymentGateway && $paymentGateway->is_qr_payment_enabled ? $paymentGateway->qr_code_image_url : null;
 
-        $customerDisplayData = [
+        $customerDisplayData = \App\Support\CustomerDisplayPayload::normalize([
             'order_number' => $this->orderNumber,
             'formatted_order_number' => $this->formattedOrderNumber,
             'items' => $this->getCustomerDisplayItems(),
@@ -2679,7 +2684,7 @@ class Pos extends Component
             'status' => $this->customerDisplayStatus ?? 'idle',
             'cash_due' => ($this->customerDisplayStatus ?? null) === 'billed' ? $this->total : null,
             'qr_code_image_url' => $qrCodeImageUrl,
-        ];
+        ]);
 
         $userId = auth()->id();
         $cacheKey = 'customer_display_cart_user_' . $userId;
@@ -2935,6 +2940,24 @@ class Pos extends Component
             $this->noOfPax = (int) $this->noOfPax;
         }
 
+        if ($this->orderType === 'dine_in' && $this->tableId && $this->noOfPax) {
+            $tbl = Table::select('id', 'table_code', 'seating_capacity')->find($this->tableId);
+            if ($tbl) {
+                $cap = (int) ($tbl->seating_capacity ?? 0);
+                if ($cap > 0 && (int) $this->noOfPax > $cap) {
+                    $this->alert('warning', __('messages.paxExceedsTableCapacity', [
+                        'pax' => $this->noOfPax,
+                        'capacity' => $cap,
+                        'table' => $tbl->table_code,
+                    ]), [
+                        'toast' => true,
+                        'position' => 'top-end',
+                    ]);
+                    $this->noOfPax = $cap;
+                }
+            }
+        }
+
         $wasDraft = false;
 
         $rules = [
@@ -3067,8 +3090,7 @@ class Pos extends Component
                 $this->applyStampDiscountToOrderData($orderData);
             }
 
-            // Save user ID when bill action is triggered
-            if ($action === 'bill' && user()) {
+            if (user() && in_array($status, ['kot', 'billed'], true)) {
                 $orderData['added_by'] = user()->id;
             }
 
@@ -3192,8 +3214,7 @@ class Pos extends Component
                 $this->formattedOrderNumber = $orderNumberData['formatted_order_number'];
             }
 
-            // Save user ID when bill action is triggered
-            if ($action === 'bill' && user()) {
+            if (user() && in_array($status, ['kot', 'billed'], true)) {
                 $updateData['added_by'] = user()->id;
             }
 
@@ -4329,6 +4350,11 @@ class Pos extends Component
             $this->deleteMergedTableOrders();
         }
 
+        if ($status === 'kot') {
+            $order->refresh();
+            OrderWaiterResponseService::autoAcceptWhenPlacedByWaiterOnPos($order);
+        }
+
         $this->dispatch('posOrderSuccess');
 
         $this->alert('success', $successMessage, [
@@ -4675,35 +4701,25 @@ class Pos extends Component
             $this->resetLoyaltyRedemption();
         }
         // Save empty cart state to cache for customer display
-        $taxesForDisplay = [];
-        if ($this->taxes) {
-            $taxesForDisplay = $this->taxes->map(function ($tax) {
-                return [
-                    'name' => $tax->tax_name,
-                    'percent' => $tax->tax_percent,
-                    'amount' => 0,
-                ];
-            })->toArray();
-        }
-        $customerDisplayData = [
+        $customerDisplayData = \App\Support\CustomerDisplayPayload::normalize([
             'order_number' => $this->orderNumber,
             'formatted_order_number' => $this->formattedOrderNumber,
             'items' => [],
             'sub_total' => 0,
             'discount' => 0,
             'total' => 0,
-            'taxes' => $taxesForDisplay,
+            'taxes' => [],
             'extra_charges' => [],
             'tip' => 0,
             'delivery_fee' => 0,
             'order_type' => $this->orderType,
             'status' => 'idle',
             'cash_due' => null,
-        ];
+        ]);
 
         $userId = auth()->id();
-        // $cacheKey = 'customer_display_cart_user_' . $userId;
-        // Cache::put($cacheKey, $customerDisplayData, now()->addMinutes(30));
+        $cacheKey = 'customer_display_cart_user_' . $userId;
+        Cache::put($cacheKey, $customerDisplayData, now()->addMinutes(30));
 
         // Broadcast customer display update if Pusher is enabled
         if (pusherSettings()->is_enabled_pusher_broadcast) {
@@ -4722,7 +4738,14 @@ class Pos extends Component
 
     public function showAddDiscount()
     {
-        $orderDetail = Order::find($this->orderID);
+        $resolvedOrderId = $this->orderID ?: ($this->orderDetail->id ?? null);
+        $orderDetail = $resolvedOrderId ? Order::find($resolvedOrderId) : null;
+        if (!$orderDetail) {
+            return;
+        }
+        if (!$this->orderID) {
+            $this->orderID = $orderDetail->id;
+        }
         $this->discountType = $orderDetail->discount_type ?? $this->discountType ?? 'fixed';
         $this->discountValue = $orderDetail->discount_value ?? $this->discountValue ?? null;
         $this->showDiscountModal = true;
@@ -4807,7 +4830,7 @@ class Pos extends Component
     {
         $selectedExecutive = DeliveryExecutive::find($this->selectDeliveryExecutive);
 
-        if (!$selectedExecutive || $selectedExecutive->status !== 'available' || !(bool) $selectedExecutive->is_online) {
+        if (!$selectedExecutive || !$selectedExecutive->isAssignable()) {
             $this->alert('error', __('messages.invalidRequest'), [
                 'toast' => true,
                 'position' => 'top-end',
@@ -5188,6 +5211,64 @@ class Pos extends Component
         }
     }
 
+    /**
+     * Sync MultiPOS device registration flags from the current request (cookie + branch).
+     * Used from render() and before cart mutations so Livewire cannot add items while POS is blocked.
+     */
+    protected function refreshMultiPosRegistrationState(): void
+    {
+        $this->shouldBlockPos = false;
+        $this->hasPosMachine = false;
+        $this->machineStatus = null;
+        $this->posMachine = null;
+        $this->limitReached = false;
+        $this->limitMessage = '';
+
+        $multiPosEnabled = module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules());
+
+        if (!$multiPosEnabled) {
+            return;
+        }
+
+        $cookieName = config('multipos.cookie.name', 'pos_token');
+        $deviceId = request()->cookie($cookieName);
+
+        if ($deviceId) {
+            $this->posMachine = \Modules\MultiPOS\Entities\PosMachine::where('device_id', $deviceId)
+                ->where('branch_id', branch()->id)
+                ->first();
+
+            if ($this->posMachine) {
+                $this->hasPosMachine = true;
+                if (auth()->check()) {
+                    try {
+                        $this->posMachine->activateIfPendingRegisteredByApprover(auth()->user());
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Failed to activate POS machine: ' . $e->getMessage());
+                    }
+                }
+                $this->machineStatus = $this->posMachine->status;
+            }
+        }
+
+        if (!$this->hasPosMachine) {
+            $restaurant = branch()->restaurant;
+            $packageLimit = optional($restaurant->package)->multipos_limit;
+            if (!is_null($packageLimit) && $packageLimit >= 0) {
+                $currentCount = \Modules\MultiPOS\Entities\PosMachine::where('branch_id', branch()->id)
+                    ->whereIn('status', ['active', 'pending'])
+                    ->count();
+
+                if ($currentCount >= $packageLimit) {
+                    $this->limitReached = true;
+                    $this->limitMessage = __('multipos::messages.registration.limit_reached.message', ['limit' => $packageLimit]);
+                }
+            }
+        }
+
+        $this->shouldBlockPos = !$this->hasPosMachine || $this->machineStatus === 'pending' || $this->machineStatus === 'declined';
+    }
+
     public function render()
     {
         // Only generate order number if there is no existing order or table order without active order
@@ -5230,51 +5311,8 @@ class Pos extends Component
             $this->orderTypeId = $orderTypeFirst->id;
         }
 
-        // Check MultiPOS status and determine if POS should be blocked
-        $this->shouldBlockPos = false;
         $this->showRestaurantClosedBanner = false;
-        $this->hasPosMachine = false;
-        $this->machineStatus = null;
-        $this->posMachine = null;
-        $this->limitReached = false;
-        $this->limitMessage = '';
-
-        $multiPosEnabled = module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules());
-
-        if ($multiPosEnabled) {
-            $cookieName = config('multipos.cookie.name', 'pos_token');
-            $deviceId = request()->cookie($cookieName);
-
-            if ($deviceId) {
-                $this->posMachine = \Modules\MultiPOS\Entities\PosMachine::where('device_id', $deviceId)
-                    ->where('branch_id', branch()->id)
-                    ->first();
-
-                if ($this->posMachine) {
-                    $this->hasPosMachine = true;
-                    $this->machineStatus = $this->posMachine->status;
-                }
-            }
-
-            // Check branch-wise limit if no machine registered for this device
-            if (!$this->hasPosMachine) {
-                $restaurant = branch()->restaurant;
-                $packageLimit = optional($restaurant->package)->multipos_limit;
-                if (!is_null($packageLimit) && $packageLimit >= 0) {
-                    $currentCount = \Modules\MultiPOS\Entities\PosMachine::where('branch_id', branch()->id)
-                        ->whereIn('status', ['active', 'pending'])
-                        ->count();
-
-                    if ($currentCount >= $packageLimit) {
-                        $this->limitReached = true;
-                        $this->limitMessage = __('multipos::messages.registration.limit_reached.message', ['limit' => $packageLimit]);
-                    }
-                }
-            }
-
-            // Block POS if no machine, pending, or declined
-            $this->shouldBlockPos = !$this->hasPosMachine || $this->machineStatus === 'pending' || $this->machineStatus === 'declined';
-        }
+        $this->refreshMultiPosRegistrationState();
 
         $availability = RestaurantAvailabilityService::getAvailability($this->restaurant, branch());
         if (!($availability['is_open'] ?? true)) {
@@ -5282,7 +5320,22 @@ class Pos extends Component
             $this->showRestaurantClosedBanner = true;
         }
 
-        return view('livewire.pos.pos');
+        $branch = branch();
+        $deliveryPlatforms = Cache::remember(
+            'delivery_platforms_' . $this->restaurant->id,
+            60 * 60 * 24,
+            fn () => DeliveryPlatform::where('is_active', true)->orderBy('name')->get()
+        );
+
+        return view('livewire.pos.pos', array_merge(
+            PosOrderTypeClientData::buildModalScriptPayload(
+                (int) $branch->id,
+                $branch,
+                $this->orderTypes,
+                $deliveryPlatforms
+            ),
+            ['modalDeliveryPlatforms' => $deliveryPlatforms]
+        ));
     }
 
     // Update item notes and save to database if applicable
@@ -5432,6 +5485,9 @@ class Pos extends Component
     // Add a helper to format items for customer display
     private function getCustomerDisplayItems()
     {
+        $selectableEu = restaurant()->selectableEuAllergenKeys();
+        $euEnabled = $selectableEu !== [];
+
         $items = [];
         foreach ($this->orderItemList as $key => $item) {
             // Set price context before using prices
@@ -5463,6 +5519,24 @@ class Pos extends Component
                 }
             }
             $totalUnitPrice = $basePrice + $modifierTotal;
+
+            $euAllergenKeys = [];
+            if ($euEnabled) {
+                $stored = is_object($item) && isset($item->eu_allergen_keys)
+                    ? (array) $item->eu_allergen_keys
+                    : (array) ($item['eu_allergen_keys'] ?? []);
+                $euAllergenKeys = array_values(array_unique(array_intersect(
+                    EuAnnexIiAllergens::keys(),
+                    $selectableEu,
+                    array_filter($stored, 'is_string')
+                )));
+            }
+
+            $storedDietary = is_object($item) && isset($item->dietary_labels)
+                ? (array) $item->dietary_labels
+                : (array) ($item['dietary_labels'] ?? []);
+            $dietaryLabels = DietaryLabels::normalize($storedDietary);
+
             $items[] = [
                 'name' => $item->item_name ?? ($item['name'] ?? 'Item'),
                 'qty' => $this->orderItemQty[$key] ?? 1,
@@ -5474,6 +5548,8 @@ class Pos extends Component
                 ] : null,
                 'modifiers' => $modifiers,
                 'notes' => $this->itemNotes[$key] ?? null,
+                'eu_allergen_keys' => $euAllergenKeys,
+                'dietary_labels' => $dietaryLabels,
             ];
         }
         return $items;
@@ -5701,11 +5777,13 @@ class Pos extends Component
         // Use waiter_id if available, otherwise fallback to backup_waiter_id
         $waiterId = $assignment?->waiter_id ?? $assignment?->backup_waiter_id ?? null;
 
-        if ($waiterId) {
+        $restricted = PosWaitersCache::actorIsRestrictedPosWaiter(user(), (int) $this->restaurant->id);
+
+        if ($waiterId && !$restricted) {
             $this->selectWaiter = $waiterId;
         }
 
-        return $waiterId ? User::find($waiterId) : null;
+        return ($waiterId && !$restricted) ? User::find($waiterId) : null;
     }
 
     /**
@@ -5741,6 +5819,10 @@ class Pos extends Component
     #[Computed]
     public function isWaiterLocked()
     {
+        if (PosWaitersCache::actorIsRestrictedPosWaiter(user(), (int) $this->restaurant->id)) {
+            return true;
+        }
+
         return $this->assignedWaiterFromTable !== null;
     }
 

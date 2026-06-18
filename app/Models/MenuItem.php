@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Helper\Files;
 use App\Models\BaseModel;
 use App\Traits\HasContextualPricing;
 
@@ -47,7 +48,10 @@ class MenuItem extends BaseModel
         'tandoori-roti.webp',
         'uttapam.webp',
         'vegetable-hakka-noodles.webp',
-        'vegetable-manchow-soup.webp'
+        'vegetable-manchow-soup.webp',
+        'lounge.webp',
+        'roof-top.webp',
+        'garden.webp',
     ];
 
     protected $guarded = ['id'];
@@ -55,6 +59,8 @@ class MenuItem extends BaseModel
     protected $casts = [
         'is_available' => 'boolean',
         'show_on_customer_site' => 'boolean',
+        'eu_allergen_keys' => 'array',
+        'dietary_labels' => 'array',
     ];
 
     protected $appends = [
@@ -135,14 +141,78 @@ class MenuItem extends BaseModel
         return $this->getTranslatedValue('description');
     }
 
+    /**
+     * True when another menu item (any branch) still uses this image filename.
+     */
+    public static function isImageShared(?string $image, ?int $exceptMenuItemId = null): bool
+    {
+        if (blank($image)) {
+            return false;
+        }
+
+        if (in_array($image, static::FILENAME_TO_EXCLUDE, true)) {
+            return true;
+        }
+
+        $query = static::withoutGlobalScopes()->where('image', $image);
+
+        if ($exceptMenuItemId !== null) {
+            $query->where('id', '!=', $exceptMenuItemId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Remove the image file from storage only when no menu item references it.
+     */
+    public static function deleteImageFileIfUnreferenced(?string $image, ?int $exceptMenuItemId = null): void
+    {
+        if (blank($image) || static::isImageShared($image, $exceptMenuItemId)) {
+            return;
+        }
+
+        Files::deleteFile($image, 'item');
+    }
+
     public function itemPhotoUrl(): Attribute
     {
         return Attribute::get(function (): string {
             if (in_array($this->image, MenuItem::FILENAME_TO_EXCLUDE)) {
-                return asset_url('item/' . $this->image);
+                return $this->bustImageUrl(asset_url('item/' . $this->image));
             }
-            return $this->image ? asset_url_local_s3('item/' . $this->image) : asset('img/food.svg');
+
+            if ($this->image) {
+                return $this->bustImageUrl(asset_url_local_s3('item/' . $this->image));
+            }
+
+            // Restaurant-level default image (or disable entirely)
+            $restaurant = restaurant();
+            if ($restaurant && ($restaurant->disable_menu_item_default_image ?? false)) {
+                return asset('img/transparent.svg');
+            }
+
+            if ($restaurant && !empty($restaurant->menu_item_default_image_path)) {
+                return $this->bustImageUrl(asset_url_local_s3($restaurant->menu_item_default_image_path));
+            }
+
+            return asset('img/food.svg');
         });
+    }
+
+    /**
+     * Bust browser/CDN caches when the menu item image (or row) changes.
+     */
+    private function bustImageUrl(string $url): string
+    {
+        $ts = $this->updated_at?->getTimestamp();
+        if (!$ts) {
+            return $url;
+        }
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url . $separator . 'v=' . $ts;
     }
 
     public function menu(): BelongsTo

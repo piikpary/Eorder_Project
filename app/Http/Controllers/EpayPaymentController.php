@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 
 class EpayPaymentController extends Controller
 {
@@ -92,6 +93,8 @@ class EpayPaymentController extends Controller
             $order->amount_paid = ($order->amount_paid ?? 0) + $epayPayment->amount;
             $order->status = 'paid';
             $order->save();
+
+            ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
             // Create or update payment record
             Payment::updateOrCreate(

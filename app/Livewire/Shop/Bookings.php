@@ -24,7 +24,7 @@ class Bookings extends Component
             return $this->redirect(route('home'));
         }
 
-        $this->bookings = Reservation::with('customer', 'table')->where('customer_id', customer()->id)
+        $this->bookings = Reservation::with('customer', 'table.area', 'area')->where('customer_id', customer()->id)
             ->orderBy('id', 'desc')
             ->get();
         

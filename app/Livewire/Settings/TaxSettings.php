@@ -3,6 +3,7 @@
 namespace App\Livewire\Settings;
 
 use App\Models\Tax;
+use App\Services\Pos\PosBranchCacheInvalidation;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -104,6 +105,9 @@ class TaxSettings extends Component
                     $item->taxes()->sync($allTaxes->pluck('id')->toArray());
                 }
             }
+
+            // Invalidate after any tax-mode save + optional item-tax sync so POS refreshes latest item tax mappings.
+            PosBranchCacheInvalidation::invalidateForRestaurant($this->settings);
 
             $this->alert('success', __('app.saved'), [
                 'toast' => true,

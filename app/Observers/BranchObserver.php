@@ -125,7 +125,9 @@ class BranchObserver
                 'branch_id' => $branch->id,
                 'slug' => $defaultOrderTypesSlug[$index],
                 'is_default' => true,
-                'type' => $defaultOrderTypesSlug[$index]
+                'type' => $defaultOrderTypesSlug[$index],
+                'enable_token_number' => true,
+                'show_order_number_on_board' => true,
             ]);
         }
 

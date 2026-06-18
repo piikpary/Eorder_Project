@@ -1,3 +1,9 @@
+@props([
+    'restaurant' => null,
+    'value' => null,
+    'compact' => false,
+])
+
 @php
     // Get restaurant from prop, helper, or request hash (similar to datepicker)
     $restaurantObj = $restaurant ?? null;
@@ -22,16 +28,17 @@
 
     // Get time format from restaurant or use default
     $timeFormat = $restaurantObj?->time_format ?? 'h:i A';
-    $currentTime = $value ?? now()->format('H:i');
+    $pickerTz = $restaurantObj?->timezone ?? config('app.timezone');
+    $currentTime = $value ?? now($pickerTz)->format('H:i');
 
     // Normalize time format
     if ($currentTime && preg_match('/(\d{1,2}):(\d{1,2})/', $currentTime, $matches)) {
         $currentTime = str_pad((int)$matches[1], 2, '0', STR_PAD_LEFT) . ':' . str_pad((int)$matches[2], 2, '0', STR_PAD_LEFT);
     } else {
-        $currentTime = now()->format('H:i');
+        $currentTime = now($pickerTz)->format('H:i');
     }
 
-    $timeObj = now()->setTimeFromTimeString($currentTime);
+    $timeObj = now($pickerTz)->setTimeFromTimeString($currentTime);
     $hour24 = (int)$timeObj->format('H');
     $minute = (int)$timeObj->format('i');
     $is24Hour = $timeFormat === 'H:i';
@@ -40,6 +47,10 @@
     // Detect if format uses uppercase 'A' or lowercase 'a' for AM/PM
     $isUpperCaseAmPm = strpos($timeFormat, 'A') !== false;
     $ampmValue = $is24Hour ? '' : ($isUpperCaseAmPm ? strtoupper($timeObj->format('A')) : strtolower($timeObj->format('A')));
+
+    $defaultInputClass = $compact
+        ? 'inline-flex items-center w-full h-8 max-h-8 min-h-0 box-border pl-2.5 pr-8 py-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-xs leading-tight text-gray-700 dark:text-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 cursor-pointer relative z-10'
+        : 'inline-flex items-center w-full min-h-[2.5rem] box-border pl-3 pr-10 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-sm leading-tight text-gray-700 dark:text-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 cursor-pointer relative z-10';
 @endphp
 
 <div x-data="{
@@ -130,11 +141,11 @@
             this.minutes = m;
         }
     }
-}" x-on:click.away="showPicker = false" class="relative">
+}" x-on:click.away="showPicker = false" class="relative w-full min-w-0">
     <input type="text" x-ref="input" x-model="displayValue" @input="handleInput($event)" @click="togglePicker()" readonly
-        {!! $attributes->merge(['class' => 'inline-flex items-center pl-4 pr-5 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-lg text-gray-700 dark:text-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 w-full cursor-pointer relative z-10']) !!}>
-    <div class="absolute inset-y-0 right-3 flex items-center pointer-events-none z-20">
-        <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {!! $attributes->merge(['class' => $defaultInputClass]) !!}>
+    <div class="{{ $compact ? 'absolute inset-y-0 right-2' : 'absolute inset-y-0 right-2.5' }} flex items-center pointer-events-none z-20">
+        <svg class="{{ $compact ? 'w-4 h-4' : 'w-5 h-5' }} text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
     </div>

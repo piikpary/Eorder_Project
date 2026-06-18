@@ -1,0 +1,20 @@
+<?php 
+return [
+  'name' => 'Penjaga Penyimpanan',
+  'status_title' => 'Jalur Sistem Penjaga Penyimpanan',
+  'permissions_badge' => 'Mode: 0775 (Direktori) / 0664 (File)',
+  'success_message' => 'Upaya perbaikan pada item :count (file dan direktori).',
+  'error_alert' => 'Satu atau lebih jalur penyimpanan memerlukan perhatian. Klik "Perbaikan Rekursif" untuk memperbaiki izin.',
+  'recursive_repair' => 'Perbaikan Rekursif',
+  'secure_repair' => 'Izin Aman & Perbaikan',
+  'refresh_status' => 'Segarkan Status',
+  'path' => 'Jalur',
+  'status' => 'Status',
+  'perms' => 'Perm',
+  'readable' => 'Dapat dibaca',
+  'writable' => 'Dapat ditulisi',
+  'yes' => 'Ya',
+  'no' => 'TIDAK',
+  'ok' => 'OKE',
+  'issue' => 'Masalah',
+];

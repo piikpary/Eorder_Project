@@ -1,5 +1,12 @@
 (function ($) {
     "use strict";
+
+    // Keep inside IIFE so loading this file twice (e.g. Livewire navigate) does not
+    // throw "Identifier 'historyPush' has already been declared" on a second global const.
+    function historyPush(url) {
+        window.history.pushState({ id: url }, url, url);
+    }
+
     $.easyAjax = function (options) {
         var defaults = {
             type: "GET",
@@ -552,11 +559,6 @@
         }
     };
 })(jQuery);
-
-//history pushstate
-const historyPush = (url) => {
-    window.history.pushState({id: url}, url, url);
-};
 
 // when session expire then it reload user to login page
 $(document).ajaxError(function (event, jqxhr, settings, thrownError) {

@@ -27,9 +27,6 @@ class PaymentSettings extends Component
     public $activePaymentSetting = null;
     public $stripeKey;
     public bool $stripeStatus;
-    public bool $enableForDineIn;
-    public bool $enableForDelivery;
-    public bool $enableForPickup;
     public $enableQrPayment = false;
     public $qrCodeImage;
     public $webhookUrl;
@@ -168,7 +165,6 @@ class PaymentSettings extends Component
             'tap' => $this->isGlobalTapEnabled,
             'offline' => true,
             'qr_code' => true,
-            'serviceSpecific' => true,
         ];
 
         // Find the first enabled payment gateway
@@ -180,7 +176,7 @@ class PaymentSettings extends Component
         }
 
         if ($this->activePaymentSetting === null) {
-            $this->activePaymentSetting = 'serviceSpecific';
+            $this->activePaymentSetting = 'offline';
         }
     }
 
@@ -200,7 +196,6 @@ class PaymentSettings extends Component
             'tap' => $this->isGlobalTapEnabled,
             'offline' => true,
             'qr_code' => true,
-            'serviceSpecific' => true,
         ];
 
         if (isset($paymentGateways[$tab]) && $paymentGateways[$tab]) {
@@ -226,10 +221,6 @@ class PaymentSettings extends Component
         $this->isRazorpayEnabled = $this->paymentGateway->razorpay_status;
         $this->isStripeEnabled = $this->paymentGateway->stripe_status;
         $this->isFlutterwaveEnabled = $this->paymentGateway->flutterwave_status;
-
-        $this->enableForDineIn = $this->paymentGateway->is_dine_in_payment_enabled;
-        $this->enableForDelivery = $this->paymentGateway->is_delivery_payment_enabled;
-        $this->enableForPickup = $this->paymentGateway->is_pickup_payment_enabled;
 
         $this->enableQrPayment = (bool)$this->paymentGateway->is_qr_payment_enabled;
         $this->qrCodeImage = $this->paymentGateway->qr_code_image_url;
@@ -397,17 +388,6 @@ class PaymentSettings extends Component
         ]);
 
         return 0;
-    }
-
-    public function submitFormServiceSpecific()
-    {
-        $this->paymentGateway->update([
-            'is_dine_in_payment_enabled' => $this->enableForDineIn,
-            'is_delivery_payment_enabled' => $this->enableForDelivery,
-            'is_pickup_payment_enabled' => $this->enableForPickup,
-        ]);
-        $this->updatePaymentStatus();
-        $this->alertSuccess();
     }
 
     public function submitFormRazorpay()

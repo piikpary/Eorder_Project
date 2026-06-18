@@ -5,9 +5,12 @@ namespace App\Livewire\Forms;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
 use Illuminate\Validation\Rule;
+use App\Helper\Files;
+use Livewire\WithFileUploads;
+
 class EditItemCategory extends Component
 {
-    use LivewireAlert;
+    use LivewireAlert, WithFileUploads;
 
     public $categoryName;
     public $itemCategory;
@@ -15,6 +18,8 @@ class EditItemCategory extends Component
     public $currentLanguage;
     public $languages = [];
     public $globalLocale;
+    public $categoryImageTemp;
+    public ?string $categoryImage = null;
 
     public function mount()
     {
@@ -32,6 +37,7 @@ class EditItemCategory extends Component
         }
 
         $this->categoryName = $this->translations[$this->globalLocale] ?? '';
+        $this->categoryImage = $this->itemCategory->image;
     }
 
     public function submitForm()
@@ -43,6 +49,7 @@ class EditItemCategory extends Component
                     ->ignore($this->itemCategory->id) // Ignore the current category ID when updating
                     ->where('branch_id', branch()->id),
             ],
+            'categoryImageTemp' => \App\Support\ImageUpload::mimesRule(),
         ], [
             'translations.' . $this->globalLocale . '.required' => __('validation.categoryNameRequired', ['language' => $this->languages[$this->globalLocale]]),
             'translations.' . $this->globalLocale . '.unique' => __('validation.categoryNameUnique', ['language' => $this->languages[$this->globalLocale]]),
@@ -54,10 +61,24 @@ class EditItemCategory extends Component
                 : $this->itemCategory->setTranslation('category_name', $code, $translation);
         });
 
+        if ($this->categoryImageTemp) {
+            
+            $oldImage = $this->itemCategory->image;
+
+            Files::deleteFile($oldImage, 'item-category');
+            $newImage = Files::uploadLocalOrS3($this->categoryImageTemp, 'item-category', width: 350, height: 350);
+            
+            $this->itemCategory->image = $newImage;
+            
+            
+        }
+
+        
         $this->itemCategory->save();
 
         $this->dispatch('refreshCategories');
         $this->dispatch('hideCategoryModal');
+        $this->dispatch('close-edit-category-modal');
 
         $this->alert('success', __('messages.categoryUpdated'), [
             'toast' => true,
@@ -85,6 +106,43 @@ class EditItemCategory extends Component
     public function updatedCurrentLanguage()
     {
         $this->categoryName = $this->translations[$this->currentLanguage] ?? '';
+    }
+
+    public function updatedCategoryImageTemp(): void
+    {
+        if (!$this->categoryImageTemp) {
+            return;
+        }
+
+        $this->validate([
+            'categoryImageTemp' => \App\Support\ImageUpload::mimesRule(),
+        ]);
+    }
+
+    public function removeSelectedImage(): void
+    {
+        $this->categoryImageTemp = null;
+    }
+
+    public function removeCurrentImage(): void
+    {
+        if (!empty($this->itemCategory->image)) {
+            Files::deleteFile($this->itemCategory->image, 'item-category');
+        }
+
+        $this->itemCategory->image = null;
+        $this->categoryImage = null;
+        $this->categoryImageTemp = null;
+        $this->itemCategory->save();
+
+        $this->dispatch('refreshCategories');
+
+        $this->alert('success', __('messages.categoryImageDeleted'), [
+            'toast' => true,
+            'position' => 'top-end',
+            'showCancelButton' => false,
+            'cancelButtonText' => __('app.close')
+        ]);
     }
 
     public function render()

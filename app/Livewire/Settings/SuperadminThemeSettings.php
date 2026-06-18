@@ -17,6 +17,7 @@ class SuperadminThemeSettings extends Component
     public $themeColor;
     public $themeColorRgb;
     public $photo;
+    public $darkPhoto;
     public $appName;
     public $showLogoText;
     public $upload_fav_icon_android_chrome_192;
@@ -40,7 +41,47 @@ class SuperadminThemeSettings extends Component
             'upload_favicon_32' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
             'favicon' => 'nullable|file|mimes:ico|max:2048',
             'themeColor' => 'required',
+            'photo' => 'nullable|image|max:1024',
+            'darkPhoto' => 'nullable|image|max:1024',
         ];
+    }
+
+    public function updatedPhoto(): void
+    {
+        $this->validateLogo('photo');
+    }
+
+    public function updatedDarkPhoto(): void
+    {
+        $this->validateLogo('darkPhoto');
+    }
+
+    public function validateLogo(string $field = 'photo'): void
+    {
+        $this->resetErrorBag($field);
+
+        $upload = $this->{$field};
+
+        if (! $upload) {
+            return;
+        }
+
+        $imageInfo = @getimagesize($upload->getRealPath());
+        if (! $imageInfo) {
+            return;
+        }
+
+        $width = $imageInfo[0];
+        $height = $imageInfo[1];
+
+        if ($width < 97 || $height < 96) {
+            $this->addError($field, __('modules.settings.imageDimensionsTooSmall', [
+                'width' => 97,
+                'height' => 96,
+                'currentWidth' => $width,
+                'currentHeight' => $height,
+            ]));
+        }
     }
 
     public function mount()
@@ -66,6 +107,13 @@ class SuperadminThemeSettings extends Component
 
         $this->validate();
 
+        $this->validateLogo('photo');
+        $this->validateLogo('darkPhoto');
+
+        if ($this->getErrorBag()->has('photo') || $this->getErrorBag()->has('darkPhoto')) {
+            return;
+        }
+
         $this->themeColorRgb = $this->hex2rgba($this->themeColor);
 
         $this->settings->name = $this->appName;
@@ -76,6 +124,10 @@ class SuperadminThemeSettings extends Component
 
         if ($this->photo) {
             $this->settings->logo = Files::uploadLocalOrS3($this->photo, dir: 'logo', width: 150, height: 150);
+        }
+
+        if ($this->darkPhoto) {
+            $this->settings->dark_logo = Files::uploadLocalOrS3($this->darkPhoto, dir: 'logo', width: 150, height: 150);
         }
 
         $faviconBasePath = $this->settings->getFaviconBasePath();
@@ -131,6 +183,23 @@ class SuperadminThemeSettings extends Component
         Files::deleteFile($this->settings->logo, 'logo');
 
         $this->settings->forceFill(['logo' => null])->save();
+
+        $this->redirect(route('superadmin.superadmin-settings.index') . '?tab=theme', navigate: true);
+    }
+
+    public function deleteDarkLogo()
+    {
+        cache()->forget('global_setting');
+
+        if (is_null($this->settings->dark_logo)) {
+            return;
+        }
+
+        Files::deleteFile($this->settings->dark_logo, 'logo');
+
+        $this->settings->forceFill(['dark_logo' => null])->save();
+
+        session()->forget('restaurantOrGlobalSetting');
 
         $this->redirect(route('superadmin.superadmin-settings.index') . '?tab=theme', navigate: true);
     }

@@ -39,79 +39,86 @@
 
                             @forelse ($restaurants as $item)
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" wire:key='member-restaurants-{{ $item->id }}' wire:loading.class.delay='opacity-10'>
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="align-middle whitespace-nowrap py-2.5 px-4 text-sm text-gray-900 dark:text-white">
                                     {{ $item->id ?? '--' }}
                                 </td>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white inline-flex gap-2 items-center">
-                                    <img src="{{  $item->logoUrl }}" class="h-8" alt="App Logo" />
-                                    <div class="flex flex-col items-start gap-y-1">
-                                        <a href="{{ route('superadmin.restaurants.show', $item->hash) }}"
-                                            wire:navigate class="underline underline-offset-1 font-medium">
-                                            {{ \Illuminate\Support\Str::limit($item->name, 25, '...') }}
-                                        </a>
-
-                                        @if(module_enabled('Subdomain'))
-                                            <div class="flex flex-col items-center gap-y-1">
-                                                <a href="https://{{ $item->sub_domain }}" target="_blank"  class="underline  flex items-center gap-x-1 underline-offset-1 font-normal">{{ $item->sub_domain }}
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
-                                                        <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
-                                                        <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
-                                                    </svg>
+                                <td class="align-middle py-2 px-4 text-sm text-gray-900 dark:text-white">
+                                    <div class="flex min-w-0 items-center gap-3">
+                                        <img src="{{ $item->logoUrl }}" class="h-9 w-9 shrink-0 rounded-md object-cover" alt="" />
+                                        <div class="min-w-0 flex-1 space-y-1">
+                                            <div class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                                <a href="{{ route('superadmin.restaurants.show', $item->hash) }}"
+                                                    wire:navigate
+                                                    class="min-w-0 truncate font-medium text-gray-900 underline decoration-gray-300 underline-offset-2 hover:decoration-skin-base dark:text-white">
+                                                    {{ \Illuminate\Support\Str::limit($item->name, 40, '...') }}
                                                 </a>
+                                                @if (module_enabled('Subdomain') && $item->sub_domain)
+                                                    <a href="https://{{ $item->sub_domain }}" target="_blank" rel="noopener noreferrer"
+                                                        class="inline-flex shrink-0 items-center rounded text-gray-400 hover:text-skin-base dark:text-gray-500 dark:hover:text-skin-base"
+                                                        title="{{ $item->sub_domain }}">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                                            <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
+                                                            <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
+                                                        </svg>
+                                                    </a>
+                                                @endif
                                             </div>
-                                        @endif
-                                        <div class="inline-flex items-center gap-x-1">
-                                            <span class="text-xs text-gray-600 border dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 bg-gray-200 px-2 py-1 rounded-md">{{ $item->branches_count }} @lang('modules.settings.branches')</span>
-                                            <span class="text-xs text-gray-600 border dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 bg-gray-200 px-2 py-1 rounded-md">{{ $item->orders_count }} @lang('menu.orders')</span>
-
-                                            @if ($item->approval_status == 'Pending')
-                                                <svg class="h-5 w-5 text-yellow-400" width="24px" height="24px" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g stroke-width="0"/> <title>Approval Pending</title> <g stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><path opacity=".5" d="M3 10.417c0-3.198 0-4.797.378-5.335.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991z"/><path d="M10.03 8.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.97 1.97a.75.75 0 1 0 1.06 1.06L12 13.06l1.97 1.97a.75.75 0 0 0 1.06-1.06L13.06 12l1.97-1.97a.75.75 0 1 0-1.06-1.06L12 10.94z"/></g></svg>
-                                            @elseif ($item->approval_status == 'Rejected')
-                                             <svg class="h-5 w-5 text-red-500" width="24px" height="24px" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g stroke-width="0"/> <title>Rejection Reason: {{ $item->rejection_reason }}</title> <g stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><path opacity=".5" d="M3 10.417c0-3.198 0-4.797.378-5.335.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991z"/><path d="M10.03 8.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.97 1.97a.75.75 0 1 0 1.06 1.06L12 13.06l1.97 1.97a.75.75 0 0 0 1.06-1.06L13.06 12l1.97-1.97a.75.75 0 1 0-1.06-1.06L12 10.94z"/></g></svg>
+                                            @if (module_enabled('Subdomain') && $item->sub_domain)
+                                                <a href="https://{{ $item->sub_domain }}" target="_blank" rel="noopener noreferrer"
+                                                    class="block max-w-full truncate text-xs font-normal text-gray-500 underline-offset-2 hover:text-skin-base hover:underline dark:text-gray-400">
+                                                    {{ $item->sub_domain }}
+                                                </a>
                                             @endif
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <span class="rounded-md border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">{{ $item->branches_count }} @lang('modules.settings.branches')</span>
+                                                <span class="rounded-md border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">{{ $item->orders_count }} @lang('menu.orders')</span>
+                                                @if ($item->approval_status == 'Pending')
+                                                    <svg class="h-4 w-4 shrink-0 text-yellow-500" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><title>@lang('app.pending_approval')</title><g fill="currentColor"><path opacity=".5" d="M3 10.417c0-3.198 0-4.797.378-5.335.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991z"/><path d="M10.03 8.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.97 1.97a.75.75 0 1 0 1.06 1.06L12 13.06l1.97 1.97a.75.75 0 0 0 1.06-1.06L13.06 12l1.97-1.97a.75.75 0 1 0-1.06-1.06L12 10.94z"/></g></svg>
+                                                @elseif ($item->approval_status == 'Rejected')
+                                                    <svg class="h-4 w-4 shrink-0 text-red-500" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><title>@lang('app.reject'): {{ $item->rejection_reason }}</title><g fill="currentColor"><path opacity=".5" d="M3 10.417c0-3.198 0-4.797.378-5.335.377-.537 1.88-1.052 4.887-2.081l.573-.196C10.405 2.268 11.188 2 12 2s1.595.268 3.162.805l.573.196c3.007 1.029 4.51 1.544 4.887 2.081C21 5.62 21 7.22 21 10.417v1.574c0 5.638-4.239 8.375-6.899 9.536C13.38 21.842 13.02 22 12 22s-1.38-.158-2.101-.473C7.239 20.365 3 17.63 3 11.991z"/><path d="M10.03 8.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.97 1.97a.75.75 0 1 0 1.06 1.06L12 13.06l1.97 1.97a.75.75 0 0 0 1.06-1.06L13.06 12l1.97-1.97a.75.75 0 1 0-1.06-1.06L12 10.94z"/></g></svg>
+                                                @endif
+                                            </div>
                                         </div>
-
                                     </div>
-
                                 </td>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="align-middle whitespace-nowrap py-2.5 px-4 text-sm text-gray-900 dark:text-white">
                                     {{ $item->email ?? '--' }}
                                 </td>
 
+                                <td class="align-middle py-2.5 px-4 text-sm text-gray-900 dark:text-white">
+                                    <div class="flex min-w-0 flex-col items-start gap-1.5">
+                                        @if ($item?->package?->package_name)
+                                            <span class="break-words">
+                                                {{ $item?->package?->package_name }} ({{ $item?->package_type }})
+                                            </span>
+                                        @endif
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white flex flex-col items-start gap-y-1.5">
-
-                                    @if($item?->package?->package_name)
-                                        <span>
-                                            {{ $item?->package?->package_name }} ({{ $item?->package_type }})
-                                        </span>
-                                    @endif
-
-                                    @if (user_can('Update Restaurant'))
-                                        <span wire:click="showChangePackage({{ $item->id }})" wire:key='package-update-{{ $item->id}}' class="bg-gray-100 hover:bg-gray-200 text-gray-700 select-none text-xs cursor-pointer font-medium inline-flex items-center px-1.5 py-0.5 rounded  dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-400 border border-gray-500 ">
-                                            <svg class="w-4 h-4 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
-                                            </svg>
-                                            @lang('app.change')
-                                        </span>
-                                    @endif
+                                        @if (user_can('Update Restaurant'))
+                                            <span wire:click="showChangePackage({{ $item->id }})" wire:key='package-update-{{ $item->id}}' class="inline-flex cursor-pointer select-none items-center rounded border border-gray-500 bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600">
+                                                <svg class="me-1 h-3.5 w-3.5 text-current" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m14.304 4.844 2.852 2.852M7 7H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4.5m2.409-9.91a2.017 2.017 0 0 1 0 2.853l-6.844 6.844L8 14l.713-3.565 6.844-6.844a2.015 2.015 0 0 1 2.852 0Z"/>
+                                                </svg>
+                                                @lang('app.change')
+                                            </span>
+                                        @endif
+                                    </div>
                                 </td>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
+                                <td class="align-middle whitespace-nowrap py-2.5 px-4 text-sm text-gray-900 dark:text-white">
                                 @if ($item->is_active == true)
-                                    <span class="bg-green-100 uppercase text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">@lang('app.active')</span>
+                                    <span class="rounded bg-green-100 px-2 py-0.5 text-xs font-medium uppercase text-green-800 dark:bg-green-900 dark:text-green-300">@lang('app.active')</span>
                                 @else
-                                    <span class="bg-red-100 uppercase text-red-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-red-900 dark:text-red-300">@lang('app.inactive')</span>
+                                    <span class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium uppercase text-red-800 dark:bg-red-900 dark:text-red-300">@lang('app.inactive')</span>
                                 @endif
                                 </td>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white text-center">
+                                <td class="align-middle whitespace-nowrap py-2.5 px-4 text-center text-sm text-gray-900 dark:text-white">
                                     @include('common.date-time-display', ['date' => $item->created_at])
                                 </td>
 
-                                <td class="py-2.5 px-4 space-x-2 whitespace-nowrap text-right">
+                                <td class="align-middle whitespace-nowrap py-2.5 px-4 text-right">
                                     <x-dropdown align="right">
                                         <x-slot name="trigger">
                                             <button type="button"
@@ -153,7 +160,7 @@
                             </tr>
                             @empty
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400">
-                                <td class="py-2.5 px-4 space-x-6" colspan="8">
+                                <td class="py-2.5 px-4 space-x-6" colspan="7">
                                     @lang('messages.noRestaurantFound')
                                 </td>
                             </tr>
@@ -174,7 +181,7 @@
         </div>
     </div>
 
-    <x-right-modal wire:model.live="showEditCustomerModal">
+    <x-right-modal wire:model.live="showEditCustomerModal" :content-scroll="false">
         <x-slot name="title">
             {{ __("modules.restaurant.editRestaurant") }}
         </x-slot>

@@ -26,19 +26,23 @@ class UserSeeder extends Seeder
                     'restaurant_id' => $branch->restaurant->id
                 ]);
 
-                $waiter = User::create([
-                    'name' => 'Jaquelyn Battle',
-                    'email' => 'waiter@example.com',
-                    'password' => bcrypt(123456),
-                    'restaurant_id' => $branch->restaurant->id,
-                    'branch_id' => $branch->id
-                ]);
-
                 $adminRole = Role::where('name', 'Admin_' . $branch->restaurant_id)->first();
                 $waiterRole = Role::where('name', 'Waiter_' . $branch->restaurant_id)->first();
 
                 $admin->assignRole($adminRole);
-                $waiter->assignRole($waiterRole);
+
+                for ($i = 1; $i <= 5; $i++) {
+                    $waiterEmail = $i === 1 ? 'waiter@example.com' : "waiter{$i}@example.com";
+                    $waiter = User::create([
+                        'name' => 'Waiter ' . $i,
+                        'email' => $waiterEmail,
+                        'password' => bcrypt(123456),
+                        'restaurant_id' => $branch->restaurant->id,
+                        'branch_id' => $branch->id
+                    ]);
+
+                    $waiter->assignRole($waiterRole);
+                }
             } else {
                 $admin = User::create([
                     'name' => fake()->firstName() . ' ' . fake()->lastName(),
@@ -47,19 +51,22 @@ class UserSeeder extends Seeder
                     'restaurant_id' => $branch->restaurant->id
                 ]);
 
-                $waiter = User::create([
-                    'name' => fake()->firstName() . ' ' . fake()->lastName(),
-                    'email' => fake()->unique()->safeEmail(),
-                    'password' => bcrypt(123456),
-                    'restaurant_id' => $branch->restaurant->id,
-                    'branch_id' => $branch->id
-                ]);
-
                 $adminRole = Role::where('name', 'Admin_' . $branch->restaurant_id)->first();
                 $waiterRole = Role::where('name', 'Waiter_' . $branch->restaurant_id)->first();
 
                 $admin->assignRole($adminRole);
-                $waiter->assignRole($waiterRole);
+
+                for ($i = 1; $i <= 5; $i++) {
+                    $waiter = User::create([
+                        'name' => 'Waiter ' . $i,
+                        'email' => "waiter{$i}.restaurant{$branch->restaurant->id}.branch{$branch->id}@example.com",
+                        'password' => bcrypt(123456),
+                        'restaurant_id' => $branch->restaurant->id,
+                        'branch_id' => $branch->id
+                    ]);
+
+                    $waiter->assignRole($waiterRole);
+                }
             }
         });
     }

@@ -21,11 +21,7 @@ class DeliveryHistory extends Component
             ->with(['items', 'customer'])
             ->where('delivery_executive_id', $executive?->id)
             ->where('order_type', 'delivery')
-            ->whereIn('order_status', [
-                OrderStatus::DELIVERED->value,
-                OrderStatus::CANCELLED->value,
-                OrderStatus::SERVED->value,
-            ])
+            ->whereIn('order_status', OrderStatus::terminalProgressValues())
             ->orderByDesc('id')
             ->paginate(10);
 

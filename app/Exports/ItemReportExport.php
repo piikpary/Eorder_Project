@@ -127,7 +127,7 @@ class ItemReportExport implements WithMapping, FromCollection, WithHeadings, Wit
      */
     public function collection()
     {
-        return MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)->with(['orders' => function ($q) {
+        $items = MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)->with(['orders' => function ($q) {
             return $q->join('orders', 'orders.id', '=', 'order_items.order_id')
                 ->whereBetween('orders.date_time', [$this->startDateTime, $this->endDateTime])
                 ->where('orders.status', 'paid')
@@ -148,17 +148,43 @@ class ItemReportExport implements WithMapping, FromCollection, WithHeadings, Wit
                     $q->where('orders.waiter_id', $this->filterByWaiter);
                 });
         }, 'category', 'variations'])
-            ->where(function ($query) {
-                if ($this->searchTerm) {
-                    $query->where(function ($q) {
-                        $safeTerm = Common::safeString($this->searchTerm);
+            ->when($this->searchTerm, function ($query) {
+                $safeTerm = Common::safeString($this->searchTerm);
+                $query->where(function ($q) use ($safeTerm) {
+                    $q->where('item_name', 'like', '%' . $safeTerm . '%')
+                        ->orWhereHas('category', function ($q) use ($safeTerm) {
+                            $q->where('category_name', 'like', '%' . $safeTerm . '%');
+                        });
+                });
+            })
+            ->get();
 
-                        $q->where('item_name', 'like', '%' . $safeTerm . '%')
-                            ->orWhereHas('category', function ($q) use ($safeTerm) {
-                                $q->where('category_name', 'like', '%' . $safeTerm . '%');
-                            });
+        // Match the on-screen item report: export only sold items (and only sold variations).
+        return $items
+            ->map(function ($item) {
+                if ($item->variations && $item->variations->count() > 0) {
+                    $item->variations->each(function ($variation) use ($item) {
+                        $variation->quantity_sold = (int) ($item->orders
+                            ->where('menu_item_variation_id', $variation->id)
+                            ->sum('quantity') ?? 0);
+                        $variation->total_revenue = (float) ($variation->price * $variation->quantity_sold);
                     });
+
+                    $item->setRelation('variations', $item->variations->filter(function ($v) {
+                        return (int) ($v->quantity_sold ?? 0) > 0;
+                    })->values());
+
+                    $item->quantity_sold = (int) ($item->variations->sum('quantity_sold') ?? 0);
+                    $item->total_revenue = (float) ($item->variations->sum('total_revenue') ?? 0);
+                } else {
+                    $quantitySold = (int) ($item->orders->sum('quantity') ?? 0);
+                    $item->quantity_sold = $quantitySold;
+                    $item->total_revenue = (float) ($item->price * $quantitySold);
                 }
-            })->get();
+
+                return (int) ($item->quantity_sold ?? 0) > 0 ? $item : null;
+            })
+            ->filter()
+            ->values();
     }
 }

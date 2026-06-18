@@ -25,6 +25,31 @@ public/user-uploads/public/hot
 /public/user-uploads/*
 !public/user-uploads/.htaccess
 
+# Demo / seed images (tracked in Git for fresh installs)
+!public/user-uploads/area/
+public/user-uploads/area/*
+!public/user-uploads/area/garden.webp
+!public/user-uploads/area/lounge.webp
+!public/user-uploads/area/roof-top.webp
+
+!public/user-uploads/item/
+public/user-uploads/item/*
+!public/user-uploads/item/butter-chicken.webp
+!public/user-uploads/item/chicken-hyderabadi-biryani.webp
+!public/user-uploads/item/chicken-manchurian.webp
+!public/user-uploads/item/chilli-paneer.webp
+!public/user-uploads/item/dal-makhni.webp
+!public/user-uploads/item/idli-sambar.webp
+!public/user-uploads/item/masala-dosa.webp
+!public/user-uploads/item/medu-vada.webp
+!public/user-uploads/item/naan-recipe.webp
+!public/user-uploads/item/paneer-tikka.webp
+!public/user-uploads/item/spring-rolls.webp
+!public/user-uploads/item/tandoori-roti.webp
+!public/user-uploads/item/uttapam.webp
+!public/user-uploads/item/vegetable-hakka-noodles.webp
+!public/user-uploads/item/vegetable-manchow-soup.webp
+
 /public/qrcodes/*
 !public/qrcodes/.htaccess
 

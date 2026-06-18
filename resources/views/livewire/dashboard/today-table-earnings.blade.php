@@ -7,25 +7,16 @@
             <ul class="divide-y divide-gray-50 dark:divide-gray-700">
                 @forelse ($orders as $item)
                     <li class="py-1 sm:py-2">
-                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
-                            <div class="flex-1 min-w-0">
-                                <div class="w-full max-w-smspace-y-2">
-                                    <div >
-                                        <div class="flex items-center gap-3">
-
-                                            <span class="text-[11px] text-gray-300 w-4">{{ $loop->index+1 }}</span>
-
-                                            <div @class(['w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-semibold bg-skin-base/[0.2] text-skin-base'])>
-                                                <h3 wire:loading.class.delay='opacity-50'
-                                                    @class(['font-semibold'])>
-                                                    {{ $item?->table?->table_code }}
-                                                </h3>
-                                            </div>
-                                        </div>
+                        <div class="flex items-center gap-3 sm:gap-4">
+                            <div class="flex min-w-0 flex-1 items-center gap-3">
+                                <span class="w-4 shrink-0 text-[11px] text-gray-300 dark:text-gray-500">{{ $loop->index + 1 }}</span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="inline-flex max-w-full rounded-lg bg-skin-base/[0.2] px-2.5 py-1">
+                                        @include('livewire.dashboard.partials.table-area-badge', ['order' => $item])
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-[13px] font-medium text-gray-800 dark:text-white">
+                            <div class="shrink-0 text-[13px] font-medium text-gray-800 dark:text-white">
                                 {{ currency_format($item->total_price, restaurant()->currency_id) }}
                             </div>
                         </div>

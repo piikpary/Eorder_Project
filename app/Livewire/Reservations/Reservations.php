@@ -73,7 +73,7 @@ class Reservations extends Component
         $start = Carbon::createFromFormat($dateFormat, $this->startDate, $tz)->startOfDay()->setTimezone('UTC')->toDateTimeString();
         $end = Carbon::createFromFormat($dateFormat, $this->endDate, $tz)->endOfDay()->setTimezone('UTC')->toDateTimeString();
 
-        $reservations = Reservation::with('customer', 'table')
+        $reservations = Reservation::with('customer', 'table.area', 'area')
             ->orderBy('reservation_date_time', 'asc')
             ->whereDate('reservation_date_time', '>=', $start)
             ->whereDate('reservation_date_time', '<=', $end)

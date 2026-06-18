@@ -10,6 +10,7 @@ use App\Models\XenditPayment;
 use App\Models\Order;
 use App\Events\SendNewOrderReceived;
 use App\Notifications\SendOrderBill;
+use App\Services\ShopCartKotPrintUrls;
 
 class XenditPaymentController extends Controller
 {
@@ -120,6 +121,8 @@ class XenditPaymentController extends Controller
             $order->amount_paid = $order->amount_paid + $xenditPayment->amount;
             $order->status = 'paid';
             $order->save();
+
+            ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
             // Only create a new Payment if transaction_id is not equal to $invoiceId
             $existingPayment = Payment::where('order_id', $xenditPayment->order_id)

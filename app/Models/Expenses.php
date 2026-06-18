@@ -3,9 +3,8 @@
 namespace App\Models;
 
 use App\Traits\HasBranch;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use App\Models\BaseModel;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Expenses extends BaseModel
 {
@@ -33,5 +32,10 @@ class Expenses extends BaseModel
     public function category()
     {
         return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
+    }
+
+    public function recurringTemplate(): BelongsTo
+    {
+        return $this->belongsTo(ExpensesRecurring::class, 'expenses_recurring_id');
     }
 }

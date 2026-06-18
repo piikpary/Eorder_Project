@@ -13,6 +13,7 @@ use App\Models\{
 
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 
 
 class PayfastPaymentController extends Controller
@@ -140,14 +141,17 @@ class PayfastPaymentController extends Controller
 
         if ($order) {
             $order->update([
-                'amount_paid' =>$order->amount_paid + $payfastPayment->amount,
+                'amount_paid' => $order->amount_paid + $payfastPayment->amount,
                 'status' => 'paid',
             ]);
-        }
+
+            ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
+
             SendNewOrderReceived::dispatch($order);
 
             if ($order->customer_id) {
                 SendOrderBillEvent::dispatch($order);
             }
+        }
     }
 }

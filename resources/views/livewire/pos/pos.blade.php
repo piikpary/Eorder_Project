@@ -1,4 +1,4 @@
-<div class="relative">
+<div class="relative flex flex-col h-full min-h-0">
     {{-- Include MultiPOS registration and status handling --}}
     @if(module_enabled('MultiPOS') && in_array('MultiPOS', restaurant_modules()))
         @include('multipos::partials.pos-registration', [
@@ -10,7 +10,6 @@
             'shouldBlockPos' => $shouldBlockPos
         ])
     @endif
-
     {{-- Only render POS content if not blocked by registration/pending/declined --}}
     @if(!$shouldBlockPos)
         @if($showRestaurantClosedBanner)
@@ -21,19 +20,58 @@
             </div>
         @endif
 
+        @php
+            $lwPosOtmCharges = collect($posExtraChargesBySlug ?? [])->map(function ($charges) {
+                if ($charges instanceof \Illuminate\Support\Collection) {
+                    return $charges->values()->map(fn ($c) => $c->toArray())->all();
+                }
+
+                return [];
+            })->all();
+            $lwPosOtmClient = [
+                'posOrderTypePriceMaps' => $posOrderTypePriceMaps ?? new \stdClass(),
+                'posExtraChargesBySlug' => $lwPosOtmCharges,
+                'posDeliveryDefaultFee' => (float) ($posDeliveryDefaultFee ?? 0),
+                'posOrderTypesForModal' => $posOrderTypesForModal ?? [],
+                'posDeliveryPlatformsForModal' => $posDeliveryPlatformsForModal ?? [],
+                'posOrderTypeDefaultSaveUrl' => route('ajax.pos.order-type-default'),
+                'hasOrderTypeId' => (bool) $orderTypeId,
+                'orderTypeId' => $orderTypeId ? (int) $orderTypeId : null,
+                'orderType' => $orderType,
+                'orderTypeSlug' => $orderTypeSlug,
+                'csrfToken' => csrf_token(),
+                'labels' => [
+                    'selectDeliveryPlatform' => __('modules.order.selectDeliveryPlatform'),
+                    'selectDeliveryPlatformDescription' => __('modules.order.selectDeliveryPlatformDescription'),
+                    'selectOrderType' => __('modules.order.selectOrderType'),
+                    'selectOrderTypeDescription' => __('modules.order.selectOrderTypeDescription'),
+                ],
+            ];
+        @endphp
+        <script type="application/json" id="lw-pos-order-type-client-data">{!! json_encode($lwPosOtmClient, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) !!}</script>
+
         @if(!$orderTypeId)
-        @livewire('forms.OrderTypeSelection')
+            @include('pos.partials.order-type-modal', [
+                'orderTypes' => $this->orderTypes,
+                'deliveryPlatforms' => $modalDeliveryPlatforms,
+                'posDeliveryPlatformsForModal' => $posDeliveryPlatformsForModal ?? [],
+            ])
         @endif
 
-        <div class="flex-grow lg:flex h-auto">
-            @include('pos.menu')
+        <div class="relative flex flex-1 min-h-0 flex-col lg:flex-row w-full overflow-hidden gap-x-2">
+            <div class="w-full lg:w-8/12 flex-shrink-0 min-h-0 lg:pt-16">
+                @include('pos.menu')
+            </div>
+            <div class="hidden lg:block lg:w-4/12 shrink-0" aria-hidden="true"></div>
+            <div id="order-items-container" class="w-full lg:w-4/12 flex flex-1 min-h-0 flex-col overflow-hidden border-s border-gray-200 dark:border-gray-700 lg:flex-none lg:flex-shrink-0 max-lg:sticky max-lg:top-16 max-lg:z-20 max-lg:self-start max-lg:bg-white max-lg:dark:bg-gray-800 max-lg:px-3 max-lg:pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:max-lg:px-4 lg:px-0 lg:pb-0 lg:fixed lg:inset-y-0 lg:right-0 rtl:lg:left-0 rtl:lg:right-auto lg:z-40 lg:bg-white lg:dark:bg-gray-800 lg:pt-0">
             @if (!$orderDetail || ($orderDetail && $orderDetail->status == 'draft'))
                 @include('pos.kot_items')
             @elseif($orderDetail->status == 'kot')
                 @include('pos.order_items')
-            @elseif($orderDetail->status == 'billed' || $orderDetail->status == 'paid')
+            @elseif(in_array($orderDetail->status, ['billed', 'paid', 'payment_due'], true))
                 @include('pos.order_detail')
             @endif
+            </div>
         </div>
 
         <x-dialog-modal wire:model.live="showVariationModal" maxWidth="xl">
@@ -169,9 +207,45 @@
         </x-dialog-modal>
 
         @script
+        @php
+            $lwPosCtxOrderId = isset($orderDetail) && $orderDetail?->id
+                ? (int) $orderDetail->id
+                : (isset($orderID) && $orderID ? (int) $orderID : null);
+        @endphp
         <script>
+            (function () {
+                var oid = @json($lwPosCtxOrderId);
+                window.__posLwServerOrderId = oid;
+                window.posState = window.posState || {};
+                if (oid) {
+                    window.posState.orderID = oid;
+                }
+                if (typeof window.getCurrentPosOrderId !== 'function') {
+                    window.getCurrentPosOrderId = function () {
+                        var toPositiveInt = function (v) {
+                            if (v === null || v === undefined || v === '' || v === 'null') {
+                                return null;
+                            }
+                            var n = parseInt(String(v), 10);
+                            return (Number.isNaN(n) || n <= 0) ? null : n;
+                        };
+                        var id = toPositiveInt(window.posState && window.posState.orderID);
+                        if (id) {
+                            return id;
+                        }
+                        id = toPositiveInt(window.posState && window.posState.orderDetail && window.posState.orderDetail.id);
+                        if (id) {
+                            return id;
+                        }
+                        return toPositiveInt(window.__posLwServerOrderId);
+                    };
+                }
+            })();
+            @include('pos.partials.pos-sidebar-order-type-sync')
+            @include('pos.partials.order-type-modal-livewire-scripts')
+
             $wire.on('play_beep', () => {
-                new Audio("{{ asset('sound/sound_beep-29.mp3')}}").play();
+                new Audio(@json(asset('sound/sound_beep-29.mp3'))).play();
             });
 
             $wire.on('print_location', (url) => {
@@ -191,6 +265,18 @@
                     anchor.click();
                 }
             });
+
+            if (typeof Livewire !== 'undefined' && typeof Livewire.on === 'function') {
+                Livewire.on('posPaymentCompletedPrint', (payload) => {
+                    const data = Array.isArray(payload) ? payload[0] : payload;
+                    const orderId = data?.id ?? null;
+                    if (!orderId || typeof window.printOrder !== 'function') {
+                        return;
+                    }
+                    // Use POS printOrder() so behavior matches existing Pos.php print flow.
+                    setTimeout(() => window.printOrder(orderId), 120);
+                });
+            }
 
             // Handle deletion of merged orders after save
             // Use a small delay to ensure it happens after Livewire response is complete

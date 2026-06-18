@@ -3,7 +3,7 @@
         <div class="flex flex-wrap justify-between items-center mx-auto max-w-screen-xl">
             <div class="flex gap-8 items-center">
                 <a href="{{ route('delivery.assigned-orders') }}" class="inline-flex items-center app-logo">
-                    <img src="{{ $restaurant->logoUrl }}" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9" alt="App Logo" />
+                    <x-restaurant-logo :restaurant="$restaurant" class="ltr:mr-3 rtl:ml-3 h-6 sm:h-9" />
                     @if ($restaurant->show_logo_text)
                         <span class="self-center text-xl font-semibold whitespace-nowrap dark:text-white">{{ $restaurant->name }}</span>
                     @endif

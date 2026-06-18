@@ -67,6 +67,8 @@ class PlanList extends Component
     public $selectedCurrencyCode;
     public $currentCurrencyName;
     public $globalCurrencyName;
+    public bool $showStripeEmbeddedModal = false;
+    public ?int $stripeEmbeddedPaymentId = null;
 
     public function mount()
     {
@@ -128,7 +130,7 @@ class PlanList extends Component
     public function selectedPackage($id)
     {
         $this->resetValidation();
-        $this->reset(['show', 'offlineMethodId', 'offlineUploadFile', 'offlineDescription']);
+        $this->reset(['show', 'offlineMethodId', 'offlineUploadFile', 'offlineDescription', 'showStripeEmbeddedModal', 'stripeEmbeddedPaymentId']);
 
         $this->selectedPlan = Package::findOrFail($id);
         $this->stripeSettings = SuperadminPaymentGateway::first();
@@ -179,7 +181,7 @@ class PlanList extends Component
         $gateway = $activeGateways->keys()->first();
 
         match ($gateway) {
-            'stripe' => $this->initiateStripePayment(),
+            'stripe' => $this->startStripeEmbeddedPayment(),
             'razorpay' => $this->razorpaySubscription($this->selectedPlan->id),
             'flutterwave' => $this->initiateFlutterwavePayment(),
             'paypal' => $this->initiatePaypalPayment(),
@@ -230,7 +232,18 @@ class PlanList extends Component
         $offlinePlanChange->next_pay_date = $package->package_type == PackageType::LIFETIME ? null : ($this->isAnnual ? now()->addYear()->format('Y-m-d') : now()->addMonth()->format('Y-m-d'));
 
         if ($this->offlineUploadFile) {
-            $offlinePlanChange->file_name = Files::uploadLocalOrS3($this->offlineUploadFile, OfflinePlanChange::FILE_PATH);
+            try {
+                $offlinePlanChange->file_name = Files::uploadLocalOrS3($this->offlineUploadFile, OfflinePlanChange::FILE_PATH);
+            } catch (\Throwable $e) {
+                $this->alert('error', $e->getMessage(), [
+                    'toast' => true,
+                    'position' => 'top-end',
+                    'showCancelButton' => false,
+                    'cancelButtonText' => __('app.close'),
+                ]);
+
+                return;
+            }
         }
 
         $offlinePlanChange->save();
@@ -538,38 +551,46 @@ class PlanList extends Component
     }
 
     // initiate stripe payment
-    public function initiateStripePayment()
+    public function startStripeEmbeddedPayment(): void
     {
+        $plan = Package::findOrFail($this->selectedPlan->id);
+        $type = $plan->package_type == PackageType::LIFETIME ? 'lifetime' : ($this->isAnnual ? 'annual' : 'monthly');
 
-        if ($this->selectedPlan->package_type == PackageType::LIFETIME) {
-            $amount = $this->selectedPlan->price;
-        } else {
-            $amount = $this->isAnnual ? $this->selectedPlan->annual_price : $this->selectedPlan->monthly_price;
+        // For Stripe subscriptions (monthly/annual), package must have Stripe price id
+        if ($plan->package_type != PackageType::LIFETIME) {
+            $priceId = $type === 'annual' ? $plan->stripe_annual_plan_id : $plan->stripe_monthly_plan_id;
+            if (empty($priceId) || trim((string)$priceId) === '') {
+                request()->session()->flash('flash.banner', __('messages.noPlanIdFound'));
+                request()->session()->flash('flash.bannerStyle', 'danger');
+                $this->redirect(route('dashboard'), navigate: true);
+                return;
+            }
         }
+
+        $amount = $plan->package_type == PackageType::LIFETIME
+            ? $plan->price
+            : ($this->isAnnual ? $plan->annual_price : $plan->monthly_price);
 
         if (!$amount) {
-            $this->alert('error', __('messages.noPlanIdFound'), [
-                'toast' => true,
-                'position' => 'top-end',
-                'showCancelButton' => false,
-                'cancelButtonText' => __('app.close')
-            ]);
+            request()->session()->flash('flash.banner', __('messages.noPlanIdFound'));
+            request()->session()->flash('flash.bannerStyle', 'danger');
+            $this->redirect(route('dashboard'), navigate: true);
             return;
         }
-
-        $plan = Package::find($this->selectedPlan->id);
-        $type = $this->isAnnual ? 'annual' : 'monthly';
-        $currency_id = $plan->currency_id;
 
         $payment = RestaurantPayment::create([
             'restaurant_id' => $this->restaurant->id,
             'amount' => $amount,
             'package_id' => $plan->id,
             'package_type' => $type,
-            'currency_id' => $currency_id,
+            'currency_id' => $plan->currency_id,
         ]);
 
-        $this->dispatch('stripePlanPaymentInitiated', payment: $payment);
+        $this->stripeEmbeddedPaymentId = $payment->id;
+        $this->showStripeEmbeddedModal = true;
+        $this->showPaymentMethodModal = false;
+
+        $this->dispatch('openStripeEmbeddedModal', paymentId: $payment->id);
     }
 
     public function initiateXenditPayment()
@@ -1113,6 +1134,7 @@ class PlanList extends Component
             ];
 
             // Make API call to Tap Charge API
+            /** @var \Illuminate\Http\Client\Response $response */
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $secretKey,
                 'Content-Type' => 'application/json',

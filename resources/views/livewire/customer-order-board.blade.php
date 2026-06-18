@@ -1,6 +1,6 @@
 <div
     class="flex h-dvh w-full flex-col overflow-hidden md:grid md:h-screen md:w-screen md:grid-cols-2"
-    @if(!pusherSettings()->is_enabled_pusher_broadcast) wire:poll.2s @endif
+    @if(!pusherSettings()->is_enabled_pusher_broadcast) wire:poll.10s @endif
 >
     <!-- Preparing (top on mobile, left on md+) -->
     <div class="flex min-h-0 flex-1 flex-col bg-gray-700 text-white md:h-full md:flex-none">

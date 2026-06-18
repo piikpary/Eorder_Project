@@ -58,7 +58,7 @@ class FrontFeaturePage extends Component
             'language' => 'required',
             'featureTitle' => 'required',
             'featureDescription' => 'required',
-            'featureImage' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+            'featureImage' => \App\Support\ImageUpload::requiredMimesRule()
         ]);
 
         $frontDetail = FrontFeature::create(

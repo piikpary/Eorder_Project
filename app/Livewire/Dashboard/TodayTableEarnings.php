@@ -17,7 +17,7 @@ class TodayTableEarnings extends Component
         $endUTC = $boundaries['end']->setTimezone('UTC')->toDateTimeString();
 
         $orders = Order::select('table_id', DB::raw('SUM(total) as total_price'))
-            ->with('table')
+            ->with('table.area')
             ->whereNotNull('table_id')
             ->where('orders.date_time', '>=', $startUTC)
             ->where('orders.date_time', '<=', $endUTC)

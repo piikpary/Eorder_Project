@@ -15,6 +15,7 @@ use App\Models\Payment;
 use App\Models\Printer;
 use Livewire\Component;
 use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\KotPlace;
 use App\Models\MenuItem;
 use App\Models\OrderTax;
@@ -23,9 +24,11 @@ use App\Models\OrderType;
 use App\Models\TapPayment;
 use App\Models\EpayPayment;
 use App\Models\OrderCharge;
+use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Livewire\Attributes\On;
+use App\Concerns\PrintsShopKot;
 use App\Events\OrderUpdated;
 use App\Models\ItemCategory;
 use App\Models\PaypalPayment;
@@ -54,12 +57,16 @@ use App\Models\PaymentGatewayCredential;
 use App\Models\OfflinePaymentMethod;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use App\Services\RestaurantAvailabilityService;
+use App\Services\ShopCartKotPrintUrls;
+use App\Services\Shop\BrowseCartMutator;
+use App\Services\Shop\CustomerSiteCatalogBuilder;
 
 class Cart extends Component
 {
 
     use LivewireAlert;
     use PrinterSetting;
+    use PrintsShopKot;
 
     // Note: HasLoyaltyIntegration trait is conditionally loaded
     // If the Loyalty module doesn't exist, stub methods below handle it gracefully
@@ -89,7 +96,10 @@ class Cart extends Component
     public $customerName;
     public $customerPhone;
     public $customerPhoneCode;
+    public $phoneCodeDetected = false;
     public $customerAddress;
+    public $mapApiKey;
+    public $mapProvider;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -100,6 +110,7 @@ class Cart extends Component
     public $showVeg;
     public $razorpayStatus;
     public $stripeStatus;
+    public bool $showStripeOrderPaymentModal = false;
     public $cartQty;
     public $restaurantHash;
     public $restaurant;
@@ -166,6 +177,118 @@ class Cart extends Component
     public $offlinePaymentMethods = [];
     public $selectedOfflinePaymentMethod = null;
 
+    private function getActivePaymentOptions(): array
+    {
+        $pg = $this->paymentGateway;
+
+        if (!$pg) {
+            return [];
+        }
+
+        $options = [];
+
+        if ((bool) ($pg->stripe_status ?? false)) {
+            $options[] = 'stripe';
+        }
+        if ((bool) ($pg->razorpay_status ?? false)) {
+            $options[] = 'razorpay';
+        }
+        if ((bool) ($pg->flutterwave_status ?? false)) {
+            $options[] = 'flutterwave';
+        }
+        if ((bool) ($pg->paypal_status ?? false)) {
+            $options[] = 'paypal';
+        }
+        if ((bool) ($pg->payfast_status ?? false)) {
+            $options[] = 'payfast';
+        }
+        if ((bool) ($pg->paystack_status ?? false)) {
+            $options[] = 'paystack';
+        }
+        if ((bool) ($pg->xendit_status ?? false)) {
+            $options[] = 'xendit';
+        }
+        if ((bool) ($pg->epay_status ?? false)) {
+            $options[] = 'epay';
+        }
+        if ((bool) ($pg->mollie_status ?? false)) {
+            $options[] = 'mollie';
+        }
+        if ((bool) ($pg->tap_status ?? false)) {
+            $options[] = 'tap';
+        }
+
+        if ((bool) ($pg->is_qr_payment_enabled ?? false) && !empty($pg->qr_code_image_url)) {
+            $options[] = 'qr';
+        }
+
+        if (!empty($this->offlinePaymentMethods) && count($this->offlinePaymentMethods) > 0) {
+            foreach ($this->offlinePaymentMethods as $method) {
+                if (!empty($method?->name)) {
+                    $options[] = 'offline:' . $method->name;
+                }
+            }
+        }
+
+        return $options;
+    }
+
+    private function autoStartSinglePaymentOption(int $orderId): bool
+    {
+        $options = $this->getActivePaymentOptions();
+
+        if (count($options) !== 1) {
+            return false;
+        }
+
+        $option = $options[0];
+
+        if ($option === 'qr') {
+            $this->showPaymentModal = true;
+            $this->showQrCode = true;
+            $this->showPaymentDetail = false;
+            $this->selectedOfflinePaymentMethod = null;
+            return true;
+        }
+
+        if (str_starts_with($option, 'offline:')) {
+            $methodName = Str::after($option, 'offline:');
+            $this->showPaymentModal = true;
+            $this->showQrCode = false;
+            $this->showPaymentDetail = true;
+            $this->selectedOfflinePaymentMethod = $methodName;
+            return true;
+        }
+
+        // Online gateways: trigger directly (no gateway chooser modal).
+        $this->showPaymentModal = false;
+
+        match ($option) {
+            'stripe' => $this->initiateStripePayment($orderId),
+            'razorpay' => $this->initiatePayment($orderId),
+            'flutterwave' => $this->initiateFlutterwavePayment($orderId),
+            'paypal' => $this->initiatePaypalPayment($orderId),
+            'payfast' => $this->initiatePayfastPayment($orderId),
+            'paystack' => $this->initiatePaystackPayment($orderId),
+            'xendit' => $this->initiateXenditPayment($orderId),
+            'epay' => $this->initiateEpayPayment($orderId),
+            'mollie' => $this->initiateMolliePayment($orderId),
+            'tap' => $this->initiateTapPayment($orderId),
+            default => null,
+        };
+
+        return true;
+    }
+    /** When true, order-type choice is handled by the client catalog UI (not Livewire modal). */
+    public bool $pendingClientOrderTypeSelection = false;
+
+    /** Set after the customer explicitly picks an order type (chips, modal, or single-type auto). */
+    public bool $orderTypeConfirmedByUser = false;
+
+    private bool $clientShopCatalogResolved = false;
+
+    private ?array $clientShopCatalogCache = null;
+
     // Loyalty properties - defined here so they exist even if trait doesn't
     public $loyaltyPointsRedeemed = 0;
     public $loyaltyDiscountAmount = 0;
@@ -197,6 +320,20 @@ class Cart extends Component
         if (!$this->restaurant) {
             abort(404);
         }
+
+        if ($this->shouldRedirectToBookTable()) {
+            $this->redirect(
+                route('book_a_table', ['hash' => $this->restaurant->hash]) . '?branch=' . $this->shopBranch->id,
+                navigate: true,
+            );
+
+            return;
+        }
+
+        $this->restaurant->loadMissing('euAllergenSetting');
+
+        $this->mapApiKey = global_setting()->google_map_api_key ?? null;
+        $this->mapProvider = global_setting()->map_provider ?? 'google';
 
         // Detect if user came from QR code
         $this->cameFromQR = request()->query('hash') === $this->restaurant->hash ||
@@ -235,29 +372,71 @@ class Cart extends Component
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
-        $this->customerPhoneCode = $this->customer?->phone_code ?? $this->restaurant->phone_code ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->customer?->phone_code) && !empty($detectedPhoneCode);
+        $this->customerPhoneCode = $this->customer?->phone_code
+            ?? $detectedPhoneCode
+            ?? $this->restaurant->phone_code
+            ?? $this->allPhoneCodes->first();
 
-        // If came from QR code, auto-set to dine_in and don't show modal
+        // If came from QR / table scan, lock dine-in and hide order-type picker
         if ($this->cameFromQR) {
-            $this->orderType = 'dine_in';
-            $this->setDefaultOrderType();
+            session(['shop_force_dine_in' => true]);
+
+            $dineInType = OrderType::query()
+                ->where('branch_id', $this->shopBranch->id)
+                ->where('enable_from_customer_site', true)
+                ->where('type', 'dine_in')
+                ->availableForRestaurant()
+                ->orderByDesc('is_default')
+                ->first();
+
+            if ($dineInType) {
+                $this->applyOrderTypeId((int) $dineInType->id);
+            } else {
+                $this->orderType = 'dine_in';
+                $this->setDefaultOrderType();
+            }
+
             $this->showOrderTypeModal = false;
+            $this->pendingClientOrderTypeSelection = false;
+            $this->orderTypeConfirmedByUser = true;
         } else {
+            session()->forget('shop_force_dine_in');
             // For regular users, determine default order type but show modal first
             $this->orderType = $this->restaurant->allow_dine_in_orders ? 'dine_in' : ($this->restaurant->allow_customer_delivery_orders ? 'delivery' : 'pickup');
 
-            // Check if we have multiple order types to show modal
-            $availableOrderTypes = OrderType::where('branch_id', $this->shopBranch->id)
-                ->where('is_active', true)
+            // Fetch customer-site enabled order types once (used for modal + auto-select)
+            $customerOrderTypes = OrderType::query()
+                ->where('branch_id', $this->shopBranch->id)
                 ->where('enable_from_customer_site', true)
-                ->count();
+                ->availableForRestaurant()
+                ->orderByDesc('is_default')
+                ->get(['id', 'slug', 'type']);
 
-            // Show modal if more than one order type available
-            $this->showOrderTypeModal = $availableOrderTypes > 1;
+            $orderTypeCount = $customerOrderTypes?->count() ?? 0;
 
             // If only one order type, set it automatically
-            if ($availableOrderTypes == 1) {
+            if ($orderTypeCount === 1) {
+                $this->showOrderTypeModal = false;
+                $orderTypeModel = $customerOrderTypes->first();
+                $this->orderTypeId = $orderTypeModel->id;
+                $this->orderTypeSlug = $orderTypeModel->slug;
+                $this->orderType = $orderTypeModel->type;
+                $this->orderTypeConfirmedByUser = true;
+            } elseif ($orderTypeCount > 1) {
+                // Pre-select default for menu browsing; do not block the page (e.g. guests booking a table).
+                $orderTypeModel = $customerOrderTypes->first();
+                if ($orderTypeModel) {
+                    $this->applyOrderTypeId((int) $orderTypeModel->id);
+                }
+                $this->pendingClientOrderTypeSelection = false;
+                $this->showOrderTypeModal = false;
+            } else {
+                $this->showOrderTypeModal = false;
+                $this->orderType = 'dine_in';
                 $this->setDefaultOrderType();
+                $this->orderTypeConfirmedByUser = true;
             }
         }
 
@@ -269,33 +448,38 @@ class Cart extends Component
             }
         }
 
+        if ($this->shouldResetBrowseCartForNewOrder()) {
+            $this->clearClientBrowseCart();
+        }
+
         // Fetch QR code image from database
         $this->qrCodeImage = $this->restaurant->qr_code_image;
 
-        // Only call these if order type is already selected
-        if (!$this->showOrderTypeModal) {
+        // Only call these if order type is already selected (skip while client JS order-type picker is open)
+        if (!$this->showOrderTypeModal && !$this->pendingClientOrderTypeSelection) {
             $this->updatedOrderType($this->orderType);
         }
         $this->taxMode = $this->restaurant->tax_mode ?? 'order';
 
         $this->pickupRange = $this->restaurant->pickup_days_range ?? 1;
         $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
-        $this->minDate = now()->format($dateFormat);
-        $this->maxDate = now()->addDays($this->pickupRange - 1)->endOfDay()->format($dateFormat);
+        $restaurantTz = $this->restaurant->timezone ?? config('app.timezone');
+        $this->minDate = now($restaurantTz)->format($dateFormat);
+        $this->maxDate = now($restaurantTz)->addDays($this->pickupRange - 1)->endOfDay()->format($dateFormat);
 
-        // Initialize pickupDate and pickupTime from deliveryDateTime if it exists
+        // Initialize pickupDate and pickupTime from deliveryDateTime if it exists (restaurant timezone)
         if ($this->deliveryDateTime) {
             try {
-                $dateTime = \Carbon\Carbon::createFromFormat('Y-m-d\TH:i', $this->deliveryDateTime);
+                $dateTime = \Carbon\Carbon::createFromFormat('Y-m-d\TH:i', $this->deliveryDateTime, $restaurantTz);
                 $this->pickupDate = $dateTime->format($dateFormat);
                 $this->pickupTime = $dateTime->format('H:i');
             } catch (\Exception $e) {
-                $this->pickupDate = now()->format($dateFormat);
-                $this->pickupTime = now()->format('H:i');
+                $this->pickupDate = now($restaurantTz)->format($dateFormat);
+                $this->pickupTime = now($restaurantTz)->format('H:i');
             }
         } else {
-            $this->pickupDate = now()->format($dateFormat);
-            $this->pickupTime = now()->format('H:i');
+            $this->pickupDate = now($restaurantTz)->format($dateFormat);
+            $this->pickupTime = now($restaurantTz)->format('H:i');
         }
 
         $this->defaultDate = old('deliveryDateTime', $this->deliveryDateTime ?? $this->minDate);
@@ -326,6 +510,10 @@ class Cart extends Component
                     $this->showLocationModal = true;
                 }
             }
+        }
+
+        if (! $this->pendingClientOrderTypeSelection && ! $this->showOrderTypeModal && (int) ($this->orderTypeId ?? 0) > 0) {
+            $this->applySimpleBrowseSessionCartMerge();
         }
     }
 
@@ -456,7 +644,7 @@ class Cart extends Component
     {
         // Get default order type for the current order type
         $orderTypeModel = OrderType::where('branch_id', $this->shopBranch->id)
-            ->where('is_active', true)
+            ->where('type', $this->orderType)
             ->first();
 
         if ($orderTypeModel) {
@@ -597,18 +785,29 @@ class Cart extends Component
      */
     public function updatedOrderTypeId($value)
     {
-        if (!$value) {
+        if (!$value || $this->cameFromQR) {
             return;
         }
 
-        // Get the order type information
+        $this->applyOrderTypeId((int) $value);
+    }
+
+    /**
+     * Apply order type id to cart state (charges, line pricing, totals).
+     */
+    private function applyOrderTypeId(int $value): void
+    {
+        if ($value <= 0) {
+            return;
+        }
+
         $orderType = OrderType::find($value);
 
         if (!$orderType) {
             return;
         }
 
-        // Update the local variables
+        $this->orderTypeId = $value;
         $this->orderType = $orderType->type;
         $this->orderTypeSlug = $orderType->slug;
 
@@ -670,6 +869,51 @@ class Cart extends Component
         }
 
         $this->calculateTotal();
+
+        $this->dispatchShopClientOrderTypeChanged();
+    }
+
+    public function hydrate(): void
+    {
+        $pendingRaw = session()->pull('shop_browse_order_type_id');
+
+        if ($pendingRaw) {
+            $pendingId = (int) $pendingRaw;
+
+            if ($pendingId > 0) {
+                if (session('shop_force_dine_in')) {
+                    $pendingType = OrderType::query()
+                        ->where('id', $pendingId)
+                        ->where('branch_id', $this->shopBranch->id)
+                        ->where('type', 'dine_in')
+                        ->first();
+
+                    if ($pendingType) {
+                        $this->applyOrderTypeId($pendingId);
+                    }
+
+                    $this->pendingClientOrderTypeSelection = false;
+                } elseif ($pendingId === (int) ($this->orderTypeId ?? 0)) {
+                    $this->pendingClientOrderTypeSelection = false;
+                } else {
+                    $this->applyOrderTypeId($pendingId);
+                    $this->pendingClientOrderTypeSelection = false;
+                }
+            }
+        }
+
+        if (! $this->pendingClientOrderTypeSelection && (int) ($this->orderTypeId ?? 0) > 0) {
+            $this->applySimpleBrowseSessionCartMerge();
+        }
+    }
+
+    /**
+     * Apply browse-cart session lines after a fetch mutation (dispatched from Alpine; no $wire.$call).
+     */
+    #[On('shop-browse-merge-cart-from-session')]
+    public function mergeBrowseCartFromSession(): void
+    {
+        $this->applySimpleBrowseSessionCartMerge();
     }
 
     /**
@@ -677,18 +921,250 @@ class Cart extends Component
      */
     public function selectOrderTypeFromModal($orderTypeId)
     {
-        if (!$orderTypeId) {
+        if (!$orderTypeId || $this->cameFromQR) {
             return;
         }
 
-        // Set the order type ID which will trigger updatedOrderTypeId
-        $this->orderTypeId = $orderTypeId;
-
-        $orderType = OrderType::find($this->orderTypeId);
-        $this->orderTypeSlug = $orderType->slug;
-        $this->orderType = $orderType->type;
-        // Close the modal
+        $this->applyOrderTypeId((int) $orderTypeId);
         $this->showOrderTypeModal = false;
+        $this->pendingClientOrderTypeSelection = false;
+        $this->orderTypeConfirmedByUser = true;
+    }
+
+    /**
+     * Handle calls from the wire:ignored client catalog (Alpine) via Livewire.dispatchTo.
+     *
+     * @param  mixed  $detail  Event detail from the browser (shape varies by Livewire version)
+     */
+    #[On('client-menu-remote')]
+    public function clientMenuRemote(mixed $detail = null): void
+    {
+        $payload = $detail;
+
+        if (is_array($payload) && array_is_list($payload) && isset($payload[0]) && is_array($payload[0])) {
+            $payload = $payload[0];
+        }
+
+        if (! is_array($payload)) {
+            return;
+        }
+
+        $method = $payload['method'] ?? null;
+        $args = $payload['args'] ?? [];
+
+        if (! is_string($method) || $method === '') {
+            return;
+        }
+
+        if (is_array($args)) {
+            $args = array_values($args);
+        } elseif (is_object($args)) {
+            $args = array_values((array) $args);
+        } else {
+            return;
+        }
+
+        match ($method) {
+            'showItemDetail' => $this->showItemDetail((int) ($args[0] ?? 0)),
+            'addQty' => $this->addQty((string) ($args[0] ?? '')),
+            'subQty' => $this->subQty((string) ($args[0] ?? '')),
+            'addCartItems' => $this->addCartItems(
+                (int) ($args[0] ?? 0),
+                (int) ($args[1] ?? 0),
+                (int) ($args[2] ?? 0),
+            ),
+            'subCartItems' => $this->subCartItems((int) ($args[0] ?? 0)),
+            'subModifiers' => $this->subModifiers((int) ($args[0] ?? 0)),
+            'showItemVariations' => $this->showItemVariations((int) ($args[0] ?? 0)),
+            'selectOrderTypeFromModal' => $this->selectOrderTypeFromModal($args[0] ?? null),
+            default => null,
+        };
+    }
+
+    private function isPlainNumericCartKey(mixed $cartKey): bool
+    {
+        if (is_int($cartKey)) {
+            return $cartKey > 0;
+        }
+
+        return is_string($cartKey) && ctype_digit($cartKey) && (int) $cartKey > 0;
+    }
+
+    private function cartHasVariationLineForMenuItem(int $menuItemId): bool
+    {
+        $prefix = $menuItemId . '_';
+
+        foreach (array_keys($this->orderItemList ?? []) as $cartKey) {
+            if (is_string($cartKey) && str_starts_with($cartKey, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function purgeSimpleBrowseLine(int $menuItemId): void
+    {
+        unset(
+            $this->orderItemList[$menuItemId],
+            $this->orderItemVariation[$menuItemId],
+            $this->orderItemAmount[$menuItemId],
+            $this->orderItemQty[$menuItemId],
+            $this->orderItemModifiersPrice[$menuItemId],
+            $this->itemNotes[$menuItemId],
+            $this->cartItemQty[$menuItemId],
+        );
+    }
+
+    private function ensureSimpleBrowseLineQty(int $menuItemId, int $qty): void
+    {
+        if ($qty < 1) {
+            return;
+        }
+
+        $item = MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)
+            ->where('show_on_customer_site', true)
+            ->where('branch_id', $this->shopBranch->id)
+            ->find($menuItemId);
+
+        if (! $item) {
+            return;
+        }
+
+        if ($this->orderTypeId) {
+            $item->setPriceContext((int) $this->orderTypeId, null);
+        }
+
+        $this->orderItemList[$menuItemId] = $item;
+        $this->orderItemQty[$menuItemId] = $qty;
+        $this->cartItemQty[$menuItemId] = $qty;
+        unset($this->orderItemVariation[$menuItemId]);
+
+        $basePrice = $this->orderItemList[$menuItemId]->price;
+        $this->orderItemAmount[$menuItemId] = $qty * ($basePrice + ($this->orderItemModifiersPrice[$menuItemId] ?? 0));
+        $this->itemNotes[$menuItemId] = $this->itemNotes[$menuItemId] ?? '';
+    }
+
+    private function applySimpleBrowseSessionCartMerge(): void
+    {
+        if (! $this->restaurant?->hash) {
+            return;
+        }
+
+        $key = BrowseCartMutator::sessionKey($this->restaurant->hash);
+
+        if (! session()->has($key)) {
+            return;
+        }
+
+        $map = session($key, []);
+        if (! is_array($map)) {
+            $map = [];
+        }
+
+        $normalized = [];
+        foreach ($map as $k => $v) {
+            $ki = (int) $k;
+            if ($ki < 1) {
+                continue;
+            }
+            $normalized[$ki] = (int) $v;
+        }
+
+        foreach (array_keys($this->orderItemList ?? []) as $cartKey) {
+            if (! $this->isPlainNumericCartKey($cartKey)) {
+                continue;
+            }
+            $mid = (int) $cartKey;
+            if ($this->cartHasVariationLineForMenuItem($mid)) {
+                continue;
+            }
+            $want = $normalized[$mid] ?? 0;
+            if ($want < 1) {
+                $this->purgeSimpleBrowseLine($mid);
+            }
+        }
+
+        foreach ($normalized as $mid => $want) {
+            if ($want < 1) {
+                continue;
+            }
+            if ($this->cartHasVariationLineForMenuItem((int) $mid)) {
+                continue;
+            }
+            $this->ensureSimpleBrowseLineQty((int) $mid, $want);
+        }
+
+        $this->calculateTotal();
+    }
+
+    private function syncBrowseSimpleCartSessionFromComponent(): void
+    {
+        if (! $this->restaurant?->hash) {
+            return;
+        }
+
+        $key = BrowseCartMutator::sessionKey($this->restaurant->hash);
+        $map = [];
+
+        foreach ($this->cartItemQty ?? [] as $k => $q) {
+            if (! $this->isPlainNumericCartKey($k)) {
+                continue;
+            }
+            $mid = (int) $k;
+            if ($this->cartHasVariationLineForMenuItem($mid)) {
+                continue;
+            }
+            $qi = (int) $q;
+            if ($mid < 1 || $qi < 1) {
+                continue;
+            }
+            $map[(string) $mid] = $qi;
+        }
+
+        session([$key => $map]);
+    }
+
+    /**
+     * Fresh customer order from menu (clears JS browse cart + Livewire cart state).
+     */
+    public function startNewShopOrder(): void
+    {
+        $this->clearClientBrowseCart();
+    }
+
+    private function shouldResetBrowseCartForNewOrder(): bool
+    {
+        return request()->boolean('new_order') && ! request()->has('current_order');
+    }
+
+    private function clearClientBrowseCart(): void
+    {
+        if ($this->restaurant?->hash) {
+            session()->forget(BrowseCartMutator::sessionKey($this->restaurant->hash));
+        }
+
+        $this->orderItemList = [];
+        $this->orderItemVariation = [];
+        $this->orderItemQty = [];
+        $this->cartItemQty = [];
+        $this->orderItemAmount = [];
+        $this->orderItemModifiersPrice = [];
+        $this->itemModifiersSelected = [];
+        $this->itemNotes = [];
+        $this->orderItemTaxDetails = [];
+        $this->subTotal = 0;
+        $this->total = 0;
+        $this->totalTaxAmount = 0;
+        $this->taxBase = 0;
+        $this->cartQty = 0;
+        $this->showCart = false;
+        $this->showMenu = true;
+
+        $this->calculateTotal();
+        $this->dispatch('shop-client-cart-reset');
+        $this->dispatch('shop-client-cart-qty-sync', cartItemQty: []);
+        $this->dispatch('shop-client-show-menu', showMenu: true);
     }
 
     public function initializeHeaderSettings()
@@ -749,6 +1225,18 @@ class Cart extends Component
 
     public function addCartItems($id, $variationCount, $modifierCount)
     {
+        if (is_numeric($id)) {
+            $id = (int) $id;
+        }
+        $variationCount = (int) $variationCount;
+        $modifierCount = (int) $modifierCount;
+
+        if (! $this->orderTypeConfirmedByUser && $this->getOrderTypesProperty()->count() > 1) {
+            $this->showOrderTypeModal = true;
+
+            return;
+        }
+
         // Check radius restriction before allowing cart operations
         if (!$this->checkRadiusRestriction()) {
             // Check if location is set
@@ -781,7 +1269,12 @@ class Cart extends Component
 
         // Check order limit
         $orderStats = $this->shopBranch ? getRestaurantOrderStats($this->shopBranch->id) : null;
-        if (!$orderStats || (!$orderStats['unlimited'] && $orderStats['current_count'] >= $orderStats['order_limit'])) {
+        if (! branchOrderStatsAllowNewOrder($orderStats)) {
+            $this->alert('error', __('messages.orderLimitReached'), [
+                'toast' => true,
+                'position' => 'top-end',
+            ]);
+
             return;
         }
 
@@ -820,6 +1313,10 @@ class Cart extends Component
 
     public function syncCart($id)
     {
+        if (is_numeric($id)) {
+            $id = (int) $id;
+        }
+
         // Check radius restriction before adding items
         if (!$this->checkRadiusRestriction()) {
             if (empty($this->addressLat) || empty($this->addressLng)) {
@@ -865,6 +1362,8 @@ class Cart extends Component
         if (!isset($this->itemNotes[$id])) {
             $this->itemNotes[$id] = '';
         }
+
+        $this->syncBrowseSimpleCartSessionFromComponent();
     }
 
     #[On('addQty')]
@@ -906,12 +1405,19 @@ class Cart extends Component
         $basePrice = $this->orderItemVariation[$id]->price ?? $this->orderItemList[$id]->price;
         $this->orderItemAmount[$id] = $this->orderItemQty[$id] * ($basePrice + ($this->orderItemModifiersPrice[$id] ?? 0));
         $this->calculateTotal();
+        $this->syncBrowseSimpleCartSessionFromComponent();
     }
 
     #[On('subQty')]
     public function subQty($id)
     {
+        // If the cart line doesn't exist, ignore (prevents undefined array key errors on stale Livewire updates)
+        if (!isset($this->orderItemQty[$id])) {
+            return;
+        }
+
         $this->showCartVariationModal = false;
+
         $this->orderItemQty[$id] = (isset($this->orderItemQty[$id]) && $this->orderItemQty[$id] > 1) ? ($this->orderItemQty[$id] - 1) : 0;
 
         // Set price context before using price
@@ -924,7 +1430,7 @@ class Cart extends Component
             }
         }
 
-        $basePrice = $this->orderItemVariation[$id]->price ?? $this->orderItemList[$id]->price;
+        $basePrice = $this->orderItemVariation[$id]->price ?? $this->orderItemList[$id]->price ?? 0;
         $this->orderItemAmount[$id] = $this->orderItemQty[$id] * ($basePrice + ($this->orderItemModifiersPrice[$id] ?? 0));
         $menuID = explode('_', $id);
 
@@ -946,6 +1452,7 @@ class Cart extends Component
         }
 
         $this->calculateTotal();
+        $this->syncBrowseSimpleCartSessionFromComponent();
     }
 
     public function calculateTotal()
@@ -953,7 +1460,7 @@ class Cart extends Component
         $this->cartQty = 0;
 
         foreach ($this->orderItemQty ?? [] as $qty) {
-            if ($qty > 0) {
+            if ((int) $qty > 0) {
                 $this->cartQty++;
             }
         }
@@ -1044,6 +1551,177 @@ class Cart extends Component
         $this->recalculateTaxTotals($this->taxBase);
 
         $this->total += (float)$this->deliveryFee ?: 0;
+
+        $this->dispatchShopClientBrowserCartSync();
+    }
+
+    /**
+     * Whether the floating shop cart summary should show (covers string qty / stale cartQty edge cases).
+     */
+    public function shopCartStripShouldDisplay(): bool
+    {
+        if (((int) ($this->cartQty ?? 0)) > 0) {
+            return true;
+        }
+
+        foreach ($this->orderItemQty ?? [] as $qty) {
+            if ((int) $qty > 0) {
+                return true;
+            }
+        }
+
+        return is_array($this->orderItemAmount ?? null) && count($this->orderItemAmount) > 0;
+    }
+
+    /**
+     * Line count for the floating cart banner (distinct cart lines with qty &gt; 0).
+     */
+    public function shopCartBannerLineCount(): int
+    {
+        $n = 0;
+        foreach ($this->orderItemQty ?? [] as $qty) {
+            if ((int) $qty > 0) {
+                $n++;
+            }
+        }
+
+        if ($n > 0) {
+            return $n;
+        }
+
+        return max(0, (int) ($this->cartQty ?? 0));
+    }
+
+    private function dispatchShopClientBrowserCartSync(): void
+    {
+        $this->dispatch('shop-client-cart-qty-sync', cartItemQty: $this->cartItemQty ?? []);
+    }
+
+    private function dispatchShopClientOrderTypeChanged(): void
+    {
+        if ($this->orderTypeId) {
+            $this->dispatch('shop-client-order-type-changed', orderTypeId: (int) $this->orderTypeId);
+        }
+    }
+
+    /**
+     * Client-side catalog JSON for the Alpine menu. Must be present on Livewire updates too; returning null
+     * on X-Livewire requests broke DOM morphing and blocked cart UI updates after add-to-cart.
+     */
+    private function getClientShopCatalogPayload(): ?array
+    {
+        if ($this->clientShopCatalogResolved) {
+            return $this->clientShopCatalogCache;
+        }
+
+        $this->clientShopCatalogResolved = true;
+
+        try {
+            $this->restaurant->loadMissing('euAllergenSetting');
+            $this->clientShopCatalogCache = CustomerSiteCatalogBuilder::build(
+                $this->restaurant,
+                $this->shopBranch,
+                $this->table ?? null,
+                (bool) $this->cameFromQR,
+                app()->getLocale(),
+                (int) ($this->orderTypeId ?? 0),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('shop_client_catalog_build_failed', [
+                'message' => $e->getMessage(),
+                'branch_id' => $this->shopBranch->id ?? null,
+            ]);
+            $this->clientShopCatalogCache = null;
+        }
+
+        return $this->clientShopCatalogCache;
+    }
+
+    /**
+     * UI config for Alpine browse layer (labels, flags, order limits). Must be present on Livewire updates.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function getClientShopBrowseConfig(): ?array
+    {
+        $orderStats = $this->shopBranch ? getRestaurantOrderStats($this->shopBranch->id) : null;
+        $orderLimitOk = branchOrderStatsAllowNewOrder($orderStats);
+
+        $orderTypesQuery = OrderType::query()
+            ->where('branch_id', $this->shopBranch->id)
+            ->where('enable_from_customer_site', true)
+            ->availableForRestaurant()
+            ->orderByDesc('is_default')
+            ->orderBy('id');
+
+        if ($this->cameFromQR) {
+            $orderTypesQuery->where('type', 'dine_in');
+        }
+
+        $orderTypesPick = $orderTypesQuery->get()
+            ->reject(fn (OrderType $ot) => $ot->type === 'room_service' || $ot->slug === 'room_service')
+            ->map(fn (OrderType $ot) => [
+                'id' => $ot->id,
+                'slug' => $ot->slug,
+                'type' => $ot->type,
+                'name' => $ot->translated_name,
+                'description' => $this->orderTypeCustomerDescription($ot),
+            ])
+            ->values()
+            ->all();
+
+        $euSelectableForBrowse = $this->restaurant->selectableEuAllergenKeys();
+
+        return [
+            'showMenu' => (bool) $this->showMenu,
+            'euAllergensEnabled' => $euSelectableForBrowse !== [],
+            'orderLimitOk' => $orderLimitOk,
+            'livewire_component_name' => $this->getName() ?: 'shop.cart',
+            'showVeg' => (bool) ($this->restaurant->show_veg ?? false),
+            'showHalal' => (bool) ($this->restaurant->show_halal ?? false),
+            'hideImages' => (bool) ($this->restaurant->hide_menu_item_image_on_customer_site ?? false),
+            'canCreateOrder' => (bool) $this->canCreateOrder,
+            'allowCustomerOrders' => (bool) ($this->restaurant->allow_customer_orders ?? false),
+            'initialCartItemQty' => $this->cartItemQty ?? [],
+            'use_js_order_type_modal' => false,
+            'book_table_url' => $this->getBookTableUrl(),
+            'show_book_table_escape' => $this->showBookTableEscapeOnOrderTypeModal(),
+            'cart_storage_key' => 'tt_shop_cart_qty_' . $this->restaurant->hash,
+            'order_type_sync_url' => route('shop.sync_browse_order_type', ['hash' => $this->restaurant->hash]),
+            'browse_cart_mutate_url' => route('shop.browse_cart_mutate', ['hash' => $this->restaurant->hash]),
+            'came_from_qr' => (bool) $this->cameFromQR,
+            'branch_id' => (int) $this->shopBranch->id,
+            'order_types_pick' => $orderTypesPick,
+            'labels' => [
+                'showAll' => __('app.showAll'),
+                'showMore' => __('modules.menu.showMore'),
+                'showLess' => __('modules.menu.showLess'),
+                'searchPlaceholder' => __('placeholders.searchMenuItems'),
+                'typeVeg' => __('modules.menu.typeVeg'),
+                'typeHalal' => __('modules.menu.typeHalal'),
+                'noMenuAdded' => __('messages.noMenuAdded'),
+                'noItemAdded' => __('messages.noItemAdded'),
+                'add' => __('app.add'),
+                'cancel' => __('app.cancel'),
+                'itemDescription' => __('modules.menu.itemDescription'),
+                'allergensHeading' => __('modules.settings.euAllergensCustomerDisplayHeading'),
+                'dietaryLabelsHeading' => __('modules.menu.dietaryLabelsSectionTitle'),
+                'outOfStock' => 'Out of stock',
+                'preparationTime' => __('modules.menu.preparationTime'),
+                'minutes' => __('modules.menu.minutes'),
+                'showVariations' => __('modules.menu.showVariations'),
+                'allItemsLoaded' => __('messages.allItemsLoaded'),
+                'itemLabel' => __('modules.menu.item'),
+                'selectOrderType' => __('modules.order.selectOrderType'),
+                'selectOrderTypeDescription' => __('modules.order.selectOrderTypeDescription'),
+                'selectOrderTypeWithDeliveryDescription' => __('modules.order.selectOrderTypeWithDeliveryDescription'),
+                'bookTable' => __('menu.bookTable'),
+                'bookTableInstead' => __('messages.bookTableInstead'),
+                'dineInDescription' => __('messages.dineInDescription'),
+                'deliveryDescription' => __('messages.deliveryDescription'),
+                'pickupDescription' => __('messages.pickupDescription'),
+            ],
+        ];
     }
 
     public function removeExtraCharge($chargeId, $orderType = null)
@@ -1202,8 +1880,20 @@ class Cart extends Component
             if (is_null($this->customer) || is_null($this->customer->name) || is_null($this->customer->phone)) {
                 $this->customerName = $this->customer?->name;
                 $this->customerPhone = $this->customer?->phone;
-                $this->customerPhoneCode = $this->customer?->phone_code ?? $this->restaurant->phone_code ?? $this->allPhoneCodes->first();
+                $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+                $this->phoneCodeDetected = empty($this->customer?->phone_code) && !empty($detectedPhoneCode);
+                $this->customerPhoneCode = $this->customer?->phone_code
+                    ?? $detectedPhoneCode
+                    ?? $this->restaurant->phone_code
+                    ?? $this->allPhoneCodes->first();
                 $this->showCustomerNameModal = true;
+                if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
+                    $this->dispatch('initCartCustomerAddressMap', [
+                        'lat' => $this->addressLat ?? $this->shopBranch?->lat ?? 26.9125,
+                        'lng' => $this->addressLng ?? $this->shopBranch?->lng ?? 75.7875,
+                        'address' => $this->deliveryAddress ?? $this->customerAddress ?? null,
+                    ]);
+                }
                 return;
             }
 
@@ -1396,6 +2086,7 @@ class Cart extends Component
     {
         $this->showCart = true;
         $this->showMenu = false;
+        $this->dispatch('shop-client-show-menu', showMenu: false);
     }
 
     #[On('showMenuItems')]
@@ -1403,6 +2094,7 @@ class Cart extends Component
     {
         $this->showCart = false;
         $this->showMenu = true;
+        $this->dispatch('shop-client-show-menu', showMenu: true);
     }
 
     public function updatedPhoneCodeIsOpen($value)
@@ -1435,23 +2127,66 @@ class Cart extends Component
             'customerPhoneCode' => 'required',
             'customerPhone' => [
                 'required',
-                Rule::unique('customers', 'phone')->ignore($this->customer->id ?? null),
+
             ],
         ];
 
         // Require address when order type is delivery
         if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
-            $rules['customerAddress'] = 'required';
+            $rules['deliveryAddress'] = 'required';
+            $rules['addressLat'] = 'required|numeric';
+            $rules['addressLng'] = 'required|numeric';
         }
 
         $this->validate($rules);
 
+        if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
+            $this->customerAddress = $this->deliveryAddress;
+        }
 
         $this->customer->name = $this->customerName;
         $this->customer->phone = $this->customerPhone;
         $this->customer->phone_code = $this->customerPhoneCode;
         $this->customer->delivery_address = $this->customerAddress;
         $this->customer->save();
+
+        // Also persist into customer_addresses for delivery orders (non-blocking).
+        if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
+            try {
+                $maxAddresses = 3;
+                $alreadyExists = CustomerAddress::query()
+                    ->where('customer_id', $this->customer->id)
+                    ->where('address', $this->deliveryAddress)
+                    ->when(!empty($this->addressLat) && !empty($this->addressLng), function ($q) {
+                        $q->where('lat', $this->addressLat)->where('lng', $this->addressLng);
+                    })
+                    ->exists();
+
+                if (!$alreadyExists) {
+                    $count = CustomerAddress::query()->where('customer_id', $this->customer->id)->count();
+                    if ($count < $maxAddresses) {
+                        $hasHome = CustomerAddress::query()
+                            ->where('customer_id', $this->customer->id)
+                            ->where('label', 'Home')
+                            ->exists();
+
+                        CustomerAddress::create([
+                            'customer_id' => $this->customer->id,
+                            'label' => $hasHome ? 'Delivery' : 'Home',
+                            'address' => $this->deliveryAddress,
+                            'lat' => $this->addressLat,
+                            'lng' => $this->addressLng,
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Don't block checkout if address save fails.
+                Log::warning('Cart submitCustomerName: failed saving customer address', [
+                    'customer_id' => $this->customer?->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         session(['customer' => $this->customer]);
         $this->customerId = $this->customer->id; // Set customerId for loyalty integration trait
@@ -1558,20 +2293,30 @@ class Cart extends Component
 
     private function updateDeliveryDateTime()
     {
-        if ($this->pickupDate && $this->pickupTime) {
-            $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
-            try {
-                $dateTime = \Carbon\Carbon::createFromFormat($dateFormat . ' H:i', $this->pickupDate . ' ' . $this->pickupTime);
-                $this->deliveryDateTime = $dateTime->format('Y-m-d\TH:i');
-            } catch (\Exception $e) {
-                // If parsing fails, try to set a default
-                $this->deliveryDateTime = now()->format('Y-m-d\TH:i');
+        if (!$this->pickupDate || !$this->pickupTime || !$this->restaurant) {
+            return;
+        }
+
+        $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
+        $timezone = $this->restaurant->timezone ?? config('app.timezone');
+
+        try {
+            $parsed = \Carbon\Carbon::createFromFormat($dateFormat, $this->pickupDate, $timezone);
+            if (!preg_match('/^(\d{1,2}):(\d{2})/', trim((string) $this->pickupTime), $m)) {
+                throw new \InvalidArgumentException('Invalid pickup time');
             }
+            $parsed->setTime((int) $m[1], (int) $m[2], 0);
+            $this->deliveryDateTime = $parsed->format('Y-m-d\TH:i');
+        } catch (\Exception $e) {
+            $this->deliveryDateTime = now($timezone)->format('Y-m-d\TH:i');
         }
     }
 
     public function savePickupDateTime()
     {
+        // Ensure deliveryDateTime is set from pickup fields even if user did not change defaults.
+        $this->updateDeliveryDateTime();
+
         $this->validate([
             'deliveryDateTime' => 'required|date',
         ]);
@@ -1583,8 +2328,10 @@ class Cart extends Component
     public function showPickupDateTime()
     {
         $this->showPickupDateTimeModal = true;
-        $this->pickupDate = now()->format($this->restaurant->date_format ?? 'd-m-Y');
-        $this->pickupTime = now()->format($this->restaurant->time_format ?? 'H:i');
+        $tz = $this->restaurant->timezone ?? config('app.timezone');
+        $dateFormat = $this->restaurant->date_format ?? 'd-m-Y';
+        $this->pickupDate = now($tz)->format($dateFormat);
+        $this->pickupTime = now($tz)->format('H:i');
         $this->updateDeliveryDateTime();
     }
 
@@ -1656,9 +2403,6 @@ class Cart extends Component
             Order::where('id', $this->order->id)->update([
                 'status' => 'pending_verification',
             ]);
-            if($this->restaurant->auto_confirm_orders_after_payment){
-            $this->printKot($this->order);
-            }
             $this->sendNotifications($this->order);
 
             $this->alert('success', __('messages.orderSaved'), [
@@ -1668,6 +2412,7 @@ class Cart extends Component
                 'cancelButtonText' => __('app.close')
             ]);
 
+            $this->clearClientBrowseCart();
             $this->redirect(route('order_success', [$this->order->uuid]));
             return;
         }
@@ -1679,9 +2424,22 @@ class Cart extends Component
         if ($this->customer && (is_null($this->customer->name) || ($this->orderType == 'delivery' && is_null($this->customerAddress)) && is_null($deliverySetting))) {
             $this->customerName = $this->customer->name;
             $this->customerAddress = $this->customer->delivery_address;
+            $this->deliveryAddress = $this->customer->delivery_address;
             $this->customerPhone = $this->customer->phone;
-            $this->customerPhoneCode = $this->customer->phone_code ?? $this->restaurant->phone_code ?? $this->allPhoneCodes->first();
+            $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+            $this->phoneCodeDetected = empty($this->customer?->phone_code) && !empty($detectedPhoneCode);
+            $this->customerPhoneCode = $this->customer->phone_code
+                ?? $detectedPhoneCode
+                ?? $this->restaurant->phone_code
+                ?? $this->allPhoneCodes->first();
             $this->showCustomerNameModal = true;
+            if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
+                $this->dispatch('initCartCustomerAddressMap', [
+                    'lat' => $this->addressLat ?? $this->shopBranch?->lat ?? 26.9125,
+                    'lng' => $this->addressLng ?? $this->shopBranch?->lng ?? 75.7875,
+                    'address' => $this->deliveryAddress ?? $this->customerAddress ?? null,
+                ]);
+            }
             $this->payNow = $pay;
             return;
         }
@@ -1699,8 +2457,20 @@ class Cart extends Component
         ) {
             $this->customerName = $this->customer->name;
             $this->customerPhone = $this->customer->phone;
-            $this->customerPhoneCode = $this->customer->phone_code ?? $this->restaurant->phone_code ?? $this->allPhoneCodes->first();
+            $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+            $this->phoneCodeDetected = empty($this->customer?->phone_code) && !empty($detectedPhoneCode);
+            $this->customerPhoneCode = $this->customer->phone_code
+                ?? $detectedPhoneCode
+                ?? $this->restaurant->phone_code
+                ?? $this->allPhoneCodes->first();
             $this->showCustomerNameModal = true;
+            if ($this->orderType === 'delivery' || $this->orderTypeSlug === 'delivery') {
+                $this->dispatch('initCartCustomerAddressMap', [
+                    'lat' => $this->addressLat ?? $this->shopBranch?->lat ?? 26.9125,
+                    'lng' => $this->addressLng ?? $this->shopBranch?->lng ?? 75.7875,
+                    'address' => $this->deliveryAddress ?? $this->customerAddress ?? null,
+                ]);
+            }
             $this->payNow = $pay;
             return;
         }
@@ -1774,6 +2544,7 @@ class Cart extends Component
                 'order_type' => $this->orderTypeSlug ?? $this->orderType,
                 'order_type_id' => $orderTypeId,
                 'custom_order_type_name' => $orderTypeName,
+                'order_note' => $this->orderNote,
                 'pickup_date' => $this->deliveryDateTime,
                 'delivery_address' => $this->customerAddress,
                 'status' => $this->restaurant->auto_confirm_orders_before_payment ? 'kot' : 'draft',
@@ -1816,7 +2587,7 @@ class Cart extends Component
         // CRITICAL: Create order_items FIRST so we can link kot_items to them
         // This ensures kot_items have price and amount from order_items
         $orderItems = [];
-        
+
         // Only create KOT if there are items to add (new items for existing order, or all items for new order)
         $kot = null;
         if (!empty($this->orderItemList)) {
@@ -1931,8 +2702,8 @@ class Cart extends Component
         // Recalculate totals using all KOT items for KOT orders to avoid overwriting previous totals
         $this->subTotal = 0;
         if ($order->status === 'kot' && $order->kot && $order->kot->count() > 0) {
-            foreach ($order->kot as $kot) {
-                foreach ($kot->items->where('status', '!=', 'cancelled') as $kotItem) {
+            foreach ($order->kot as $orderKot) {
+                foreach ($orderKot->items->where('status', '!=', 'cancelled') as $kotItem) {
                     if (!is_null($kotItem->amount)) {
                         $this->subTotal += (float)$kotItem->amount;
                         continue;
@@ -2108,12 +2879,19 @@ class Cart extends Component
             }
         }
 
-        // Check if auto_confirm_orders_before_payment is enabled (use order value or fallback to restaurant setting)
-        $autoConfirmBeforePayment = $order->auto_confirm_orders_before_payment ?? $this->restaurant->auto_confirm_orders_before_payment ?? false;
+        $autoConfirmFlags = ShopCartKotPrintUrls::shopAutoConfirmFlags($order, $this->restaurant);
+        $autoConfirmBeforePayment = $autoConfirmFlags['before'];
 
-        // Only print KOT if a new KOT was created and order is confirmed
+        // Auto-confirm on: print at confirmation (before-payment at placement incl. pay now; after-payment only after payment — see ShopCartKotPrintUrls).
+        // Auto-confirm off: pay later prints immediately below; pay now prints when payment completes.
         if ($kot && $order->status != 'draft' && $autoConfirmBeforePayment) {
-            $this->printKot($order, $kot);
+            if (!$autoConfirmFlags['tie']) {
+                if (!$pay) {
+                    $this->printKot($order, $kot);
+                }
+            } else {
+                $this->printKot($order, $kot);
+            }
         }
 
         event(new OrderUpdated($order, 'updated'));
@@ -2124,12 +2902,24 @@ class Cart extends Component
         }
 
         if ($pay) {
-            $this->showPaymentModal = true;
             $this->paymentOrder = $order;
+
+            if ($this->autoStartSinglePaymentOption((int) $order->id)) {
+                return;
+            }
+
+            $this->showPaymentModal = true;
         } else {
             Order::where('id', $order->id)->update([
                 'status' => 'kot'
             ]);
+
+            $order->refresh();
+            if ($kot && !$autoConfirmBeforePayment) {
+                if (!$autoConfirmFlags['tie'] || !$autoConfirmFlags['after']) {
+                    $this->printKot($order, $kot);
+                }
+            }
 
             $this->sendNotifications($order);
 
@@ -2141,6 +2931,7 @@ class Cart extends Component
             ]);
 
             cache()->forget('branch_' . $this->shopBranch->id . '_order_stats');
+            $this->clearClientBrowseCart();
             $this->redirect(route('order_success', [$order->uuid]));
         }
     }
@@ -2177,7 +2968,14 @@ class Cart extends Component
             'amount' => $this->total
         ]);
 
-        $this->dispatch('stripePaymentInitiated', payment: $payment);
+        $this->showPaymentModal = false;
+        $this->showStripeOrderPaymentModal = true;
+        $this->dispatch('stripeOrderEmbeddedInit', stripePaymentId: $payment->id);
+    }
+
+    public function closeStripeOrderPaymentModal(): void
+    {
+        $this->showStripeOrderPaymentModal = false;
     }
 
     #[On('razorpayPaymentCompleted')]
@@ -2206,6 +3004,10 @@ class Cart extends Component
                 'amount' => $payment->amount,
                 'transaction_id' => $razorpayPaymentID
             ]);
+
+            if ($order->placed_via === 'shop' && ShopCartKotPrintUrls::shouldPrintKotAfterShopOnlinePayment($order, $this->restaurant)) {
+                $this->printKot($order->fresh(['kot.items.menuItem', 'kot.items.menuItemVariation', 'kot.items.modifierOptions']));
+            }
 
             $this->sendNotifications($order);
 
@@ -3139,10 +3941,18 @@ class Cart extends Component
         $items->load('category');
         $items->loadCount(['variations', 'modifierGroups']);
 
-        // Group by category
-        $groupedItems = $items->groupBy(function ($item) use ($locale) {
-            return $item->category->getTranslation('category_name', $locale);
-        });
+        // Group by category (preserve category sort_order, not alphabetical label order)
+        $groupedItems = $items
+            ->groupBy('item_category_id')
+            ->sortBy(fn ($group, $categoryId) => [
+                (int) ($group->first()->category->sort_order ?? 0),
+                (int) $categoryId,
+            ])
+            ->mapWithKeys(function ($group) use ($locale) {
+                $label = $group->first()->category->getTranslation('category_name', $locale);
+
+                return [$label => $group->values()];
+            });
 
         // Set price context on menu items in the query results
         if ($this->orderTypeId) {
@@ -3284,9 +4094,60 @@ class Cart extends Component
     public function getOrderTypesProperty()
     {
         return OrderType::where('branch_id', $this->shopBranch->id)
-            ->where('is_active', true)
             ->where('enable_from_customer_site', true)
+            ->availableForRestaurant()
+            ->orderByDesc('is_default')
+            ->orderBy('id')
             ->get();
+    }
+
+    private function shouldRedirectToBookTable(): bool
+    {
+        $wantsBooking = request()->boolean('book_table')
+            || request()->query('intent') === 'book'
+            || request()->query('intent') === 'reservation';
+
+        if (! $wantsBooking) {
+            return false;
+        }
+
+        return $this->showBookTableEscapeOnOrderTypeModal();
+    }
+
+    private function showBookTableEscapeOnOrderTypeModal(): bool
+    {
+        if (! $this->restaurant->enable_customer_reservation) {
+            return false;
+        }
+
+        $package = $this->restaurant->package;
+        if (! $package) {
+            return false;
+        }
+
+        $modules = $package->modules->pluck('name')->toArray();
+        $additionalFeatures = json_decode($package->additional_features ?? '[]', true) ?: [];
+
+        return in_array('Table Reservation', array_merge($modules, $additionalFeatures), true);
+    }
+
+    private function getBookTableUrl(): ?string
+    {
+        if (! $this->showBookTableEscapeOnOrderTypeModal()) {
+            return null;
+        }
+
+        return route('book_a_table', ['hash' => $this->restaurant->hash]) . '?branch=' . $this->shopBranch->id;
+    }
+
+    private function orderTypeCustomerDescription(OrderType $orderType): string
+    {
+        return match ($orderType->type) {
+            'dine_in' => __('messages.dineInDescription'),
+            'delivery' => __('messages.deliveryDescription'),
+            'pickup' => __('messages.pickupDescription'),
+            default => '',
+        };
     }
 
     public function render()
@@ -3298,102 +4159,9 @@ class Cart extends Component
             'phonecodes' => $this->filteredPhoneCodes,
             'isRestaurantOpenForOrders' => (bool) ($availability['is_open'] ?? true),
             'restaurantClosedMessage' => RestaurantAvailabilityService::getMessage($availability, $this->restaurant),
+            'clientShopCatalog' => $this->getClientShopCatalogPayload(),
+            'clientShopBrowseConfig' => $this->getClientShopBrowseConfig(),
         ]);
-    }
-
-
-    public function printKot($order, $kot = null, $kotIds = [])
-    {
-        // Check if the 'kitchen' package is enabled
-        if (in_array('Kitchen', restaurant_modules()) && in_array('kitchen', custom_module_plugins())) {
-            // Get all KOTs for this order (created above)
-
-            if ($kotIds) {
-                $kots = $order->kot()->whereIn('id', $kotIds)->with('items')->get();
-            } else {
-                $kots = $order->kot()->with('items')->get();
-            }
-
-            foreach ($kots as $kot) {
-                $kotPlaceItems = [];
-
-                foreach ($kot->items as $kotItem) {
-                    if ($kotItem->menuItem && $kotItem->menuItem->kot_place_id) {
-                        $kotPlaceId = $kotItem->menuItem->kot_place_id;
-
-                        if (!isset($kotPlaceItems[$kotPlaceId])) {
-                            $kotPlaceItems[$kotPlaceId] = [];
-                        }
-
-                        $kotPlaceItems[$kotPlaceId][] = $kotItem;
-                    }
-                }
-
-                // Get the kot places and their printer settings
-                $kotPlaceIds = array_keys($kotPlaceItems);
-                $kotPlaces = KotPlace::with('printerSetting')->whereIn('id', $kotPlaceIds)->get();
-
-                foreach ($kotPlaces as $kotPlace) {
-                    $printerSetting = $kotPlace->printerSetting;
-
-                    if ($printerSetting && $printerSetting->is_active == 0) {
-                        $printerSetting = Printer::where('is_default', true)->first();
-                    }
-
-                    // If no printer is set, fallback to print URL dispatch
-                    if (!$printerSetting) {
-                        $url = route('kot.print', [$kot->id, $kotPlace?->id]);
-                        $this->dispatch('print_location', $url);
-                        continue;
-                    }
-
-                    try {
-                        switch ($printerSetting->printing_choice) {
-                            case 'directPrint':
-                                $this->handleKotPrint($kot->id, $kotPlace->id);
-                                break;
-                            default:
-                        }
-                    } catch (\Throwable $e) {
-                        $this->alert('error', __('messages.printerNotConnected') . ' ' . $e->getMessage(), [
-                            'toast' => true,
-                            'position' => 'top-end',
-                            'showCancelButton' => false,
-                            'cancelButtonText' => __('app.close')
-                        ]);
-                    }
-                }
-            }
-        } else {
-            $kotPlace = KotPlace::where('is_default', 1)->first();
-            $printerSetting = $kotPlace->printerSetting;
-
-            // Get the KOT for this order
-            $kot = $kot ?? $order->kot()->first();
-
-            // If no printer is set, fallback to print URL dispatch
-            if (!$printerSetting) {
-                $url = route('kot.print', [$kot->id, $kotPlace?->id]);
-                $this->dispatch('print_location', $url);
-            }
-
-            try {
-                switch ($printerSetting->printing_choice) {
-                    case 'directPrint':
-                        $this->handleKotPrint($kot->id, $kotPlace->id);
-                        break;
-
-                    default:
-                }
-            } catch (\Throwable $e) {
-                $this->alert('error', __('messages.printerNotConnected') . ' ' . $e->getMessage(), [
-                    'toast' => true,
-                    'position' => 'top-end',
-                    'showCancelButton' => false,
-                    'cancelButtonText' => __('app.close')
-                ]);
-            }
-        }
     }
 
 }

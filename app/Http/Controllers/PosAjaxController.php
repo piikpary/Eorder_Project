@@ -8,15 +8,14 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\DeliveryExecutive;
 use App\Models\DeliveryPlatform;
-use App\Models\ItemCategory;
 use App\Models\Kot;
 use App\Models\KotItem;
 use App\Models\KotPlace;
-use App\Models\Menu;
 use App\Models\MenuItem;
 use App\Models\MenuItemVariation;
 use App\Models\MultipleOrder;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\OrderCharge;
 use App\Models\OrderItem;
 use App\Models\OrderTax;
@@ -29,15 +28,27 @@ use App\Models\Table;
 use App\Models\TableSession;
 use App\Models\Tax;
 use App\Models\User;
+use App\Enums\OrderStatus;
 use App\Events\OrderTableAssigned;
 use App\Events\OrderWaiterAssigned;
 use App\Events\NewOrderCreated;
+use App\Events\SendNewOrderReceived;
+use App\Services\OrderWaiterResponseService;
+use App\Events\SendOrderBillEvent;
+use App\Services\Pos\MenuItemsCatalogCache;
+use App\Services\Pos\PosBranchCacheInvalidation;
+use App\Services\Pos\PosTaxonomyCache;
+use App\Services\Pos\PosWaitersCache;
 use App\Services\RestaurantAvailabilityService;
+use App\Services\Tables\TablesIndexCache;
+use App\Support\DietaryLabels;
+use App\Support\EuAnnexIiAllergens;
 use App\Traits\PrinterSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class PosAjaxController extends Controller
 {
@@ -557,17 +568,11 @@ class PosAjaxController extends Controller
 
     public function getMenus()
     {
-
-        $menus = cache()->remember('menus_' . $this->branch->id, 60, function () {
-            return Menu::where('branch_id', $this->branch->id)->get()->map(function ($menu) {
-                return [
-                    'id' => $menu->id,
-                    'menu_name' => $menu->getTranslation('menu_name', session('locale', app()->getLocale())),
-                    'sort_order' => $menu->sort_order,
-                ];
-            });
-        });
-
+        $branchId = (int) $this->branch->id;
+        $menus = PosTaxonomyCache::rememberMenus(
+            $branchId,
+            fn () => PosTaxonomyCache::buildMenusPayload($branchId)
+        );
 
         return response()->json($menus);
     }
@@ -575,46 +580,52 @@ class PosAjaxController extends Controller
     public function getCategories(Request $request)
     {
         $menuId = $request->input('menu_id');
-        $search = $request->input('search', '');
+        $search = (string) $request->input('search', '');
+        $branchId = (int) $this->branch->id;
 
-        // Build query for categories with item counts based on filters
-        $categories = ItemCategory::select('id', 'category_name', 'sort_order')
-            ->where('branch_id', $this->branch->id)
-            ->withCount(['items' => function ($query) use ($menuId, $search) {
-                $query->where('branch_id', $this->branch->id);
-
-                if ($menuId) {
-                    $query->where('menu_id', $menuId);
-                }
-
-                if ($search) {
-                    $query->where('item_name', 'like', '%' . $search . '%');
-                }
-            }])
-            ->having('items_count', '>', 0)
-            ->orderBy('sort_order')
-            ->get()
-            ->map(function ($category) {
-                return [
-                    'id' => $category->id,
-                    'count' => $category->items_count,
-                    'category_name' => $category->getTranslation('category_name', session('locale', app()->getLocale())),
-                    'sort_order' => $category->sort_order,
-                ];
-            });
+        $categories = PosTaxonomyCache::rememberCategories(
+            $branchId,
+            $menuId,
+            $search,
+            fn () => PosTaxonomyCache::buildCategoriesPayload($branchId, $menuId, $search)
+        );
 
         return response()->json($categories);
     }
 
     public function getMenuItems(Request $request)
     {
-        $menuId = $request->input('menu_id');
-        $categoryId = $request->input('category_id');
-        $search = $request->input('search', '');
-        $limit = $request->input('limit', 48);
+        $loadAll = $request->boolean('load_all');
+        $menuId = $loadAll ? null : $request->input('menu_id');
+        $categoryId = $loadAll ? null : $request->input('category_id');
+        $search = $loadAll ? '' : $request->input('search', '');
+        $limit = $loadAll ? MenuItemsCatalogCache::CATALOG_LIMIT : (int) $request->input('limit', 48);
+        $limit = min(max($limit, 1), MenuItemsCatalogCache::CATALOG_LIMIT);
         $orderTypeId = $request->input('order_type_id');
         $deliveryAppId = $request->input('delivery_app_id');
         $normalizedDeliveryAppId = ($deliveryAppId === 'default' || !$deliveryAppId) ? null : (int) $deliveryAppId;
+
+        if ($loadAll) {
+            $catalog = MenuItemsCatalogCache::getCatalogPayload($this->branch->id);
+            $items = $catalog['items'];
+            $totalCount = $catalog['total_count'];
+
+            if ($orderTypeId) {
+                $items = MenuItemsCatalogCache::applyOrderContextToRows(
+                    $items,
+                    $this->branch->id,
+                    (int) $orderTypeId,
+                    $normalizedDeliveryAppId
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'items' => $items,
+                'total_count' => $totalCount,
+                'loaded_count' => count($items),
+            ]);
+        }
 
         // Build query
         $query = MenuItem::where('branch_id', $this->branch->id);
@@ -651,9 +662,27 @@ class PosAjaxController extends Controller
             }
         }
 
-        $items = $menuItems->map(function ($menuItem) {
+        $restaurantSelectable = $this->restaurant?->selectableEuAllergenKeys() ?? [];
+        $appendEuAllergens = $restaurantSelectable !== [];
+
+        $items = $menuItems->map(function ($menuItem) use ($appendEuAllergens, $restaurantSelectable) {
+            $euAllergenKeys = [];
+            if ($appendEuAllergens) {
+                $euAllergenKeys = array_values(array_unique(array_intersect(
+                    EuAnnexIiAllergens::keys(),
+                    $restaurantSelectable,
+                    array_filter((array) ($menuItem->eu_allergen_keys ?? []), 'is_string')
+                )));
+            }
+
+            $dietaryLabels = DietaryLabels::normalize(
+                is_array($menuItem->dietary_labels ?? null) ? $menuItem->dietary_labels : []
+            );
+
             return [
                 'id' => $menuItem->id,
+                'menu_id' => $menuItem->menu_id,
+                'item_category_id' => $menuItem->item_category_id,
                 'item_name' => $menuItem->item_name,
                 'price' => (float) $menuItem->price,
                 'item_photo_url' => $menuItem->item_photo_url,
@@ -661,6 +690,8 @@ class PosAjaxController extends Controller
                 'in_stock' => (bool) $menuItem->in_stock,
                 'variations_count' => (int) ($menuItem->variations_count ?? 0),
                 'modifier_groups_count' => (int) ($menuItem->modifier_groups_count ?? 0),
+                'eu_allergen_keys' => $euAllergenKeys,
+                'dietary_labels' => $dietaryLabels,
                 'taxes' => collect($menuItem->taxes ?? [])->map(function ($tax) {
                     return [
                         'id' => $tax->id,
@@ -696,8 +727,10 @@ class PosAjaxController extends Controller
             $branchId = $this->branch?->id ?? null;
             $search = trim((string)$request->input('search', ''));
 
-            $query = \Modules\Hotel\Entities\Stay::with(['room.roomType', 'stayGuests.guest'])
-                ->where('status', \Modules\Hotel\Enums\StayStatus::CHECKED_IN);
+            $statuses = $this->resolveHotelStaySelectableStatuses();
+            $query = \Modules\Hotel\Entities\Stay::withoutGlobalScopes()
+                ->with(['room.roomType', 'stayGuests.guest'])
+                ->whereIn('status', $statuses);
 
             if ($search !== '') {
                 $query->where(function ($q) use ($search) {
@@ -731,11 +764,288 @@ class PosAjaxController extends Controller
         }
     }
 
+    /**
+     * Hotel module: full room list for POS picker (all rooms + active stay when present).
+     * Lets staff see every room at once; rows without a matching stay are shown disabled.
+     */
+    public function getHotelRoomPickerList(Request $request)
+    {
+        if (!function_exists('module_enabled') || !module_enabled('Hotel')) {
+            return response()->json(['success' => false, 'items' => []]);
+        }
+
+        if (!class_exists(\Modules\Hotel\Entities\Stay::class)) {
+            return response()->json(['success' => false, 'items' => []]);
+        }
+
+        $branchId = (int) ($this->branch?->id ?? 0);
+        if ($branchId < 1) {
+            return response()->json(['success' => false, 'items' => []]);
+        }
+
+        try {
+            $statuses = $this->resolveHotelStaySelectableStatuses();
+
+            if (class_exists(\Modules\Hotel\Entities\Room::class)) {
+                $items = $this->buildHotelRoomPickerItemsFromEloquentRooms($branchId, $statuses);
+            } elseif (Schema::hasTable('hotel_rooms')) {
+                $items = $this->buildHotelRoomPickerItemsFromDatabaseRooms($branchId, $statuses);
+            } else {
+                $items = $this->buildHotelRoomPickerItemsStaysOnly($branchId, $statuses);
+            }
+
+            return response()->json([
+                'success' => true,
+                'items' => $items,
+                'fetched_at' => now()->toIso8601String(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('POS AJAX getHotelRoomPickerList failed: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'items' => []], 500);
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveHotelStaySelectableStatuses(): array
+    {
+        $out = [];
+        if (class_exists(\Modules\Hotel\Enums\StayStatus::class) && enum_exists(\Modules\Hotel\Enums\StayStatus::class)) {
+            $allowedNames = ['CHECKED_IN', 'CHECK_IN', 'IN_HOUSE', 'OCCUPIED'];
+            foreach (\Modules\Hotel\Enums\StayStatus::cases() as $case) {
+                if (in_array($case->name, $allowedNames, true)) {
+                    $out[] = $case instanceof \BackedEnum ? (string) $case->value : $case->name;
+                }
+            }
+        }
+
+        $out = array_values(array_unique(array_filter($out)));
+        if ($out === []) {
+            $out = ['checked_in', 'CHECKED_IN'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, string>  $statuses
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildHotelRoomPickerItemsFromEloquentRooms(int $branchId, array $statuses): array
+    {
+        $roomClass = \Modules\Hotel\Entities\Room::class;
+
+        $rooms = $roomClass::withoutGlobalScopes()
+            ->where('branch_id', $branchId)
+            ->with(['roomType'])
+            ->orderBy('room_number')
+            ->get();
+
+        if ($rooms->isEmpty() && $this->restaurant && Schema::hasColumn('hotel_rooms', 'restaurant_id')) {
+            $rooms = $roomClass::withoutGlobalScopes()
+                ->where('restaurant_id', (int) $this->restaurant->id)
+                ->with(['roomType'])
+                ->orderBy('room_number')
+                ->get();
+        }
+
+        $roomIds = $rooms->pluck('id')->all();
+        $staysByRoomId = collect();
+        if ($roomIds !== []) {
+            $staysByRoomId = \Modules\Hotel\Entities\Stay::withoutGlobalScopes()
+                ->whereIn('room_id', $roomIds)
+                ->whereIn('status', $statuses)
+                ->with(['stayGuests.guest'])
+                ->orderByDesc('id')
+                ->get()
+                ->unique('room_id')
+                ->keyBy('room_id');
+        }
+
+        $rows = [];
+        foreach ($rooms as $room) {
+            $stay = $staysByRoomId->get($room->id);
+            $rows[] = $this->formatHotelRoomPickerRowFromRoomAndStay($room, $stay);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int, string>  $statuses
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildHotelRoomPickerItemsFromDatabaseRooms(int $branchId, array $statuses): array
+    {
+        $q = DB::table('hotel_rooms');
+        if (Schema::hasColumn('hotel_rooms', 'branch_id')) {
+            $q->where('branch_id', $branchId);
+        } elseif (Schema::hasColumn('hotel_rooms', 'restaurant_id') && $this->restaurant) {
+            $q->where('restaurant_id', (int) $this->restaurant->id);
+        }
+
+        $orderCol = Schema::hasColumn('hotel_rooms', 'room_number') ? 'room_number' : (Schema::hasColumn('hotel_rooms', 'number') ? 'number' : 'id');
+        $rooms = $q->orderBy($orderCol)->get();
+
+        if ($rooms->isEmpty() && Schema::hasColumn('hotel_rooms', 'restaurant_id') && $this->restaurant) {
+            $rooms = DB::table('hotel_rooms')
+                ->where('restaurant_id', (int) $this->restaurant->id)
+                ->orderBy($orderCol)
+                ->get();
+        }
+
+        $roomIds = $rooms->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $staysByRoomId = collect();
+        if ($roomIds !== [] && Schema::hasTable('hotel_stays')) {
+            $staysByRoomId = DB::table('hotel_stays')
+                ->whereIn('room_id', $roomIds)
+                ->whereIn('status', $statuses)
+                ->get()
+                ->keyBy('room_id');
+        }
+
+        $rows = [];
+        foreach ($rooms as $room) {
+            $rid = (int) $room->id;
+            $stayRow = $staysByRoomId->get($rid);
+            $stay = null;
+            if ($stayRow) {
+                $stay = \Modules\Hotel\Entities\Stay::query()
+                    ->with(['stayGuests.guest'])
+                    ->find((int) $stayRow->id);
+            }
+
+            $roomObj = new \stdClass;
+            $roomObj->id = $rid;
+            $roomObj->room_number = $room->room_number ?? $room->number ?? '';
+            $roomObj->roomType = null;
+            if (isset($room->room_type_id) && Schema::hasTable('hotel_room_types')) {
+                $rt = DB::table('hotel_room_types')->where('id', $room->room_type_id)->first();
+                if ($rt) {
+                    $typeObj = new \stdClass;
+                    $typeObj->name = $rt->name ?? $rt->type_name ?? null;
+                    $roomObj->roomType = $typeObj;
+                }
+            }
+
+            $rows[] = $this->formatHotelRoomPickerRowFromRoomAndStay($roomObj, $stay);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int, string>  $statuses
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildHotelRoomPickerItemsStaysOnly(int $branchId, array $statuses): array
+    {
+        $stays = \Modules\Hotel\Entities\Stay::withoutGlobalScopes()
+            ->whereIn('status', $statuses)
+            ->whereHas('room', function ($q) use ($branchId) {
+                $q->where('branch_id', $branchId);
+            })
+            ->with(['room.roomType', 'stayGuests.guest'])
+            ->get();
+
+        if ($stays->isEmpty() && $this->restaurant && Schema::hasColumn('hotel_rooms', 'restaurant_id')) {
+            $restaurantId = (int) $this->restaurant->id;
+            $stays = \Modules\Hotel\Entities\Stay::withoutGlobalScopes()
+                ->whereIn('status', $statuses)
+                ->whereHas('room', function ($q) use ($restaurantId) {
+                    $q->where('restaurant_id', $restaurantId);
+                })
+                ->with(['room.roomType', 'stayGuests.guest'])
+                ->get();
+        }
+
+        $rows = [];
+        foreach ($stays as $stay) {
+            $room = $stay->room;
+            if (!$room) {
+                continue;
+            }
+            $rows[] = $this->formatHotelRoomPickerRowFromRoomAndStay($room, $stay);
+        }
+
+        usort($rows, function ($a, $b) {
+            return strcmp((string) ($a['room_number'] ?? ''), (string) ($b['room_number'] ?? ''));
+        });
+
+        return $rows;
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model|object  $room
+     * @param  \Illuminate\Database\Eloquent\Model|null  $stay
+     * @return array<string, mixed>
+     */
+    private function formatHotelRoomPickerRowFromRoomAndStay(object $room, $stay): array
+    {
+        $roomNumber = '';
+        if (isset($room->room_number)) {
+            $roomNumber = (string) $room->room_number;
+        } elseif (isset($room->number)) {
+            $roomNumber = (string) $room->number;
+        }
+
+        $typeName = null;
+        if (isset($room->roomType) && $room->roomType) {
+            $rt = $room->roomType;
+            $typeName = $rt->name ?? $rt->type_name ?? null;
+            if ($typeName !== null) {
+                $typeName = (string) $typeName;
+            }
+        }
+
+        $row = [
+            'room_id' => (int) $room->id,
+            'room_number' => $roomNumber,
+            'room_type_name' => $typeName,
+            'stay_id' => null,
+            'stay_number' => null,
+            'guest_name' => null,
+            'selectable' => false,
+        ];
+
+        if ($stay) {
+            $row['stay_id'] = (int) $stay->id;
+            $row['stay_number'] = (string) ($stay->stay_number ?? '');
+            $row['guest_name'] = $this->primaryGuestNameFromStayModel($stay);
+            $row['selectable'] = true;
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model  $stay
+     */
+    private function primaryGuestNameFromStayModel($stay): ?string
+    {
+        try {
+            if (!$stay->relationLoaded('stayGuests')) {
+                $stay->load(['stayGuests.guest']);
+            }
+            if ($stay->stayGuests && $stay->stayGuests->isNotEmpty()) {
+                $primaryGuest = $stay->stayGuests->where('is_primary', true)->first() ?? $stay->stayGuests->first();
+                if ($primaryGuest && $primaryGuest->guest) {
+                    return $primaryGuest->guest->full_name ?? null;
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return null;
+    }
+
     public function getWaiters()
     {
-        $waiters = cache()->remember('waiters_' . $this->branch->id, 60, function () {
-            return User::where('restaurant_id', $this->restaurant->id)->get();
-        });
+        $waiters = PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id);
+        $waiters = PosWaitersCache::forPosActor($waiters, auth()->user(), (int) $this->restaurant->id);
+
         return response()->json($waiters);
     }
 
@@ -756,6 +1066,23 @@ class PosAjaxController extends Controller
         $customers = $query->orderBy('name')->limit(10)->get();
 
         return response()->json($customers);
+    }
+
+    public function getCustomer(int $id)
+    {
+        $customer = Customer::where('restaurant_id', $this->restaurant->id)->find($id);
+
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.customerNotFound'),
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'customer' => $customer,
+        ]);
     }
 
     public function getPhoneCodes(Request $request)
@@ -827,6 +1154,43 @@ class PosAjaxController extends Controller
         ]);
     }
 
+    public function assignCustomerToOrder(Request $request, int $orderId)
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|integer',
+            'delivery_address' => 'nullable|string|max:500',
+        ]);
+
+        $customer = Customer::where('restaurant_id', $this->restaurant->id)->find($validated['customer_id']);
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.customerNotFound'),
+            ], 404);
+        }
+
+        // Orders belong to a branch (BranchScope), not restaurant_id on orders table.
+        $order = Order::where('id', $orderId)->first();
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.orderNotFound'),
+            ], 404);
+        }
+
+        $order->customer_id = $customer->id;
+        $order->delivery_address = $validated['delivery_address'] ?? $order->delivery_address;
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => __('messages.customerAdded'),
+            'customer' => $customer,
+            'order_id' => $order->id,
+        ]);
+    }
+
     public function getExtraCharges($orderType)
     {
         $extraCharges = RestaurantCharge::whereJsonContains('order_types', $orderType)
@@ -846,16 +1210,25 @@ class PosAjaxController extends Controller
         $userId = $user ? $user->id : null;
         $isAdmin = $user ? $user->hasRole('Admin_' . $user->restaurant_id) : false;
 
+        $occupiedPaxByTable = Order::where('branch_id', $this->branch->id)
+            ->whereNotNull('table_id')
+            ->occupyingTableSeats()
+            ->selectRaw('table_id, SUM(number_of_pax) as occupied_pax')
+            ->groupBy('table_id')
+            ->pluck('occupied_pax', 'table_id');
+
         $tables = Table::where('branch_id', $this->branch->id)
-            ->where('available_status', '<>', 'running')
             ->where('status', 'active')
             ->with(['area', 'tableSession.lockedByUser'])
             ->get()
-            ->map(function ($table) use ($userId) {
+            ->map(function ($table) use ($userId, $occupiedPaxByTable) {
                 $session = $table->tableSession;
                 $isLocked = $session ? $session->isLocked() : false;
                 $isLockedByCurrentUser = $isLocked && $session && $session->locked_by_user_id === $userId;
                 $isLockedByOtherUser = $isLocked && $session && $session->locked_by_user_id !== $userId;
+                $seatCap = (int) ($table->seating_capacity ?? 0);
+                $occupiedPax = (int) ($occupiedPaxByTable[$table->id] ?? 0);
+                $isSeatBlocked = $seatCap > 0 && $occupiedPax >= $seatCap;
 
                 return [
                     'id' => $table->id,
@@ -867,6 +1240,8 @@ class PosAjaxController extends Controller
                     'area_id' => $table->area_id,
                     'area_name' => $table->area ? $table->area->area_name : 'Unknown Area',
                     'seating_capacity' => $table->seating_capacity,
+                    'occupied_pax' => $occupiedPax,
+                    'is_seat_blocked' => $isSeatBlocked,
                     'is_locked' => $isLocked,
                     'is_locked_by_current_user' => $isLockedByCurrentUser,
                     'is_locked_by_other_user' => $isLockedByOtherUser,
@@ -1020,11 +1395,30 @@ class PosAjaxController extends Controller
             $orderTypeDisplay = $data['order_type'] ?? 'Dine In';
             $orderNumber = $data['order_number'] ?? '';
             $pax = $data['pax'] ?? 1;
-            $waiterId = $data['waiter_id'] ?? null;
-            $tableId = $data['table_id'] ?? null;
+            $waiterRaw = $data['waiter_id'] ?? null;
+            $waiterId = is_numeric($waiterRaw) ? (int) $waiterRaw : null;
+            $posWaitersForActor = PosWaitersCache::forPosActor(
+                PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id),
+                auth()->user(),
+                (int) $this->restaurant->id
+            );
+            $waiterId = PosWaitersCache::normalizeWaiterSelection(
+                $waiterId,
+                auth()->user(),
+                (int) $this->restaurant->id,
+                $posWaitersForActor
+            );
+            $rawTableId = $data['table_id'] ?? null;
+            $tableId = (is_numeric($rawTableId) && (int) $rawTableId > 0)
+                ? (int) $rawTableId
+                : null;
             $discountType = $data['discount_type'] ?? null;
             $discountValue = $data['discount_value'] ?? 0;
             $discountAmount = $data['discount_amount'] ?? 0;
+            $rawDiscountApplyOn = $data['discount_apply_on'] ?? 'sub_total';
+            $discountApplyOn = in_array($rawDiscountApplyOn, ['sub_total', 'total'], true)
+                ? $rawDiscountApplyOn
+                : 'sub_total';
             $loyaltyPointsRedeemed = (int)($data['loyalty_points_redeemed'] ?? 0);
             $loyaltyDiscountAmount = (float)($data['loyalty_discount_amount'] ?? 0);
             $extraChargesData = $data['extra_charges'] ?? [];
@@ -1162,6 +1556,25 @@ class PosAjaxController extends Controller
                 ], 422);
             }
 
+            // Batch-load cart-related rows once (removes N× MenuItem::find / RestaurantCharge::find / Tax::all in loops).
+            $menuIdsFromCart = collect($items)->pluck('id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $menuItemsById = $menuIdsFromCart === []
+                ? collect()
+                : MenuItem::with('translations')->whereIn('id', $menuIdsFromCart)->get()->keyBy('id');
+
+            $extraChargeIdList = collect($extraChargesData ?? [])
+                ->map(fn ($c) => is_array($c) ? ($c['id'] ?? null) : $c)
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+            $restaurantChargesById = $extraChargeIdList === []
+                ? collect()
+                : RestaurantCharge::whereIn('id', $extraChargeIdList)->get()->keyBy('id');
+
+            $cachedTaxesAll = Tax::all();
+
             // Restaurant availability guard (match Livewire Pos::saveOrder)
             // Do not block explicit cancel actions from availability check
             $primaryAction = !empty($actions) ? $actions[0] : null;
@@ -1189,7 +1602,7 @@ class PosAjaxController extends Controller
             // Check if table is locked by another user (similar to Pos.php)
             $table = null;
             if ($tableId && $normalizedOrderType === 'dine_in') {
-                $table = Table::find($tableId);
+                $table = Table::with(['tableSession.lockedByUser'])->find($tableId);
                 if ($table && $table->tableSession && $table->tableSession->isLocked()) {
                     $lockedByUser = $table->tableSession->lockedByUser;
                     $lockedUserName = $lockedByUser ? $lockedByUser->name : 'Another user';
@@ -1204,6 +1617,22 @@ class PosAjaxController extends Controller
                                 'table' => $table->table_code
                             ]),
                         ], 403);
+                    }
+                }
+
+                if ($table) {
+                    $seatCap = (int) ($table->seating_capacity ?? 0);
+                    if ($seatCap > 0 && (int) $pax > $seatCap) {
+                        DB::rollBack();
+
+                        return response()->json([
+                            'success' => false,
+                            'message' => __('messages.paxExceedsTableCapacity', [
+                                'pax' => (int) $pax,
+                                'capacity' => $seatCap,
+                                'table' => $table->table_code,
+                            ]),
+                        ], 422);
                     }
                 }
             }
@@ -1234,6 +1663,54 @@ class PosAjaxController extends Controller
                 }
                 $customer->save();
                 $customerId = $customer->id;
+            }
+
+            // Preload stamp rules + tier multiplier once for applyStampDiscountToAmount (avoids N× rule/tier queries per line).
+            $preloadedStampRulesById = collect();
+            $stampDiscountTierMultiplierOverride = null;
+            if (
+                function_exists('module_enabled')
+                && module_enabled('Loyalty')
+                && class_exists(\Modules\Loyalty\Entities\LoyaltyStampRule::class)
+            ) {
+                $stampRuleIdsForPreload = [];
+                foreach ($items as $si) {
+                    if (!empty($si['stamp_rule_id'])) {
+                        $stampRuleIdsForPreload[] = (int) $si['stamp_rule_id'];
+                    }
+                    $sk = (string) ($si['key'] ?? '');
+                    if ($sk !== '' && str_starts_with($sk, 'free_stamp_')) {
+                        $p = explode('_', $sk);
+                        if (!empty($p[2])) {
+                            $stampRuleIdsForPreload[] = (int) $p[2];
+                        }
+                    }
+                }
+                $stampRuleIdsForPreload = array_values(array_unique(array_filter($stampRuleIdsForPreload)));
+                if ($stampRuleIdsForPreload !== []) {
+                    $preloadedStampRulesById = \Modules\Loyalty\Entities\LoyaltyStampRule::whereIn('id', $stampRuleIdsForPreload)
+                        ->get()
+                        ->keyBy('id');
+                }
+
+                if ($customerId && $this->restaurant && class_exists(\Modules\Loyalty\Entities\LoyaltyAccount::class)) {
+                    $stampDiscountTierMultiplierOverride = 1.0;
+                    try {
+                        $restaurantId = (int) ($this->restaurant->id ?? 0);
+                        if ($restaurantId > 0) {
+                            $loyaltyService = app(\Modules\Loyalty\Services\LoyaltyService::class);
+                            $account = $loyaltyService->getOrCreateAccount($restaurantId, (int) $customerId);
+                            if ($account && $account->tier_id && class_exists(\Modules\Loyalty\Entities\LoyaltyTier::class)) {
+                                $tier = \Modules\Loyalty\Entities\LoyaltyTier::find($account->tier_id);
+                                if ($tier && (float) $tier->redemption_multiplier > 0) {
+                                    $stampDiscountTierMultiplierOverride = (float) $tier->redemption_multiplier;
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        $stampDiscountTierMultiplierOverride = null;
+                    }
+                }
             }
 
             // Find order type (similar to Pos.php)
@@ -1278,7 +1755,7 @@ class PosAjaxController extends Controller
                 foreach ($extraChargesData as $charge) {
                     $chargeId = is_array($charge) ? ($charge['id'] ?? null) : $charge;
                     if ($chargeId) {
-                        $chargeModel = RestaurantCharge::find($chargeId);
+                        $chargeModel = $restaurantChargesById->get((int) $chargeId);
                         if ($chargeModel) {
                             $extraCharges[] = $chargeModel;
                         }
@@ -1312,6 +1789,13 @@ class PosAjaxController extends Controller
                     return response()->json([
                         'success' => false,
                         'message' => __('validation.required', ['attribute' => __('modules.delivery.deliveryExecutive')]),
+                    ], 422);
+                }
+
+                if ($deliveryExecutiveId && !DeliveryExecutive::findAssignableForBranch((int) $deliveryExecutiveId, (int) $this->branch->id)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('messages.invalidRequest'),
                     ], 422);
                 }
             }
@@ -1406,7 +1890,7 @@ class PosAjaxController extends Controller
                     break;
                 case 'cancel':
                     $status = 'canceled';
-                    $orderStatus = 'canceled';
+                    $orderStatus = OrderStatus::CANCELLED->value;
                     $tableStatus = 'available';
                     break;
                 default:
@@ -1415,18 +1899,29 @@ class PosAjaxController extends Controller
                     $tableStatus = 'available';
             }
 
-            // Preserve / honor the current order_status coming from POS UI.
-            // This prevents status from jumping back to "confirmed" when billing or saving.
+            // Preserve / honor the current order_status from POS only when it is a valid OrderStatus enum value.
+            // The Blade POS may send lifecycle `status` strings (e.g. "kot", "draft", "billed") in this field;
+            // those belong on orders.status, not order_status, and would break the OrderStatus cast.
+            $hintCoerced = null;
             if (!empty($data['order_status'])) {
-                $orderStatus = (string) $data['order_status'];
+                $hintCoerced = $this->coerceOrderStatusEnumValue((string) $data['order_status']);
             } elseif (!empty($data['order_status_display'])) {
-                $orderStatus = (string) $data['order_status_display'];
+                $hintCoerced = $this->coerceOrderStatusEnumValue((string) $data['order_status_display']);
+            }
+            if ($hintCoerced !== null) {
+                $orderStatus = $hintCoerced;
             } elseif ($orderId) {
-                // If not sent (older clients), keep existing order status.
+                // If not sent (older clients) or hint was invalid, keep existing order status when possible.
                 try {
                     $existingOrder = $order ?? Order::find($orderId);
                     if ($existingOrder && !empty($existingOrder->order_status)) {
-                        $orderStatus = (string) $existingOrder->order_status;
+                        $existingRaw = $existingOrder->order_status instanceof \BackedEnum
+                            ? $existingOrder->order_status->value
+                            : (string) $existingOrder->order_status;
+                        $existingCoerced = $this->coerceOrderStatusEnumValue($existingRaw);
+                        if ($existingCoerced !== null) {
+                            $orderStatus = $existingCoerced;
+                        }
                     }
                 } catch (\Throwable $e) {
                     // fail-safe
@@ -1449,6 +1944,7 @@ class PosAjaxController extends Controller
             $wasDraft = false;
             $existingRedeemedPoints = 0;
             $preserveDisplayedTotalsForExistingKot = false;
+            $createdNewOrderInSubmit = false;
 
             if ($orderId) {
                 $order = Order::find($orderId);
@@ -1490,6 +1986,7 @@ class PosAjaxController extends Controller
                     'custom_order_type_name' => $orderTypeNameFinal,
                     'delivery_executive_id' => ($orderTypeSlug === 'delivery') ? $deliveryExecutiveId : null,
                     'number_of_pax' => $pax,
+                    'order_note' => $note ?: null,
                     'waiter_id' => $waiterId,
                     'pickup_date' => ($orderTypeSlug === 'pickup') ? $pickupDate : null,
                     'table_id' => $tableId ?? $order->table_id,
@@ -1505,6 +2002,7 @@ class PosAjaxController extends Controller
                     'discount_type' => $discountType,
                     'discount_value' => $discountValue,
                     'discount_amount' => $discountAmount,
+                    'discount_apply_on' => $discountApplyOn,
                     'stamp_discount_amount' => $stampDiscountAmount,
                     'loyalty_points_redeemed' => $loyaltyPointsRedeemed,
                     'loyalty_discount_amount' => round($loyaltyDiscountAmount, 2),
@@ -1523,9 +2021,8 @@ class PosAjaxController extends Controller
                     $updateData['formatted_order_number'] = $orderNumberData['formatted_order_number'];
                 }
 
-                // Save user ID when bill action is triggered
                 $user = auth()->user();
-                if ($status == 'billed' && $user) {
+                if ($user && in_array($status, ['kot', 'billed'], true)) {
                     $updateData['added_by'] = $user->id;
                 }
 
@@ -1567,9 +2064,11 @@ class PosAjaxController extends Controller
                     'table_id' => $tableId,
                     'date_time' => now(),
                     'number_of_pax' => $pax,
+                    'order_note' => $note ?: null,
                     'discount_type' => $discountType,
                     'discount_value' => $discountValue,
                     'discount_amount' => $discountAmount,
+                    'discount_apply_on' => $discountApplyOn,
                     'stamp_discount_amount' => $stampDiscountAmount,
                     'loyalty_points_redeemed' => $loyaltyPointsRedeemed,
                     'loyalty_discount_amount' => round($loyaltyDiscountAmount, 2),
@@ -1601,10 +2100,10 @@ class PosAjaxController extends Controller
                 }
 
                 $order = Order::create($orderData);
+                $createdNewOrderInSubmit = true;
 
-                // Save user ID when bill action is triggered (similar to Pos.php)
                 $user = auth()->user();
-                if ($status == 'billed' && $user) {
+                if ($user && in_array($status, ['kot', 'billed'], true)) {
                     $order->added_by = $user->id;
                     $order->save();
                 }
@@ -1628,6 +2127,7 @@ class PosAjaxController extends Controller
                 }
 
                 DB::commit();
+                TablesIndexCache::forgetForBranch((int) $this->branch->id);
 
                 return response()->json([
                     'success' => true,
@@ -1656,17 +2156,7 @@ class PosAjaxController extends Controller
                 $groupedItemsByPlace = [];
                 $itemsWithoutKotPlace = [];
                 if ($useKitchenKotSplit) {
-                    $menuIds = collect($items)
-                        ->pluck('id')
-                        ->filter()
-                        ->map(fn ($id) => (int) $id)
-                        ->unique()
-                        ->values()
-                        ->all();
-
-                    $kotPlaceByMenuItemId = $menuIds === []
-                        ? collect()
-                        : MenuItem::whereIn('id', $menuIds)->pluck('kot_place_id', 'id');
+                    $kotPlaceByMenuItemId = $menuItemsById->pluck('kot_place_id', 'id');
 
                     foreach ($items as $item) {
                         $mid = isset($item['id']) ? (int) $item['id'] : 0;
@@ -1843,9 +2333,8 @@ class PosAjaxController extends Controller
                             }
                         }
 
-                        // Tax base after discounts, optionally including charges
-                        $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-                        $taxBase = $includeChargesInTaxBase ? ($chargeBase + $serviceTotal) : $chargeBase;
+                        // Tax base equals taxable amount (subtotal - discount), excluding charges.
+                        $taxBase = $chargeBase;
                         $taxBase = max(0.0, (float)$taxBase);
 
                         // Taxes
@@ -1860,7 +2349,7 @@ class PosAjaxController extends Controller
                                     if (!empty($taxes)) {
                                         return collect($taxes);
                                     }
-                                    return \App\Models\Tax::all();
+                                    return $cachedTaxesAll;
                                 })();
 
                                 foreach ($taxesToUse as $taxModel) {
@@ -1898,7 +2387,7 @@ class PosAjaxController extends Controller
                         $correctTotal += (float)($order->tip_amount ?? $tipAmount ?? 0);
                         $correctTotal += (float)($order->delivery_fee ?? $deliveryFee ?? 0);
 
-                        $order->update([
+                        $order->updateQuietly([
                             'sub_total' => round($correctSubTotal, 2),
                             'total' => round($correctTotal, 2),
                             'discount_amount' => round($discountAmount, 2),
@@ -1937,8 +2426,7 @@ class PosAjaxController extends Controller
                             }
                         }
 
-                        $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-                        $taxBase = $includeChargesInTaxBase ? ($discountedBase + $serviceTotal) : $discountedBase;
+                        $taxBase = $discountedBase;
                         $taxBase = max(0.0, (float)$taxBase);
 
                         $taxAmount = 0.0;
@@ -1947,7 +2435,7 @@ class PosAjaxController extends Controller
                             // prefer taxes already attached to this order; otherwise, use all taxes.
                             $taxesToUse = $order->taxes && $order->taxes->count() > 0
                                 ? $order->taxes->map(fn($orderTax) => $orderTax->tax)->filter()
-                                : \App\Models\Tax::all();
+                                : $cachedTaxesAll;
                             foreach ($taxesToUse as $taxModel) {
                                 if ($taxModel && isset($taxModel->tax_percent)) {
                                     $percent = (float)$taxModel->tax_percent;
@@ -1971,7 +2459,7 @@ class PosAjaxController extends Controller
                         $total += (float)($order->tip_amount ?? $tipAmount ?? 0);
                         $total += (float)($order->delivery_fee ?? $deliveryFee ?? 0);
 
-                        $order->update([
+                        $order->updateQuietly([
                             'sub_total' => round($subTotal, 2),
                             'total' => round($total, 2),
                             'discount_amount' => round($discountAmount, 2),
@@ -1993,6 +2481,28 @@ class PosAjaxController extends Controller
                         'order_status' => $orderStatus,
                     ]);
 
+                    // When billing an existing KOT order, the frontend can send cart lines keyed as `kot_{kotId}_{kotItemId}`.
+                    // If we re-run billing for the same order, we must not re-add those same KOT lines again.
+                    $kotOrderItemIdByKotItemId = [];
+                    try {
+                        $kotItemIdsInPayload = [];
+                        foreach ($items as $payloadItem) {
+                            $key = (string)($payloadItem['key'] ?? '');
+                            if ($key && preg_match('/^kot_(\d+)_(\d+)$/', $key, $m)) {
+                                $kotItemIdsInPayload[] = (int)$m[2];
+                            }
+                        }
+                        $kotItemIdsInPayload = array_values(array_unique(array_filter($kotItemIdsInPayload)));
+                        if (!empty($kotItemIdsInPayload)) {
+                            $kotOrderItemIdByKotItemId = KotItem::whereIn('id', $kotItemIdsInPayload)
+                                ->pluck('order_item_id', 'id')
+                                ->toArray();
+                        }
+                    } catch (\Throwable $e) {
+                        // Fail-safe: do not block billing if lookup fails
+                        $kotOrderItemIdByKotItemId = [];
+                    }
+
                     // Now create order items for billing
                     foreach ($items as $item) {
                         $menuItemId = $item['id'] ?? null;
@@ -2005,6 +2515,12 @@ class PosAjaxController extends Controller
                             ? (float)$item['amount']
                             : ((float)$price * (int)$quantity);
                         $modifierIds = $item['modifier_ids'] ?? [];
+                        // Treat different modifier combinations as different line items.
+                        $normalizedModifierIds = [];
+                        if (is_array($modifierIds)) {
+                            $normalizedModifierIds = array_values(array_unique(array_filter(array_map('intval', $modifierIds), fn ($v) => $v > 0)));
+                            sort($normalizedModifierIds);
+                        }
                         $taxAmount = $item['tax_amount'] ?? 0;
                         $taxPercentage = $item['tax_percentage'] ?? 0;
                         $taxBreakup = $item['tax_breakup'] ?? null;
@@ -2012,25 +2528,16 @@ class PosAjaxController extends Controller
                         [$isFreeItemFromStamp, $stampRuleId] = $normalizeStampFields($item, $itemNote, $menuItemId ? (int)$menuItemId : null);
                         if ($isFreeItemFromStamp) {
                             $amount = 0.0;
-                        } elseif ($stampRuleId) {
-                            // Server-side safeguard for stamp discount rules
-                            $amount = $this->applyStampDiscountToAmount(
-                                (int)$menuItemId,
-                                (int)$stampRuleId,
-                                (float)$price,
-                                (int)$quantity,
-                                (float)$amount,
-                                $customerId ? (int)$customerId : null
-                            );
                         }
 
-                        // Get menu item to set price context if needed
-                        $menuItem = MenuItem::find($menuItemId);
-                        if ($menuItem && $orderTypeId) {
-                            if (method_exists($menuItem, 'setPriceContext')) {
-                                $menuItem->setPriceContext($orderTypeId, $normalizedDeliveryAppId);
-                                $price = $menuItem->price ?? $price;
-                            }
+                        $kotItemIdFromKey = null;
+                        $itemKey = (string)($item['key'] ?? '');
+                        if ($itemKey && preg_match('/^kot_(\d+)_(\d+)$/', $itemKey, $m)) {
+                            $kotItemIdFromKey = (int)$m[2];
+                        }
+                        // If this KOT line is already linked to an order_item, don't create/accumulate again.
+                        if ($kotItemIdFromKey && !empty($kotOrderItemIdByKotItemId[$kotItemIdFromKey])) {
+                            continue;
                         }
 
                         $orderItemData = [
@@ -2076,21 +2583,65 @@ class PosAjaxController extends Controller
                         // Don't include quantity in the match: POS orders are aggregated by menu+variation+free-flag
                         // and we want idempotency even if quantities drift between cart payload and existing DB rows.
 
-                        $existingOrderItem = $existingOrderItemQuery->first();
-                        if ($existingOrderItem) {
-                            $existingOrderItem->update($orderItemData);
-
-                            if (!empty($modifierIds) && is_array($modifierIds)) {
-                                $existingOrderItem->modifierOptions()->sync($modifierIds);
+                        // IMPORTANT: also match by exact modifier set to prevent merging different modifier combos.
+                        $existingOrderItem = null;
+                        $candidateOrderItems = $existingOrderItemQuery->with('modifierOptions:id')->get();
+                        foreach ($candidateOrderItems as $candidate) {
+                            $candidateModifierIds = $candidate->modifierOptions
+                                ? $candidate->modifierOptions->pluck('id')->map(fn ($id) => (int)$id)->sort()->values()->toArray()
+                                : [];
+                            if ($candidateModifierIds === $normalizedModifierIds) {
+                                $existingOrderItem = $candidate;
+                                break;
                             }
+                        }
+                        if ($existingOrderItem) {
+                            // If the payload is coming from existing KOT rows, we can receive multiple
+                            // cart lines for the same menu+variation (one per KOT item key). In that
+                            // case, *accumulate* quantities instead of overwriting them.
+                            $isKotKey = !empty($item['key']) && preg_match('/^kot_\d+_\d+$/', (string) $item['key']);
+
+                            if ($isKotKey) {
+                                $newQty = (int) ($existingOrderItem->quantity ?? 0) + (int) $quantity;
+                                $newAmount = (float) ($existingOrderItem->amount ?? 0) + (float) $amount;
+                                $newTaxAmount = (float) ($existingOrderItem->tax_amount ?? 0) + (float) $taxAmount;
+
+                                $existingOrderItem->update([
+                                    'quantity' => $newQty,
+                                    'amount' => $newAmount,
+                                    'tax_amount' => $newTaxAmount,
+                                    // Keep latest note if existing is empty.
+                                    'note' => $existingOrderItem->note ?: ($itemNote ?: null),
+                                ]);
+
+                                // Best-effort: union modifiers when accumulating.
+                                $existingOrderItem->modifierOptions()->sync($normalizedModifierIds);
+                            } else {
+                                $existingOrderItem->update($orderItemData);
+
+                                $existingOrderItem->modifierOptions()->sync($normalizedModifierIds);
+                            }
+
+                            if ($kotItemIdFromKey) {
+                                KotItem::where('id', $kotItemIdFromKey)
+                                    ->whereNull('order_item_id')
+                                    ->update(['order_item_id' => $existingOrderItem->id]);
+                                $kotOrderItemIdByKotItemId[$kotItemIdFromKey] = $existingOrderItem->id;
+                            }
+
                             continue;
                         }
 
                         $orderItem = OrderItem::create($orderItemData);
 
                         // Sync modifiers if provided
-                        if (!empty($modifierIds) && is_array($modifierIds)) {
-                            $orderItem->modifierOptions()->sync($modifierIds);
+                        $orderItem->modifierOptions()->sync($normalizedModifierIds);
+
+                        if ($kotItemIdFromKey) {
+                            KotItem::where('id', $kotItemIdFromKey)
+                                ->whereNull('order_item_id')
+                                ->update(['order_item_id' => $orderItem->id]);
+                            $kotOrderItemIdByKotItemId[$kotItemIdFromKey] = $orderItem->id;
                         }
                     }
 
@@ -2106,80 +2657,13 @@ class PosAjaxController extends Controller
                         }
                     }
 
-                    // Refresh order to get latest discount values
-                    $order->refresh();
-
-                    // Recalculate totals based on actual items (matching Livewire component logic)
-                    $recalculatedSubTotal = $order->items()->sum('amount');
-                    $recalculatedTotal = $recalculatedSubTotal;
-                    $recalculatedDiscountedTotal = $recalculatedTotal;
-
-                    // Recalculate discount amount from order (matching Livewire: uses $order->discount_type and $order->discount_value)
-                    $recalculatedDiscountAmount = 0;
-                    if ($order->discount_type === 'percent') {
-                        $recalculatedDiscountAmount = round(($recalculatedSubTotal * $order->discount_value) / 100, 2);
-                    } elseif ($order->discount_type === 'fixed') {
-                        $recalculatedDiscountAmount = min($order->discount_value, $recalculatedSubTotal);
-                    }
-
-                    // Apply discount first (matching Livewire: total -= discountAmount)
-                    $recalculatedTotal -= $recalculatedDiscountAmount;
-                    $recalculatedDiscountedTotal = $recalculatedTotal;
-
-                    // Step 2: Calculate service charges on discountedTotal
-                    $serviceTotal = 0;
-                    $orderCharges = OrderCharge::where('order_id', $order->id)->with('charge')->get();
-                    foreach ($orderCharges as $orderCharge) {
-                        if ($orderCharge->charge) {
-                            $chargeAmount = $orderCharge->charge->getAmount($recalculatedDiscountedTotal);
-                            $serviceTotal += $chargeAmount;
-                            $recalculatedTotal += $chargeAmount;
-                        }
-                    }
-
-                    // Step 3: Calculate tax_base based on setting
-                    $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-                    if ($includeChargesInTaxBase) {
-                        $recalculatedTaxBase = $recalculatedDiscountedTotal + $serviceTotal;
-                    } else {
-                        $recalculatedTaxBase = $recalculatedDiscountedTotal;
-                    }
-
-                    // Step 4: Calculate taxes on tax_base
-                    $recalculatedTaxAmount = 0;
-                    if ($taxMode === 'order') {
-                        $orderTaxes = OrderTax::where('order_id', $order->id)->with('tax')->get();
-                        foreach ($orderTaxes as $orderTax) {
-                            if ($orderTax->tax) {
-                                $taxPercent = $orderTax->tax->tax_percent ?? 0;
-                                $taxAmount = ($recalculatedTaxBase * $taxPercent) / 100;
-                                $recalculatedTotal += $taxAmount;
-                                $recalculatedTaxAmount += $taxAmount;
-                            }
-                        }
-                    } else {
-                        // Item-level tax comes from order item rows.
-                        $recalculatedTaxAmount = (float)$order->items()->sum('tax_amount');
-                        if (!($this->restaurant->tax_inclusive ?? false)) {
-                            $recalculatedTotal += $recalculatedTaxAmount;
-                        }
-                    }
-
-                    // Add tip and delivery fees
-                    if ($tipAmount > 0) {
-                        $recalculatedTotal += $tipAmount;
-                    }
-                    if ($deliveryFee > 0) {
-                        $recalculatedTotal += $deliveryFee;
-                    }
-
-                    // Update order with recalculated totals
-                    $order->update([
-                        'sub_total' => $recalculatedSubTotal,
-                        'total' => max(0, $recalculatedTotal),
-                        'discount_amount' => $recalculatedDiscountAmount,
-                        'total_tax_amount' => $recalculatedTaxAmount,
-                        'tax_base' => $recalculatedTaxBase,
+                    // Bill+payment flow: persist frontend-calculated totals directly.
+                    $order->updateQuietly([
+                        'sub_total' => (float)$subTotal,
+                        'total' => max(0, (float)$total),
+                        'discount_amount' => (float)$discountAmount,
+                        'total_tax_amount' => (float)$totalTaxAmount,
+                        'tax_base' => $taxBaseFromClient !== null ? (float)$taxBaseFromClient : (float)$discountedTotal,
                         'tax_mode' => $taxMode,
                     ]);
 
@@ -2223,12 +2707,14 @@ class PosAjaxController extends Controller
                             (float)$price,
                             (int)$quantity,
                             (float)$amount,
-                            $customerId ? (int)$customerId : null
+                            $customerId ? (int)$customerId : null,
+                            $preloadedStampRulesById->get((int)$stampRuleId),
+                            $stampDiscountTierMultiplierOverride
                         );
                     }
 
                     // Set price context if possible (same as billed)
-                    $menuItem = MenuItem::find($menuItemId);
+                    $menuItem = $menuItemId ? $menuItemsById->get((int)$menuItemId) : null;
                     if ($menuItem && $orderTypeId) {
                         if (method_exists($menuItem, 'setPriceContext')) {
                             $menuItem->setPriceContext($orderTypeId, null);
@@ -2268,6 +2754,26 @@ class PosAjaxController extends Controller
             // Create order items (for 'billed' status only, similar to Pos.php)
             // Skip if items were already created in KOT+Bill+Payment flow
             if ($status == 'billed' && !$orderItemsAlreadyCreated) {
+                // Guard against double-billing KOT lines: reuse `kot_items.order_item_id` if already linked.
+                $kotOrderItemIdByKotItemId = [];
+                try {
+                    $kotItemIdsInPayload = [];
+                    foreach ($items as $payloadItem) {
+                        $key = (string)($payloadItem['key'] ?? '');
+                        if ($key && preg_match('/^kot_(\d+)_(\d+)$/', $key, $m)) {
+                            $kotItemIdsInPayload[] = (int)$m[2];
+                        }
+                    }
+                    $kotItemIdsInPayload = array_values(array_unique(array_filter($kotItemIdsInPayload)));
+                    if (!empty($kotItemIdsInPayload)) {
+                        $kotOrderItemIdByKotItemId = KotItem::whereIn('id', $kotItemIdsInPayload)
+                            ->pluck('order_item_id', 'id')
+                            ->toArray();
+                    }
+                } catch (\Throwable $e) {
+                    $kotOrderItemIdByKotItemId = [];
+                }
+
                 foreach ($items as $item) {
                     $menuItemId = $item['id'] ?? null;
                     $variantId = $item['variant_id'] ?? 0;
@@ -2279,6 +2785,12 @@ class PosAjaxController extends Controller
                         ? (float)$item['amount']
                         : ((float)$price * (int)$quantity);
                     $modifierIds = $item['modifier_ids'] ?? [];
+                    // Treat different modifier combinations as different line items.
+                    $normalizedModifierIds = [];
+                    if (is_array($modifierIds)) {
+                        $normalizedModifierIds = array_values(array_unique(array_filter(array_map('intval', $modifierIds), fn ($v) => $v > 0)));
+                        sort($normalizedModifierIds);
+                    }
                     $taxAmount = (float)($item['tax_amount'] ?? 0);
                     $taxPercentage = (float)($item['tax_percentage'] ?? 0);
                     $taxBreakup = $item['tax_breakup'] ?? null;
@@ -2286,25 +2798,15 @@ class PosAjaxController extends Controller
                     [$isFreeItemFromStamp, $stampRuleId] = $normalizeStampFields($item, $itemNote, $menuItemId ? (int)$menuItemId : null);
                     if ($isFreeItemFromStamp) {
                         $amount = 0.0;
-                    } elseif ($stampRuleId) {
-                        $amount = $this->applyStampDiscountToAmount(
-                            (int)$menuItemId,
-                            (int)$stampRuleId,
-                            (float)$price,
-                            (int)$quantity,
-                            (float)$amount,
-                            $customerId ? (int)$customerId : null
-                        );
                     }
 
-                    // Get menu item to set price context if needed (similar to Pos.php)
-                    $menuItem = MenuItem::find($menuItemId);
-                    if ($menuItem && $orderTypeId) {
-                        // Set price context if orderTypeId is available
-                        if (method_exists($menuItem, 'setPriceContext')) {
-                            $menuItem->setPriceContext($orderTypeId, null);
-                            $price = $menuItem->price ?? $price;
-                        }
+                    $kotItemIdFromKey = null;
+                    $itemKey = (string)($item['key'] ?? '');
+                    if ($itemKey && preg_match('/^kot_(\d+)_(\d+)$/', $itemKey, $m)) {
+                        $kotItemIdFromKey = (int)$m[2];
+                    }
+                    if ($kotItemIdFromKey && !empty($kotOrderItemIdByKotItemId[$kotItemIdFromKey])) {
+                        continue;
                     }
 
                     $orderItemData = [
@@ -2350,21 +2852,63 @@ class PosAjaxController extends Controller
                     // Don't include quantity in the match: POS orders are aggregated by menu+variation+free-flag
                     // and we want idempotency even if quantities drift between cart payload and existing DB rows.
 
-                    $existingOrderItem = $existingOrderItemQuery->first();
-                    if ($existingOrderItem) {
-                        $existingOrderItem->update($orderItemData);
-
-                        if (!empty($modifierIds) && is_array($modifierIds)) {
-                            $existingOrderItem->modifierOptions()->sync($modifierIds);
+                    // IMPORTANT: also match by exact modifier set to prevent merging different modifier combos.
+                    $existingOrderItem = null;
+                    $candidateOrderItems = $existingOrderItemQuery->with('modifierOptions:id')->get();
+                    foreach ($candidateOrderItems as $candidate) {
+                        $candidateModifierIds = $candidate->modifierOptions
+                            ? $candidate->modifierOptions->pluck('id')->map(fn ($id) => (int)$id)->sort()->values()->toArray()
+                            : [];
+                        if ($candidateModifierIds === $normalizedModifierIds) {
+                            $existingOrderItem = $candidate;
+                            break;
                         }
+                    }
+                    if ($existingOrderItem) {
+                        // Same as above: accumulate quantities for existing KOT keys during billing.
+                        $isKotKey = !empty($item['key']) && preg_match('/^kot_\d+_\d+$/', (string) $item['key']);
+
+                        if ($isKotKey) {
+                            $newQty = (int) ($existingOrderItem->quantity ?? 0) + (int) $quantity;
+                            $newAmount = (float) ($existingOrderItem->amount ?? 0) + (float) $amount;
+                            $newTaxAmount = (float) ($existingOrderItem->tax_amount ?? 0) + (float) $taxAmount;
+
+                            $existingOrderItem->update([
+                                'quantity' => $newQty,
+                                'amount' => $newAmount,
+                                'tax_amount' => $newTaxAmount,
+                                'note' => $existingOrderItem->note ?: ($itemNote ?: null),
+                            ]);
+
+                            if (!empty($modifierIds) && is_array($modifierIds)) {
+                                $existingOrderItem->modifierOptions()->sync($normalizedModifierIds);
+                            }
+                        } else {
+                            $existingOrderItem->update($orderItemData);
+
+                            $existingOrderItem->modifierOptions()->sync($normalizedModifierIds);
+                        }
+
+                        if ($kotItemIdFromKey) {
+                            KotItem::where('id', $kotItemIdFromKey)
+                                ->whereNull('order_item_id')
+                                ->update(['order_item_id' => $existingOrderItem->id]);
+                            $kotOrderItemIdByKotItemId[$kotItemIdFromKey] = $existingOrderItem->id;
+                        }
+
                         continue;
                     }
 
                     $orderItem = OrderItem::create($orderItemData);
 
                     // Sync modifiers if provided (similar to Pos.php)
-                    if (!empty($modifierIds) && is_array($modifierIds)) {
-                        $orderItem->modifierOptions()->sync($modifierIds);
+                    $orderItem->modifierOptions()->sync($normalizedModifierIds);
+
+                    if ($kotItemIdFromKey) {
+                        KotItem::where('id', $kotItemIdFromKey)
+                            ->whereNull('order_item_id')
+                            ->update(['order_item_id' => $orderItem->id]);
+                        $kotOrderItemIdByKotItemId[$kotItemIdFromKey] = $orderItem->id;
                     }
                 }
 
@@ -2380,80 +2924,13 @@ class PosAjaxController extends Controller
                     }
                 }
 
-                // Refresh order to get latest discount values
-                $order->refresh();
-
-                // Recalculate totals based on actual items (matching Livewire component logic)
-                $recalculatedSubTotal = $order->items()->sum('amount');
-                $recalculatedTotal = $recalculatedSubTotal;
-                $recalculatedDiscountedTotal = $recalculatedTotal;
-
-                // Recalculate discount amount from order (matching Livewire: uses $order->discount_type and $order->discount_value)
-                $recalculatedDiscountAmount = 0;
-                if ($order->discount_type === 'percent') {
-                    $recalculatedDiscountAmount = round(($recalculatedSubTotal * $order->discount_value) / 100, 2);
-                } elseif ($order->discount_type === 'fixed') {
-                    $recalculatedDiscountAmount = min($order->discount_value, $recalculatedSubTotal);
-                }
-
-                // Apply discount first (matching Livewire: total -= discountAmount)
-                $recalculatedTotal -= $recalculatedDiscountAmount;
-                $recalculatedDiscountedTotal = $recalculatedTotal;
-
-                // Step 2: Calculate service charges on discountedTotal
-                $serviceTotal = 0;
-                $orderCharges = OrderCharge::where('order_id', $order->id)->with('charge')->get();
-                foreach ($orderCharges as $orderCharge) {
-                    if ($orderCharge->charge) {
-                        $chargeAmount = $orderCharge->charge->getAmount($recalculatedDiscountedTotal);
-                        $serviceTotal += $chargeAmount;
-                        $recalculatedTotal += $chargeAmount;
-                    }
-                }
-
-                // Step 3: Calculate tax_base based on setting
-                $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-                if ($includeChargesInTaxBase) {
-                    $recalculatedTaxBase = $recalculatedDiscountedTotal + $serviceTotal;
-                } else {
-                    $recalculatedTaxBase = $recalculatedDiscountedTotal;
-                }
-
-                // Step 4: Calculate taxes on tax_base
-                $recalculatedTaxAmount = 0;
-                if ($taxMode === 'order') {
-                    $orderTaxes = OrderTax::where('order_id', $order->id)->with('tax')->get();
-                    foreach ($orderTaxes as $orderTax) {
-                        if ($orderTax->tax) {
-                            $taxPercent = $orderTax->tax->tax_percent ?? 0;
-                            $taxAmount = ($recalculatedTaxBase * $taxPercent) / 100;
-                            $recalculatedTotal += $taxAmount;
-                            $recalculatedTaxAmount += $taxAmount;
-                        }
-                    }
-                } else {
-                    // Item-level tax comes from order item rows.
-                    $recalculatedTaxAmount = (float)$order->items()->sum('tax_amount');
-                    if (!($this->restaurant->tax_inclusive ?? false)) {
-                        $recalculatedTotal += $recalculatedTaxAmount;
-                    }
-                }
-
-                // Add tip and delivery fees
-                if ($tipAmount > 0) {
-                    $recalculatedTotal += $tipAmount;
-                }
-                if ($deliveryFee > 0) {
-                    $recalculatedTotal += $deliveryFee;
-                }
-
-                // Update order with recalculated totals (matching Livewire component)
-                $order->update([
-                    'sub_total' => $recalculatedSubTotal,
-                    'total' => max(0, $recalculatedTotal),
-                    'discount_amount' => $recalculatedDiscountAmount,
-                    'total_tax_amount' => $recalculatedTaxAmount,
-                    'tax_base' => $recalculatedTaxBase,
+                // Billed flow: keep totals exactly as sent by frontend.
+                $order->updateQuietly([
+                    'sub_total' => (float)$subTotal,
+                    'total' => max(0, (float)$total),
+                    'discount_amount' => (float)$discountAmount,
+                    'total_tax_amount' => (float)$totalTaxAmount,
+                    'tax_base' => $taxBaseFromClient !== null ? (float)$taxBaseFromClient : (float)$discountedTotal,
                     'tax_mode' => $taxMode,
                 ]);
             }
@@ -2476,7 +2953,7 @@ class PosAjaxController extends Controller
                 $stampRedemptionHappened = $this->redeemStampsForEligibleBilledItems($order);
                 if ($stampRedemptionHappened) {
                     // Recalculate persisted totals after redemption and use those values downstream.
-                    $this->recalculateOrderTotals($order);
+                    $this->recalculateOrderTotals($order, $cachedTaxesAll, true);
                     $order->refresh();
                     $stampDiscountAmount = (float)($order->stamp_discount_amount ?? $stampDiscountAmount);
                     $subTotal = (float)($order->sub_total ?? $subTotal);
@@ -2489,7 +2966,7 @@ class PosAjaxController extends Controller
             // For existing KOT orders, recompute totals from all KOT rows after new KOT creation
             // so order-level total reflects cumulative order amount (not only fresh cart payload).
             if ($orderId && $status === 'kot') {
-                $this->recalculateOrderTotals($order);
+                $this->recalculateOrderTotals($order, $cachedTaxesAll, true);
                 $order->refresh();
             }
 
@@ -2514,38 +2991,87 @@ class PosAjaxController extends Controller
                     'tip_amount' => (float)($order->tip_amount ?? $tipAmount),
                     'delivery_fee' => (float)($order->delivery_fee ?? (($orderTypeSlug === 'delivery') ? $deliveryFee : 0)),
                 ];
-            } else {
-                // Final source-of-truth totals from POS payload (AJAX parity with tt/Livewire flow).
-                // This prevents drift from intermediate server-side recalculation branches.
-                $effectiveTaxBase = $taxBaseFromClient;
-                if ($effectiveTaxBase === null) {
-                    $serviceTotal = 0.0;
-                    foreach ($extraCharges as $charge) {
-                        if ($charge && method_exists($charge, 'getAmount')) {
-                            $serviceTotal += (float)$charge->getAmount((float)$discountedTotal);
-                        }
-                    }
-                    $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-                    $effectiveTaxBase = $includeChargesInTaxBase
-                        ? ((float)$discountedTotal + $serviceTotal)
-                        : (float)$discountedTotal;
-                }
-
+            } elseif ($status === 'billed') {
+                // Billed flow must persist frontend snapshot values as-is.
                 $finalOrderUpdate = [
                     'sub_total' => (float)$subTotal,
                     'total' => max(0, (float)$total),
                     'discount_type' => $discountType,
                     'discount_value' => $discountValue,
                     'discount_amount' => (float)$discountAmount,
+                    'discount_apply_on' => $discountApplyOn,
                     'stamp_discount_amount' => (float)$stampDiscountAmount,
                     'loyalty_points_redeemed' => (int)$loyaltyPointsRedeemed,
                     'loyalty_discount_amount' => round((float)$loyaltyDiscountAmount, 2),
                     'total_tax_amount' => (float)$totalTaxAmount,
-                    'tax_base' => (float)$effectiveTaxBase,
+                    'tax_base' => $taxBaseFromClient !== null ? (float)$taxBaseFromClient : (float)$discountedTotal,
                     'tax_mode' => $taxMode,
                     'tip_amount' => (float)$tipAmount,
-                    'delivery_fee' => ($orderTypeSlug === 'delivery') ? (float)$deliveryFee : 0,
+                    'delivery_fee' => (float)(($orderTypeSlug === 'delivery') ? $deliveryFee : 0),
                 ];
+            } else {
+                // Always recompute totals server-side before final save to guarantee backend order:
+                // discount -> charges -> tax (on discounted tax_base) -> tip/delivery.
+                $this->recalculateOrderTotals($order, $cachedTaxesAll, true);
+                $order->refresh();
+
+                $finalOrderUpdate = [
+                    'sub_total' => (float)($order->sub_total ?? 0),
+                    'total' => max(0, (float)($order->total ?? 0)),
+                    'discount_type' => $discountType,
+                    'discount_value' => $discountValue,
+                    'discount_amount' => (float)($order->discount_amount ?? 0),
+                    'discount_apply_on' => $order->discount_apply_on ?? $discountApplyOn,
+                    'stamp_discount_amount' => (float)$stampDiscountAmount,
+                    'loyalty_points_redeemed' => (int)$loyaltyPointsRedeemed,
+                    'loyalty_discount_amount' => round((float)$loyaltyDiscountAmount, 2),
+                    'total_tax_amount' => (float)($order->total_tax_amount ?? 0),
+                    'tax_base' => (float)($order->tax_base ?? 0),
+                    'tax_mode' => $taxMode,
+                    'tip_amount' => (float)($order->tip_amount ?? $tipAmount),
+                    'delivery_fee' => (float)($order->delivery_fee ?? (($orderTypeSlug === 'delivery') ? $deliveryFee : 0)),
+                ];
+            }
+
+            if ($status !== 'billed') {
+                // Final normalization: tax_base must match taxable amount shown in POS.
+                // Rule agreed: taxable amount = sub_total - discount_amount (charges excluded).
+                $normalizedSubTotal = (float)($finalOrderUpdate['sub_total'] ?? 0);
+                $normalizedDiscount = (float)($finalOrderUpdate['discount_amount'] ?? 0);
+                $normalizedTaxable = max(0, round($normalizedSubTotal - $normalizedDiscount, 2));
+                $finalOrderUpdate['tax_base'] = $normalizedTaxable;
+                // Keep subtotal aligned with frontend rule: subtotal = taxable + discount.
+                $finalOrderUpdate['sub_total'] = round($normalizedTaxable + $normalizedDiscount, 2);
+
+                // Normalize final total from persisted parts to avoid branch drift:
+                // total = taxable + applicable charges + tax + tip + delivery (delivery only for delivery orders)
+                $normalizedServiceTotal = 0.0;
+                try {
+                    $orderCharges = $order->charges()->with('charge')->get();
+                    foreach ($orderCharges as $orderCharge) {
+                        if (!$orderCharge->charge) {
+                            continue;
+                        }
+                        $charge = $orderCharge->charge;
+                        $allowedTypes = $charge->order_types ?? [];
+                        if (!empty($allowedTypes) && $orderTypeSlug && !in_array($orderTypeSlug, $allowedTypes)) {
+                            continue;
+                        }
+                        $normalizedServiceTotal += (float) $charge->getAmount($normalizedTaxable);
+                    }
+                } catch (\Throwable $e) {
+                    // Fail-safe: if charge normalization fails, keep service total at 0.
+                }
+
+                $normalizedTax = (float)($finalOrderUpdate['total_tax_amount'] ?? 0);
+                $normalizedTip = (float)($finalOrderUpdate['tip_amount'] ?? 0);
+                $normalizedDelivery = ($orderTypeSlug === 'delivery')
+                    ? (float)($finalOrderUpdate['delivery_fee'] ?? 0)
+                    : 0.0;
+                $finalOrderUpdate['total'] = max(0, round(
+                    $normalizedTaxable + $normalizedServiceTotal + $normalizedTax + $normalizedTip + $normalizedDelivery,
+                    2
+                ));
             }
 
             $order->update($finalOrderUpdate);
@@ -2577,9 +3103,19 @@ class PosAjaxController extends Controller
                 }
             }
 
-            NewOrderCreated::dispatch($order);
+            // New non-draft create: OrderObserver::created already queued NewOrderCreated (after-commit).
+            // Do not rely on wasRecentlyCreated (cleared by follow-up save() on new orders).
+            $observerAlreadyQueuedNewOrderNotification = $createdNewOrderInSubmit && $status !== 'draft';
 
             DB::commit();
+            TablesIndexCache::forgetForBranch((int) $this->branch->id);
+
+            $order->refresh();
+            OrderWaiterResponseService::autoAcceptWhenPlacedByWaiterOnPos($order);
+
+            if (!$observerAlreadyQueuedNewOrderNotification) {
+                NewOrderCreated::dispatch($order->fresh());
+            }
 
             // Delete merged table orders if order is KOT or billed (not draft)
             // This handles the case when merging tables and saving the order
@@ -2619,11 +3155,8 @@ class PosAjaxController extends Controller
                         // Update table statuses and unlock tables
                         if (!empty($tableIds)) {
                             Table::whereIn('id', $tableIds)->update(['available_status' => 'available']);
-                            foreach ($tableIds as $tableId) {
-                                $tableToUnlock = Table::find($tableId);
-                                if ($tableToUnlock) {
-                                    $tableToUnlock->unlock(null, true);
-                                }
+                            foreach (Table::whereIn('id', $tableIds)->get() as $tableToUnlock) {
+                                $tableToUnlock->unlock(null, true);
                             }
                         }
 
@@ -3164,7 +3697,9 @@ class PosAjaxController extends Controller
                 $query->orderBy('created_at', 'asc');
             },
             'kot.items',
-            'kot.items.menuItem'
+            'kot.items.menuItem',
+            'kot.items.menuItemVariation',
+            'kot.items.modifierOptions',
         ])->find($id);
 
         if (!$order) {
@@ -3368,8 +3903,19 @@ class PosAjaxController extends Controller
 
     public function setTable(Request $request)
     {
-        $tableId = $request->input('table_id');
+        $rawTableId = $request->input('table_id');
+        $tableId = (is_numeric($rawTableId) && (int) $rawTableId > 0)
+            ? (int) $rawTableId
+            : null;
         $orderId = $request->input('order_id');
+
+        if (! $tableId) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.setTableNo'),
+            ], 422);
+        }
+
         $table = Table::find($tableId);
 
         if (!$table) {
@@ -3421,6 +3967,8 @@ class PosAjaxController extends Controller
             }
         }
 
+        TablesIndexCache::forgetForBranch((int) $this->branch->id);
+
         return response()->json([
             'success' => true,
             'message' => __('messages.tableLocked', ['table' => $table->table_code]),
@@ -3447,6 +3995,164 @@ class PosAjaxController extends Controller
     {
         // This is similar to submitOrder but for updating existing orders
         return $this->submitOrder($request);
+    }
+
+    /**
+     * Apply a single full / partial payment for Blade POS offline sync.
+     * Mirrors the non–split path in {@see \App\Livewire\Order\AddPayment::submitForm()}.
+     * Split bills must be completed online.
+     */
+    public function syncOfflinePayment(Request $request)
+    {
+        $orderId = (int) $request->input('order_id', 0);
+        if ($orderId <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.orderNotFound'),
+            ], 422);
+        }
+
+        $order = Order::with(['branch.restaurant'])->find($orderId);
+        if (! $order) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.orderNotFound'),
+            ], 404);
+        }
+
+        if ($order->status === 'paid') {
+            return response()->json([
+                'success' => true,
+                'message' => __('messages.paymentDoneSuccessfully'),
+                'order' => $order,
+            ]);
+        }
+
+        if (! empty($order->split_type)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.posOfflineSplitPaymentUnsupported'),
+            ], 422);
+        }
+
+        $paymentMethod = (string) $request->input('payment_method', 'cash');
+        $allowedMethods = ['cash', 'card', 'upi', 'bank_transfer', 'due'];
+        if (! in_array($paymentMethod, $allowedMethods, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.invalidPaymentMethod'),
+            ], 422);
+        }
+
+        $returnAmount = round((float) $request->input('return_amount', 0), 2);
+        $tendered = round((float) $request->input('payment_amount', 0), 2);
+        if ($tendered < 0) {
+            $tendered = 0;
+        }
+        if ($returnAmount < 0) {
+            $returnAmount = 0;
+        }
+
+        try {
+            DB::transaction(function () use ($orderId, $paymentMethod, $tendered, $returnAmount) {
+                $order = Order::lockForUpdate()->with([
+                    'items',
+                    'items.menuItem',
+                    'taxes',
+                    'payments',
+                    'splitOrders.items',
+                    'branch.restaurant',
+                ])->find($orderId);
+
+                if (! $order || $order->status === 'paid') {
+                    return;
+                }
+
+                if (! empty($order->split_type)) {
+                    throw new \RuntimeException(__('messages.posOfflineSplitPaymentUnsupported'));
+                }
+
+                $restaurant = $order->branch?->restaurant ?? restaurant();
+                $availability = RestaurantAvailabilityService::getAvailability($restaurant, $order->branch);
+                if (! ($availability['is_open'] ?? true)) {
+                    throw new \RuntimeException(RestaurantAvailabilityService::getMessage($availability, $restaurant));
+                }
+
+                $hasDuePayments = Payment::where('order_id', $order->id)
+                    ->where('is_due', true)
+                    ->exists();
+
+                if ($tendered >= 0) {
+                    $applied = max(0, round($tendered - $returnAmount, 2));
+                    Payment::create([
+                        'order_id' => $order->id,
+                        'payment_method' => $paymentMethod,
+                        'amount' => $applied,
+                        'balance' => $returnAmount,
+                        'is_due' => $paymentMethod === 'due',
+                        'due_amount_received' => ($hasDuePayments && $paymentMethod !== 'due') ? $applied : null,
+                    ]);
+                }
+
+                $order->refresh();
+                $order->load(['items', 'items.menuItem', 'taxes', 'payments', 'splitOrders.items']);
+
+                $orderPaidAmount = Payment::where('order_id', $order->id)
+                    ->where('payment_method', '!=', 'due')
+                    ->sum('amount');
+
+                $order->amount_paid = $orderPaidAmount;
+                $wasPaid = $order->status === 'paid';
+                $order->status = $orderPaidAmount >= $order->total ? 'paid' : 'payment_due';
+                $order->save();
+
+                if ($order->status === 'paid' && ! $wasPaid) {
+                    SendNewOrderReceived::dispatch($order);
+                }
+
+                Payment::where('order_id', $order->id)->where('payment_method', 'due')->delete();
+
+                if ($orderPaidAmount < $order->total) {
+                    Payment::create([
+                        'order_id' => $order->id,
+                        'payment_method' => 'due',
+                        'amount' => round($order->total - $orderPaidAmount, 2),
+                        'is_due' => true,
+                    ]);
+                }
+
+                // Dine-in table + lock: released when order_status is completed (see OrderObserver).
+
+                if ($order->customer_id) {
+                    try {
+                        SendOrderBillEvent::dispatch($order);
+                    } catch (\Exception $e) {
+                        Log::error('syncOfflinePayment notification: '.$e->getMessage());
+                    }
+                }
+            });
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('syncOfflinePayment: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.somethingWentWrong'),
+            ], 500);
+        }
+
+        $order = Order::find($orderId);
+        TablesIndexCache::forgetForBranch((int) $this->branch->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => __('messages.paymentDoneSuccessfully'),
+            'order' => $order,
+        ]);
     }
 
     public function getMenuItem($id)
@@ -3666,13 +4372,14 @@ class PosAjaxController extends Controller
 
         // Calculate discount
         $discountAmount = 0;
+        $discountBase = $subTotal;
         if ($discountType === 'percent') {
-            $discountAmount = ($subTotal * $discountValue) / 100;
+            $discountAmount = ($discountBase * $discountValue) / 100;
         } elseif ($discountType === 'fixed') {
-            $discountAmount = min($discountValue, $subTotal);
+            $discountAmount = min($discountValue, $discountBase);
         }
 
-        $discountedTotal = $subTotal - $discountAmount;
+        $discountedTotal = $discountBase - $discountAmount;
 
         // Calculate service charges
         $serviceTotal = 0;
@@ -3685,16 +4392,31 @@ class PosAjaxController extends Controller
             }
         }
 
-        // Calculate tax_base
-        $taxBase = $includeChargesInTaxBase ? $discountedTotal + $serviceTotal : $discountedTotal;
+        // tax_base is taxable amount (subtotal - discount), excluding charges.
+        $taxBase = $discountedTotal;
 
         // Calculate taxes
         if ($taxMode === 'order') {
+            $totalTaxPercent = collect($taxes)->sum(function ($tax) {
+                return (float) ($tax['tax_percent'] ?? 0);
+            });
+
             foreach ($taxes as $tax) {
-                $taxAmount = ($tax['tax_percent'] / 100) * $taxBase;
+                $taxPercent = (float) ($tax['tax_percent'] ?? 0);
+                $taxAmount = 0;
+
+                if ($isInclusive) {
+                    // Inclusive order-level tax: extract per-tax share from tax-included taxable amount.
+                    $taxAmount = $totalTaxPercent > 0
+                        ? (($taxBase * $taxPercent) / (100 + $totalTaxPercent))
+                        : 0;
+                } else {
+                    $taxAmount = ($taxPercent / 100) * $taxBase;
+                }
+
                 $totalTaxAmount += $taxAmount;
-                $total += $taxAmount;
             }
+            $total += $totalTaxAmount;
         } elseif ($taxMode === 'item') {
             $totalInclusiveTax = 0;
             $totalExclusiveTax = 0;
@@ -3711,8 +4433,8 @@ class PosAjaxController extends Controller
 
             $totalTaxAmount = $totalInclusiveTax + $totalExclusiveTax;
 
-            if ($totalExclusiveTax > 0) {
-                $total += $totalExclusiveTax;
+            if ($totalTaxAmount > 0) {
+                $total += $totalTaxAmount;
             }
         }
 
@@ -3740,9 +4462,19 @@ class PosAjaxController extends Controller
      * Mirrors Loyalty module logic (incl. tier redemption_multiplier when $customerId is set).
      *
      * @param int|null $customerId Optional; when set, tier redemption_multiplier is applied (tt parity).
+     * @param mixed $preloadedRule Optional LoyaltyStampRule from batch load (skips find).
+     * @param float|null $tierMultiplierOverride When set, skips per-call loyalty tier lookups (POS batch path).
      */
-    protected function applyStampDiscountToAmount(int $menuItemId, int $stampRuleId, float $unitPrice, int $quantity, float $currentAmount, ?int $customerId = null): float
-    {
+    protected function applyStampDiscountToAmount(
+        int $menuItemId,
+        int $stampRuleId,
+        float $unitPrice,
+        int $quantity,
+        float $currentAmount,
+        ?int $customerId = null,
+        $preloadedRule = null,
+        ?float $tierMultiplierOverride = null
+    ): float {
         // If Loyalty module is not available, keep existing amount.
         if (!function_exists('module_enabled') || !module_enabled('Loyalty')) {
             return $currentAmount;
@@ -3750,7 +4482,10 @@ class PosAjaxController extends Controller
 
         try {
             /** @var \Modules\Loyalty\Entities\LoyaltyStampRule|null $rule */
-            $rule = \Modules\Loyalty\Entities\LoyaltyStampRule::find($stampRuleId);
+            $rule = $preloadedRule;
+            if (!$rule) {
+                $rule = \Modules\Loyalty\Entities\LoyaltyStampRule::find($stampRuleId);
+            }
             if (!$rule) {
                 return $currentAmount;
             }
@@ -3768,7 +4503,9 @@ class PosAjaxController extends Controller
 
             // Tier power (tt parity): apply customer's tier redemption_multiplier to stamp discount
             $tierMultiplier = 1.00;
-            if ($customerId && $this->restaurant && class_exists(\Modules\Loyalty\Entities\LoyaltyAccount::class)) {
+            if ($tierMultiplierOverride !== null) {
+                $tierMultiplier = $tierMultiplierOverride;
+            } elseif ($customerId && $this->restaurant && class_exists(\Modules\Loyalty\Entities\LoyaltyAccount::class)) {
                 try {
                     $restaurantId = (int)($this->restaurant->id ?? 0);
                     if ($restaurantId > 0) {
@@ -4284,8 +5021,11 @@ class PosAjaxController extends Controller
     /**
      * Recalculate order totals - Direct replication of Livewire Pos::calculateTotal()
      * This matches the exact calculation flow from Pos.php
+     *
+     * @param  \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection|array|null  $taxesCollection  When set, used instead of Tax::all() (submitOrder hot path).
+     * @param  bool  $quiet  When true, persist totals without firing Order observers (submitOrder intermediate recalcs).
      */
-    private function recalculateOrderTotals($order)
+    private function recalculateOrderTotals($order, $taxesCollection = null, bool $quiet = false)
     {
         // Step 1: Calculate subtotal and total from order items
         $total = 0;
@@ -4306,7 +5046,7 @@ class PosAjaxController extends Controller
 
         $taxMode = $order->tax_mode ?? $restaurant->tax_mode ?? 'order';
         $isInclusive = $restaurant->tax_inclusive ?? false;
-        $taxes = Tax::all();
+        $taxes = $taxesCollection === null ? Tax::all() : collect($taxesCollection);
 
         // Get order items based on status
         $orderItems = collect();
@@ -4363,11 +5103,12 @@ class PosAjaxController extends Controller
 
         // Step 2: Apply discounts (matching Livewire)
         $discountAmount = 0;
+        $discountBase = $subTotal;
         if ($order->discount_value > 0 && $order->discount_type) {
             if ($order->discount_type === 'percent') {
-                $discountAmount = round(($subTotal * $order->discount_value) / 100, 2);
+                $discountAmount = round(($discountBase * $order->discount_value) / 100, 2);
             } elseif ($order->discount_type === 'fixed') {
-                $discountAmount = min($order->discount_value, $subTotal);
+                $discountAmount = min($order->discount_value, $discountBase);
             }
 
             $total -= $discountAmount;
@@ -4392,9 +5133,8 @@ class PosAjaxController extends Controller
             $serviceTotal += $chargeAmount;
         }
 
-        // Step 4: Calculate tax_base (matching Livewire)
-        $includeChargesInTaxBase = $this->restaurant->include_charges_in_tax_base ?? true;
-        $taxBase = $includeChargesInTaxBase ? $discountedTotal + $serviceTotal : $discountedTotal;
+        // Step 4: tax_base is taxable amount (subtotal - discount), excluding charges.
+        $taxBase = $discountedTotal;
 
         // Step 5: Calculate taxes on tax_base (use order's OrderTax when present, else all taxes - match tt Livewire)
         $totalTaxAmount = 0;
@@ -4407,12 +5147,27 @@ class PosAjaxController extends Controller
             $taxesToApply = $orderTaxes->isNotEmpty()
                 ? $orderTaxes->pluck('tax')->filter()->unique('id')->values()
                 : collect($taxes)->filter()->unique('id')->values();
+
+            $totalTaxPercent = $taxesToApply->sum(function ($tax) {
+                return (float) ($tax->tax_percent ?? $tax->percent ?? 0);
+            });
+
             foreach ($taxesToApply as $tax) {
                 if (!$tax) {
                     continue;
                 }
-                $taxPercent = $tax->tax_percent ?? $tax->percent ?? 0;
-                $taxAmount = ($taxPercent / 100) * $taxBase;
+                $taxPercent = (float) ($tax->tax_percent ?? $tax->percent ?? 0);
+                $taxAmount = 0;
+
+                if ($isInclusive) {
+                    // Inclusive order-level tax extraction from tax-included taxBase.
+                    $taxAmount = $totalTaxPercent > 0
+                        ? (($taxBase * $taxPercent) / (100 + $totalTaxPercent))
+                        : 0;
+                } else {
+                    $taxAmount = ($taxPercent / 100) * $taxBase;
+                }
+
                 $totalTaxAmount += $taxAmount;
             }
             // Do not mutate order_taxes here; preserve original attached tax mapping.
@@ -4448,23 +5203,26 @@ class PosAjaxController extends Controller
             $finalTotal += $totalTaxAmount;
         } else {
             // item mode
-            if (!$isInclusive) {
-                $finalTotal += $totalTaxAmount;
-            }
+            $finalTotal += $totalTaxAmount;
         }
         // Add tip and delivery (cast to float to avoid int + string errors)
         $finalTotal += $tipAmount + $deliveryFee;
         $total = round($finalTotal, 2);
 
         // Step 8: Update order with calculated values (matching Livewire) and persist tax_mode
-        $order->update([
+        $payload = [
             'sub_total' => $subTotal,
             'discount_amount' => $discountAmount,
             'total' => max(0, $total),
             'total_tax_amount' => $totalTaxAmount,
             'tax_base' => $taxBase,
             'tax_mode' => $taxMode,
-        ]);
+        ];
+        if ($quiet) {
+            $order->updateQuietly($payload);
+        } else {
+            $order->update($payload);
+        }
     }
 
     /**
@@ -4738,6 +5496,57 @@ class PosAjaxController extends Controller
     }
 
     /**
+     * Update order note for an existing order (order detail / KOT view).
+     */
+    public function updateOrderNote(Request $request, $orderId)
+    {
+        $request->validate([
+            'order_note' => 'nullable|string|max:2000',
+        ]);
+
+        $order = Order::find($orderId);
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => __('modules.order.orderNotFound'),
+            ], 404);
+        }
+
+        if (!user_can('Update Order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.permissionDenied'),
+            ], 403);
+        }
+
+        if ($order->status === 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => __('modules.order.cannotModifyPaidOrder'),
+            ], 400);
+        }
+
+        $note = $request->input('order_note');
+        $note = is_string($note) ? trim($note) : null;
+        if ($note === '') {
+            $note = null;
+        }
+
+        $order->order_note = $note;
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $note ? __('messages.updatedSuccessfully') : __('messages.removedSuccessfully'),
+            'order' => [
+                'id' => $order->id,
+                'order_note' => $order->order_note,
+            ],
+        ]);
+    }
+
+    /**
      * Update waiter for an order
      */
     public function updateWaiter(Request $request, $orderId)
@@ -4757,6 +5566,17 @@ class PosAjaxController extends Controller
 
         // Allow null to clear waiter assignment (match Livewire Pos::updatedSelectWaiter)
         $waiterId = $request->waiter_id ? intval($request->waiter_id) : null;
+        $posWaitersForActor = PosWaitersCache::forPosActor(
+            PosWaitersCache::remember((int) $this->restaurant->id, (int) $this->branch->id),
+            auth()->user(),
+            (int) $this->restaurant->id
+        );
+        $waiterId = PosWaitersCache::normalizeWaiterSelection(
+            $waiterId,
+            auth()->user(),
+            (int) $this->restaurant->id,
+            $posWaitersForActor
+        );
         $previousWaiter = $order->waiter;
         $order->update(['waiter_id' => $waiterId]);
         $order->refresh();
@@ -4794,17 +5614,11 @@ class PosAjaxController extends Controller
 
         $deliveryExecutiveId = $request->delivery_executive_id ? (int) $request->delivery_executive_id : null;
 
-        if ($deliveryExecutiveId) {
-            $validForBranch = DeliveryExecutive::where('id', $deliveryExecutiveId)
-                ->where('branch_id', $order->branch_id)
-                ->exists();
-
-            if (!$validForBranch) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('validation.exists', ['attribute' => __('modules.order.deliveryExecutive')]),
-                ], 422);
-            }
+        if ($deliveryExecutiveId && !DeliveryExecutive::findAssignableForBranch($deliveryExecutiveId, (int) $order->branch_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('messages.invalidRequest'),
+            ], 422);
         }
 
         $order->update(['delivery_executive_id' => $deliveryExecutiveId]);
@@ -4833,6 +5647,29 @@ class PosAjaxController extends Controller
     }
 
     /**
+     * Clear POS caches for current branch on server.
+     */
+    public function clearPosCache()
+    {
+        $branchId = (int) ($this->branch->id ?? 0);
+
+        if ($branchId > 0) {
+            PosBranchCacheInvalidation::invalidateForBranch($branchId);
+        }
+
+        if ($this->restaurant && $this->branch) {
+            Cache::forget(PosWaitersCache::cacheKey((int) $this->restaurant->id, $branchId));
+            Cache::forget('waiters_' . (int) $this->restaurant->id . '_' . $branchId);
+            Cache::forget('waiters_' . $branchId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('messages.cacheCleared')
+        ]);
+    }
+
+    /**
      * Update customer display cache with current cart data
      * Follows the pattern from Livewire Pos.php calculateTotal() method
      *
@@ -4845,6 +5682,8 @@ class PosAjaxController extends Controller
         if (!$userId) {
             return;
         }
+
+        $displayData = \App\Support\CustomerDisplayPayload::normalize($displayData);
 
         // Store in cache (matches Livewire Pos.php pattern)
         $cacheKey = 'customer_display_cart_user_' . $userId;
@@ -4880,7 +5719,7 @@ class PosAjaxController extends Controller
         $qrCodeImageUrl = $paymentGateway && $paymentGateway->is_qr_payment_enabled ? $paymentGateway->qr_code_image_url : null;
 
         // Prepare customer display data (matching Livewire pattern exactly)
-        $customerDisplayData = [
+        $customerDisplayData = \App\Support\CustomerDisplayPayload::normalize([
             'order_number' => $orderNumber,
             'formatted_order_number' => $formattedOrderNumber,
             'items' => $items,
@@ -4895,7 +5734,7 @@ class PosAjaxController extends Controller
             'status' => $status,
             'cash_due' => $status === 'billed' ? $total : null,
             'qr_code_image_url' => $qrCodeImageUrl,
-        ];
+        ]);
 
         // Update cache and broadcast (matching Livewire pattern)
         $this->updateCustomerDisplayCache($customerDisplayData);
@@ -4904,5 +5743,26 @@ class PosAjaxController extends Controller
             'success' => true,
             'message' => 'Customer display updated'
         ]);
+    }
+
+    /**
+     * Normalize a raw order_status string to a valid OrderStatus enum backing value, or null if not valid.
+     * Accepts US spelling "canceled" as an alias for "cancelled".
+     */
+    private function coerceOrderStatusEnumValue(?string $raw): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+        $v = strtolower(trim($raw));
+        if ($v === '') {
+            return null;
+        }
+        if ($v === 'canceled') {
+            $v = 'cancelled';
+        }
+        $case = OrderStatus::tryFrom($v);
+
+        return $case ? $case->value : null;
     }
 }

@@ -4,6 +4,7 @@ namespace App\Livewire\Customer;
 
 use App\Models\Customer;
 use App\Models\Country;
+use App\Models\User;
 use App\Notifications\CustomerEmailVerify;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +29,7 @@ class Signup extends Component
     public $name;
     public $phone;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -42,8 +44,13 @@ class Signup extends Component
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
 
-        // Set default phone code from restaurant
-        $this->phoneCode = $this->restaurant->country?->phonecode ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+
+        // Set default phone code (prefer detected, fallback to restaurant)
+        $this->phoneCode = $detectedPhoneCode
+            ?? $this->restaurant->country?->phonecode
+            ?? $this->allPhoneCodes->first();
     }
 
     public function updatedPhoneCodeIsOpen($value)
@@ -87,7 +94,7 @@ class Signup extends Component
             ->where('send_sms', 'yes')
             ->first();
 
-        return $notificationSetting && (sms_setting()->vonage_status || sms_setting()->msg91_status || sms_setting()->android_sms_gateway_status);
+        return $notificationSetting && (sms_setting()->vonage_status || sms_setting()->msg91_status || sms_setting()->twilio_status || sms_setting()->android_sms_gateway_status);
     }
 
     #[On('showSignup')]
@@ -140,10 +147,16 @@ class Signup extends Component
             $this->validate([
                 'name' => 'required|string',
                 'phoneCode' => 'required',
-                'phone' => 'required|string',
+                'phone' => [
+                    'required',
+                    'string',
+                ],
                 'email' => $this->isSmsLoginEnabled()
                     ? ['nullable', 'email', Rule::unique('customers', 'email')->where('restaurant_id', $this->restaurant->id)]
                     : ['required', 'email', Rule::unique('customers', 'email')->where('restaurant_id', $this->restaurant->id)],
+            ], [
+                // kept for backwards compatibility; no longer validated as unique here
+                'phone.unique' => __('messages.phoneAlreadyExists'),
             ]);
 
             $customer = new Customer();

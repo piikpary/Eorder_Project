@@ -25,6 +25,7 @@ class GeneralSettings extends Component
     public $restaurantAddress;
     public $restaurantPhoneCode;
     public $restaurantPhoneNumber;
+    public $phoneCodeDetected = false;
     public $restaurantEmailAddress;
     public $taxName;
     public $taxId;
@@ -65,11 +66,17 @@ class GeneralSettings extends Component
 
         $this->countries = Country::all();
 
-        //  Set default status to active
-        $this->restaurantPhoneCode = restaurant()->country->phonecode ?? $this->allPhoneCodes->first();
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        // Prefer detected phone code (only if nothing saved yet)
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->restaurantPhoneCode) && !empty($detectedPhoneCode);
+        $this->restaurantPhoneCode = $this->restaurantPhoneCode
+            ?: ($detectedPhoneCode
+                ?? (restaurant()->country->phonecode ?? $this->allPhoneCodes->first()));
+
         // Initialize predefined amounts
         $this->loadPredefinedAmounts();
     }

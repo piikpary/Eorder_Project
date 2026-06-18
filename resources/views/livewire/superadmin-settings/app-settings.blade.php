@@ -146,17 +146,35 @@
                 </div>
             </div>
 
-            <div>
-                <x-label for="mapApiKey" :value="__('modules.delivery.mapApiKey')" />
-                <x-input-password id="mapApiKey" class="block mt-1 w-full" type="text" wire:model='mapApiKey' placeholder="{{ __('placeholders.enterGoogleMapApiKey')}}" />
-                <x-input-error for="mapApiKey" class="mt-2" />
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    @lang('modules.settings.getGoogleMapApiKeyHelp')
-                    <a href="https://developers.google.com/maps/documentation/javascript/get-api-key" target="_blank"
-                        class="text-skin-base hover:text-skin-base/[.8] dark:text-skin-base dark:hover:text-skin-base/[.8]">
-                        @lang('modules.settings.learnMore')
-                    </a>
-                </p>
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-4 space-y-4">
+                <div>
+                    <x-label for="mapProvider" :value="__('modules.settings.mapProvider')" />
+                    <x-select id="mapProvider" class="block mt-1 w-full" wire:model.live='mapProvider'>
+                        <option value="google">@lang('modules.settings.mapProviderGoogle')</option>
+                        <option value="osm">@lang('modules.settings.mapProviderOsm')</option>
+                    </x-select>
+                    <x-input-error for="mapProvider" class="mt-2" />
+                    @if($mapProvider === 'osm')
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            @lang('modules.settings.mapProviderOsmHelp')
+                        </p>
+                    @endif
+                </div>
+
+                @if($mapProvider === 'google')
+                    <div class="pt-2 border-t border-gray-200 dark:border-gray-600">
+                        <x-label for="mapApiKey" :value="__('modules.delivery.mapApiKey')" />
+                        <x-input-password id="mapApiKey" class="block mt-1 w-full" type="text" wire:model='mapApiKey' placeholder="{{ __('placeholders.enterGoogleMapApiKey')}}" />
+                        <x-input-error for="mapApiKey" class="mt-2" />
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            @lang('modules.settings.getGoogleMapApiKeyHelp')
+                            <a href="https://developers.google.com/maps/documentation/javascript/get-api-key" target="_blank"
+                                class="text-skin-base hover:text-skin-base/[.8] dark:text-skin-base dark:hover:text-skin-base/[.8]">
+                                @lang('modules.settings.learnMore')
+                            </a>
+                        </p>
+                    </div>
+                @endif
             </div>
 
             <div>

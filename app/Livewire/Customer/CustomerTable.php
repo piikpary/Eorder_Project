@@ -36,7 +36,7 @@ class CustomerTable extends Component
 
     public function showEditCustomer($id)
     {
-        $this->customer = Customer::findOrFail($id);
+        $this->customer = Customer::with(['addresses', 'latestDeliveryAddress'])->findOrFail($id);
         $this->showEditCustomerModal = true;
     }
 
@@ -107,12 +107,9 @@ class CustomerTable extends Component
         // In production, this should be determined from user/branch context
         if (!$restaurantId) {
             $restaurantId = 1; // Fallback - adjust based on your setup
-            Log::warning('CustomerTable: Could not determine restaurant_id, using fallback value: ' . $restaurantId);
+            Log::debug('CustomerTable: Could not determine restaurant_id, using fallback value: ' . $restaurantId);
         }
-        
-        // Log the restaurant_id being used for debugging
-        Log::info('CustomerTable render: Using restaurant_id = ' . $restaurantId);
-        
+
         // Build base query
         $baseQuery = Customer::query()
             ->withCount('orders')
@@ -135,7 +132,6 @@ class CustomerTable extends Component
                         ->where('restaurant_id', $restaurantId)
                         ->limit(1)
                 ]);
-                Log::info('CustomerTable: Successfully added loyalty points subquery directly');
             } catch (\Exception $e) {
                 // Log error for debugging
                 Log::error('Loyalty module error in CustomerTable: ' . $e->getMessage(), [
@@ -143,8 +139,6 @@ class CustomerTable extends Component
                     'trace' => $e->getTraceAsString()
                 ]);
             }
-        } elseif (!$restaurantId) {
-            Log::warning('CustomerTable: restaurant_id is null, skipping loyalty points query');
         }
 
         $query = $baseQuery->paginate(10);

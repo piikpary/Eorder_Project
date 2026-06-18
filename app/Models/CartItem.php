@@ -24,6 +24,15 @@ class CartItem extends Model
         'tax_breakup',
     ];
 
+    protected $casts = [
+        'quantity' => 'integer',
+        'price' => 'float',
+        'amount' => 'float',
+        'tax_amount' => 'float',
+        'tax_percentage' => 'float',
+        'tax_breakup' => 'array',
+    ];
+
 
     /**
      * Get the cart session that owns the cart item.

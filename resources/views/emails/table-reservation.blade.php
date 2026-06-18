@@ -20,6 +20,10 @@
 
 **{{ __('modules.reservation.guests') }}**: {{ $reservation->party_size }}
 
+@if ($reservation->area)
+**{{ __('modules.reservation.preferredArea') }}**: {{ $reservation->area->area_name }}
+@endif
+
 @php
     $actionText = __('email.reservation.action');
     $actionUrl = route('my_bookings', ['hash' => $settings->hash]);

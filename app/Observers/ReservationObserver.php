@@ -2,12 +2,12 @@
 
 namespace App\Observers;
 
-use App\Models\Reservation;
 use App\Events\TodayReservationCreatedEvent;
+use App\Models\Reservation;
+use App\Services\Tables\TablesIndexCache;
 
 class ReservationObserver
 {
-
     public function creating(Reservation $reservation)
     {
         if (branch()) {
@@ -17,6 +17,8 @@ class ReservationObserver
 
     public function saved(Reservation $reservation)
     {
+        TablesIndexCache::forgetForBranch($reservation->branch_id);
+
         $count = Reservation::whereDate('reservation_date_time', '>=', now(timezone())->startOfDay()->toDateTimeString())
             ->whereDate('reservation_date_time', '<=', now(timezone())->endOfDay()->toDateTimeString())
             ->where('reservation_status', 'Confirmed')
@@ -24,5 +26,10 @@ class ReservationObserver
             ->count();
 
         event(new TodayReservationCreatedEvent($count));
+    }
+
+    public function deleted(Reservation $reservation): void
+    {
+        TablesIndexCache::forgetForBranch($reservation->branch_id);
     }
 }

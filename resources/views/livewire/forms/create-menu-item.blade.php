@@ -56,7 +56,7 @@
                     <div class="mb-4">
                         <x-label for="itemName" :value="__('modules.menu.itemName') . ' (' . $languages[$currentLanguage] . ')'" />
                         <x-input id="itemName" class="block mt-1 w-full" type="text" placeholder="{{ __('placeholders.menuItemNamePlaceholder') }}" wire:model.defer="itemName" wire:change="updateTranslation" />
-                        <x-input-error for="translationNames.{{ $globalLocale }}" class="mt-2" />
+                        <x-input-error for="translationNames" class="mt-2" />
                     </div>
 
                     <div>
@@ -203,6 +203,10 @@
                             </ul>
                         </div>
 
+                        @include('livewire.forms.partials.menu-item-dietary-label-chips', ['dietaryDomPrefix' => 'create-mi'])
+
+                        @include('livewire.forms.partials.menu-item-eu-allergen-chips', ['euAllergenDomPrefix' => 'create-mi'])
+
                         <!-- Additional Settings -->
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -264,7 +268,7 @@
                                     <p class="font-medium">{{ $itemImageTemp->getClientOriginalName() }}</p>
                                     <p class="text-gray-500">{{ $this->formatFileSize($itemImageTemp->getSize()) }}</p>
                                     @php
-                                    $imageInfo = getimagesize($itemImageTemp->getRealPath());
+                                    $imageInfo = @getimagesize($itemImageTemp->getRealPath());
                                     if ($imageInfo) {
                                     echo '<p class="text-gray-500">' . $imageInfo[0] . ' × ' . $imageInfo[1] . ' pixels
                                     </p>';
@@ -276,17 +280,6 @@
                         </div>
                     </div>
 
-                    <!-- Action Buttons - Hidden on mobile (buttons shown in pricing section) -->
-                    <div class="hidden lg:flex w-full space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <x-button wire:loading.attr="disabled" wire:target="submitForm" class="flex-1">
-                            <span wire:loading.remove wire:target="submitForm">@lang('app.save')</span>
-                            <span wire:loading wire:target="submitForm" class="flex items-center">
-                                Saving...
-                            </span>
-                        </x-button>
-                        <x-secondary-link href="{{ route('menu-items.index') }}" wire:navigate wire:loading.attr="disabled" wire:target="submitForm"
-                            class="flex-1">@lang('app.cancel')</x-secondary-link>
-                    </div>
                 </div>
 
 
@@ -360,6 +353,18 @@
                     </div>
                 </div>
                 @endif
+
+                <!-- Action Buttons - Hidden on mobile (buttons shown in pricing section) -->
+                <div class="hidden lg:flex w-full space-x-3 mt-2">
+                    <x-button wire:loading.attr="disabled" wire:target="submitForm" class="flex-1">
+                        <span wire:loading.remove wire:target="submitForm">@lang('app.save')</span>
+                        <span wire:loading wire:target="submitForm" class="flex items-center">
+                            Saving...
+                        </span>
+                    </x-button>
+                    <x-secondary-link href="{{ route('menu-items.index') }}" wire:navigate wire:loading.attr="disabled" wire:target="submitForm"
+                        class="flex-1">@lang('app.cancel')</x-secondary-link>
+                </div>
             </div>
 
             <!-- Right Column - Pricing Details -->
@@ -471,14 +476,27 @@
                                                 <div @class(['w-3 h-3 rounded-full flex-shrink-0', $this->orderTypeColor($orderType->id)])></div>
                                                 <span class="font-medium text-gray-900 dark:text-white text-sm truncate">{{ $orderType->order_type_name }}</span>
                                             </div>
-                                            <div class="relative flex-shrink-0">
-                                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                    <span class="text-gray-500 text-sm">{{ restaurant()->currency->currency_symbol }}</span>
+                                            <div class="flex items-center gap-1 flex-shrink-0">
+                                                <button type="button" wire:click="toggleVariationOrderTypePriceLink({{ $key }}, {{ $orderType->id }})"
+                                                    class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    title="{{ ($variationLinkedOrderTypePrices[$key][$orderType->id] ?? true) ? __('modules.menu.syncedWithBasePrice') : __('modules.menu.customPrice') }}">
+                                                    @if($variationLinkedOrderTypePrices[$key][$orderType->id] ?? true)
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock w-3.5 h-3.5 text-skin-base" viewBox="0 0 16 16">
+                                                        <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/>
+                                                    </svg>
+                                                    @else
+                                                    <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/></svg>
+                                                    @endif
+                                                </button>
+                                                <div class="relative">
+                                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                        <span class="text-gray-500 text-sm">{{ restaurant()->currency->currency_symbol }}</span>
+                                                    </div>
+                                                    <x-input type="number" step="0.001" min="0"
+                                                            wire:model.blur="variationOrderTypePrices.{{ $key }}.{{ $orderType->id }}"
+                                                            class="block pl-8 pr-3 w-24 sm:w-32"
+                                                            placeholder="0.00" />
                                                 </div>
-                                                <x-input type="number" step="0.001" min="0"
-                                                        wire:model.blur="variationOrderTypePrices.{{ $key }}.{{ $orderType->id }}"
-                                                        class="block pl-8 pr-3 w-24 sm:w-32"
-                                                        placeholder="0.00" />
                                             </div>
                                         </div>
                                         @endforeach
@@ -496,14 +514,27 @@
                                                 <svg class="w-5 h-5 text-gray-600 dark:text-gray-200 flex-shrink-0" fill="currentColor" height="20" viewBox="0 0 64 64" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M4 16h14.001a3 3 0 0 1 3 3v11.001a3 3 0 0 1-3 3h-14a3 3 0 0 1-3.001-3v-11a3 3 0 0 1 3-3"/><circle cx="33.002" cy="7" r="5"/><path d="M12.003 35.852a5.92 5.92 0 0 0 1.7 4.15H29.96v-4.155a.996.996 0 0 0-.996-.996H12.998a1 1 0 0 0-.995 1.001"/><path d="M61.737 51.359a8.13 8.13 0 0 0-8.322-5.994 7 7 0 0 0 .24-1.791A5.93 5.93 0 0 0 51 38.75c-2.147-1.425-3.753-5.048-3.996-8.858h1.916a2.99 2.99 0 0 0 2.991-2.982v-1.986a2.99 2.99 0 0 0-2.991-2.982h-6.84c-5.782-1.665-7.522-3.583-8.561-4.732l-.063-.07a3.71 3.71 0 0 0-2.018-3.813 3.64 3.64 0 0 0-5.122 2.497l-2.869 13.71a2.983 2.983 0 0 0 2.598 3.571l4.917.544a.994.994 0 0 1 .887 1.043l-.774 13.106a5.27 5.27 0 0 1-1.477-5.796H14.313c-1.612 2.671-4.193 7.679-3.149 10.936a4.04 4.04 0 0 0 2.609 2.622 3.7 3.7 0 0 0 1.39.15 6.406 6.406 0 0 0 12.78 0h17.14a1.26 1.26 0 0 0 .875-.423 7 7 0 0 0 .587 1.703.996.996 0 0 0 1.716.14q.176-.25.376-.491a6.4 6.4 0 1 0 12.484-2.718.986.986 0 0 0 .875-1.075 8 8 0 0 0-.26-1.487m-40.184 8.318a4.407 4.407 0 0 1-4.385-3.967h8.77a4.407 4.407 0 0 1-4.385 3.967M40.94 48.754h-3.885l1.718-16.24a2.98 2.98 0 0 0-1.926-3.104l-4.9-1.829a.99.99 0 0 1-.622-1.149l.745-3.215a17.1 17.1 0 0 0 8.87 3.633zm14.586 11.218a4.413 4.413 0 0 1-4.961-4.86l.304-.38a11.08 11.08 0 0 1 7.676-1.51l.236.183a4.4 4.4 0 0 1-3.255 6.567"/></svg>
                                                 <span class="font-medium text-gray-900 dark:text-white text-xs sm:text-sm truncate">Base Delivery Price</span>
                                             </div>
-                                            <div class="relative flex-shrink-0">
-                                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                    <span class="text-gray-500 text-sm">{{ restaurant()->currency->currency_symbol }}</span>
+                                            <div class="flex items-center gap-1 flex-shrink-0">
+                                                <button type="button" wire:click="toggleVariationDeliveryPriceLink({{ $key }})"
+                                                    class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    title="{{ ($variationLinkedDeliveryPrice[$key] ?? true) ? __('modules.menu.syncedWithBasePrice') : __('modules.menu.customPrice') }}">
+                                                    @if($variationLinkedDeliveryPrice[$key] ?? true)
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock w-3.5 h-3.5 text-skin-base" viewBox="0 0 16 16">
+                                                        <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/>
+                                                    </svg>
+                                                    @else
+                                                    <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/></svg>
+                                                    @endif
+                                                </button>
+                                                <div class="relative">
+                                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                        <span class="text-gray-500 text-sm">{{ restaurant()->currency->currency_symbol }}</span>
+                                                    </div>
+                                                    <x-input type="number" step="0.001"
+                                                            wire:model.live="variationBaseDeliveryPrice.{{ $key }}"
+                                                            class="block pl-8 pr-3 w-24 sm:w-32"
+                                                            placeholder="0.00" min="0" />
                                                 </div>
-                                                <x-input type="number" step="0.001"
-                                                        wire:model.live="variationBaseDeliveryPrice.{{ $key }}"
-                                                        class="block pl-8 pr-3 w-24 sm:w-32"
-                                                        placeholder="0.00" min="0" />
                                             </div>
                                         </div>
 
@@ -618,14 +649,29 @@
                                             {{ $orderType->order_type_name }}
                                         </span>
                                     </div>
-                                    <div class="relative sm:flex-shrink-0 w-full sm:w-auto">
-                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                            <span class="text-gray-500">{{ restaurant()->currency->currency_symbol }}</span>
+                                    <div class="flex items-center gap-1.5 sm:flex-shrink-0 w-full sm:w-auto">
+                                        <button type="button" wire:click="toggleOrderTypePriceLink({{ $orderType->id }})"
+                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex-shrink-0"
+                                            title="{{ ($linkedOrderTypePrices[$orderType->id] ?? true) ? __('modules.menu.syncedWithBasePrice') : __('modules.menu.customPrice') }}">
+                                            @if($linkedOrderTypePrices[$orderType->id] ?? true)
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock w-3.5 h-3.5 text-skin-base" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/>
+                                            </svg>
+                                            @else
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-unlock w-3.5 h-3.5 text-gray-400" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M12 0a4 4 0 0 1 4 4v2.5h-1V4a3 3 0 1 0-6 0v2h.5A2.5 2.5 0 0 1 12 8.5v5A2.5 2.5 0 0 1 9.5 16h-7A2.5 2.5 0 0 1 0 13.5v-5A2.5 2.5 0 0 1 2.5 6H8V4a4 4 0 0 1 4-4M2.5 7A1.5 1.5 0 0 0 1 8.5v5A1.5 1.5 0 0 0 2.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 9.5 7z"/>
+                                              </svg>
+                                            @endif
+                                        </button>
+                                        <div class="relative flex-1 sm:flex-initial">
+                                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                <span class="text-gray-500">{{ restaurant()->currency->currency_symbol }}</span>
+                                            </div>
+                                            <x-input type="number" step="0.001" min="0"
+                                                wire:model.live="orderTypePrices.{{ $orderType->id }}"
+                                                class="block w-full sm:w-32 pl-8 pr-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-skin-base focus:border-skin-base"
+                                                placeholder="0.00" />
                                         </div>
-                                        <x-input type="number" step="0.001" min="0"
-                                            wire:model.live="orderTypePrices.{{ $orderType->id }}"
-                                            class="block w-full sm:w-32 pl-8 pr-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-skin-base focus:border-skin-base"
-                                            placeholder="0.00" />
                                     </div>
                                 </div>
                                 @endforeach
@@ -645,21 +691,36 @@
                                         <svg class="w-6 h-6 text-gray-600 dark:text-gray-200 flex-shrink-0" fill="currentColor" height="24" viewBox="0 0 64 64" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 16h14.001a3 3 0 0 1 3 3v11.001a3 3 0 0 1-3 3h-14a3 3 0 0 1-3.001-3v-11a3 3 0 0 1 3-3"/><circle cx="33.002" cy="7" r="5"/><path d="M12.003 35.852a5.92 5.92 0 0 0 1.7 4.15H29.96v-4.155a.996.996 0 0 0-.996-.996H12.998a1 1 0 0 0-.995 1.001"/><path d="M61.737 51.359a8.13 8.13 0 0 0-8.322-5.994 7 7 0 0 0 .24-1.791A5.93 5.93 0 0 0 51 38.75c-2.147-1.425-3.753-5.048-3.996-8.858h1.916a2.99 2.99 0 0 0 2.991-2.982v-1.986a2.99 2.99 0 0 0-2.991-2.982h-6.84c-5.782-1.665-7.522-3.583-8.561-4.732l-.063-.07a3.71 3.71 0 0 0-2.018-3.813 3.64 3.64 0 0 0-5.122 2.497l-2.869 13.71a2.983 2.983 0 0 0 2.598 3.571l4.917.544a.994.994 0 0 1 .887 1.043l-.774 13.106a5.27 5.27 0 0 1-1.477-5.796H14.313c-1.612 2.671-4.193 7.679-3.149 10.936a4.04 4.04 0 0 0 2.609 2.622 3.7 3.7 0 0 0 1.39.15 6.406 6.406 0 0 0 12.78 0h17.14a1.26 1.26 0 0 0 .875-.423 7 7 0 0 0 .587 1.703.996.996 0 0 0 1.716.14q.176-.25.376-.491a6.4 6.4 0 1 0 12.484-2.718.986.986 0 0 0 .875-1.075 8 8 0 0 0-.26-1.487m-40.184 8.318a4.407 4.407 0 0 1-4.385-3.967h8.77a4.407 4.407 0 0 1-4.385 3.967M40.94 48.754h-3.885l1.718-16.24a2.98 2.98 0 0 0-1.926-3.104l-4.9-1.829a.99.99 0 0 1-.622-1.149l.745-3.215a17.1 17.1 0 0 0 8.87 3.633zm14.586 11.218a4.413 4.413 0 0 1-4.961-4.86l.304-.38a11.08 11.08 0 0 1 7.676-1.51l.236.183a4.4 4.4 0 0 1-3.255 6.567"/></svg>
                                         <div class="min-w-0">
                                             <span class="font-medium text-gray-900 dark:text-white text-sm truncate block">
-                                                Delivery
+                                                @lang('modules.settings.delivery')
                                             </span>
                                             <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                                                Default delivery price
+                                                @lang('modules.settings.defaultDeliveryPrice')
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="relative w-full sm:w-auto sm:flex-shrink-0">
-                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                            <span class="text-gray-500">{{ restaurant()->currency->currency_symbol }}</span>
+                                    <div class="flex items-center gap-1.5 w-full sm:w-auto sm:flex-shrink-0">
+                                        <button type="button" wire:click="toggleDeliveryPriceLink"
+                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex-shrink-0"
+                                            title="{{ $linkedDeliveryPrice ? __('modules.menu.syncedWithBasePrice') : __('modules.menu.customPrice') }}">
+                                            @if($linkedDeliveryPrice)
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-lock w-3.5 h-3.5 text-skin-base" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/>
+                                            </svg>
+                                            @else
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-unlock w-3.5 h-3.5 text-gray-400" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M12 0a4 4 0 0 1 4 4v2.5h-1V4a3 3 0 1 0-6 0v2h.5A2.5 2.5 0 0 1 12 8.5v5A2.5 2.5 0 0 1 9.5 16h-7A2.5 2.5 0 0 1 0 13.5v-5A2.5 2.5 0 0 1 2.5 6H8V4a4 4 0 0 1 4-4M2.5 7A1.5 1.5 0 0 0 1 8.5v5A1.5 1.5 0 0 0 2.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 9.5 7z"/>
+                                              </svg>
+                                            @endif
+                                        </button>
+                                        <div class="relative flex-1 sm:flex-initial">
+                                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                <span class="text-gray-500">{{ restaurant()->currency->currency_symbol }}</span>
+                                            </div>
+                                            <x-input type="number" step="0.001" min="0"
+                                                wire:model.live="baseDeliveryPrice"
+                                                class="block w-full sm:w-32 pl-8 pr-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-skin-base focus:border-skin-base"
+                                                placeholder="{{ $baseDeliveryPrice ?: '0.00' }}" />
                                         </div>
-                                        <x-input type="number" step="0.001" min="0"
-                                            wire:model.live="baseDeliveryPrice"
-                                            class="block w-full sm:w-32 pl-8 pr-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-skin-base focus:border-skin-base"
-                                            placeholder="{{ $baseDeliveryPrice ?: '0.00' }}" />
                                     </div>
                                 </div>
                                 @forelse($deliveryApps as $app)

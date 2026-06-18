@@ -241,178 +241,167 @@
         </div>
 
         <!-- Filter Section -->
-        <div class="flex flex-wrap justify-between items-center gap-4 p-4 bg-gray-50 rounded-lg dark:bg-gray-700">
-            <div class="lg:flex items-center mb-4 sm:mb-0">
-                <form  action="#" method="GET">
+        <div class="p-3 bg-gray-50 rounded-lg dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 mb-0">
+            <form class="w-full min-w-0" action="#" method="GET">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
+                    <x-select id="dateRangeType" class="block w-full sm:w-fit min-w-[7.5rem] shrink-0" wire:model.defer="dateRangeType" wire:change="setDateRange">
+                        <option value="today">@lang('app.today')</option>
+                        <option value="currentWeek">@lang('app.currentWeek')</option>
+                        <option value="lastWeek">@lang('app.lastWeek')</option>
+                        <option value="last7Days">@lang('app.last7Days')</option>
+                        <option value="currentMonth">@lang('app.currentMonth')</option>
+                        <option value="lastMonth">@lang('app.lastMonth')</option>
+                        <option value="currentYear">@lang('app.currentYear')</option>
+                        <option value="lastYear">@lang('app.lastYear')</option>
+                    </x-select>
 
-                    <div class="lg:flex gap-2 items-center">
-                        <select id="dateRangeType" class=" px-4 py-2 text-lg font-medium text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600" wire:model.defer="dateRangeType" wire:change="setDateRange">
-                            <option value="today">@lang('app.today')</option>
-                            <option value="currentWeek">@lang('app.currentWeek')</option>
-                            <option value="lastWeek">@lang('app.lastWeek')</option>
-                            <option value="last7Days">@lang('app.last7Days')</option>
-                            <option value="currentMonth">@lang('app.currentMonth')</option>
-                            <option value="lastMonth">@lang('app.lastMonth')</option>
-                            <option value="currentYear">@lang('app.currentYear')</option>
-                            <option value="lastYear">@lang('app.lastYear')</option>
-                        </select>
-
-                        <select
-                            wire:model.live="selectedHandler"
-                            wire:change="filterHandler"
-                            class=" px-4 py-2 text-lg font-medium text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600">
-                            <option value="">@lang('modules.report.allHandlers')</option>
-                            @foreach($handlers ?? [] as $user)
-                                <option value="{{ $user->id }}">{{ $user->name }}</option>
-                            @endforeach
-                        </select>
-
-                        <select
-                            wire:model.live="selectedWaiter"
-                            wire:change="filterWaiter"
-                            class=" px-4 py-2 text-lg font-medium text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600">
-                            <option value="">@lang('modules.report.allWaiters')</option>
-                            @foreach($waiters ?? [] as $user)
-                                <option value="{{ $user->id }}">{{ $user->name }}</option>
-                            @endforeach
-                        </select>
-
-                        <select
-                            wire:model.live="selectedPaymentMethod"
-                            wire:change="filterPaymentMethod"
-                            class=" px-4 py-2 text-lg font-medium text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600">
-                            <option value="">@lang('app.showAll') @lang('modules.report.paymentMethods')</option>
-                            <option value="cash">@lang('modules.order.cash')</option>
-                            <option value="upi">@lang('modules.order.upi')</option>
-                            <option value="card">@lang('modules.order.card')</option>
-                            <option value="razorpay">@lang('modules.order.razorpay')</option>
-                            <option value="stripe">@lang('modules.order.stripe')</option>
-                            <option value="flutterwave">@lang('modules.order.flutterwave')</option>
-                        </select>
-
-                        <div class="lg:flex items-center gap-1">
-                            <div class="w-full max-w-[15rem]" wire:key="start-date-{{ $startDate }}">
-                                <x-datepicker wire:model.change='startDate' placeholder="@lang('app.selectStartDate')" />
-                            </div>
-                            <span class="mx-1 text-gray-500 dark:text-gray-100 w-10 text-center">@lang('app.to')</span>
-                            <div class="w-full max-w-[15rem]" wire:key="end-date-{{ $endDate }}">
-                                <x-datepicker wire:model.live='endDate' placeholder="@lang('app.selectEndDate')" />
-                            </div>
-                        </div>
-
-                        <div class="lg:flex items-center gap-1">
-                            <div class="w-full max-w-[15rem]" wire:key="start-time-{{ $startTime }}">
-                                <label for="start-time" class="sr-only">@lang('modules.reservation.timeStart'):</label>
-                                <x-time-picker wire:model.live.debounce.500ms="startTime" value="{{ $startTime }}" />
-                            </div>
-                            <span class="mx-1 text-gray-500 dark:text-gray-100 w-10 text-center">@lang('app.to')</span>
-                            <div class="w-full max-w-[15rem]" wire:key="end-time-{{ $endTime }}">
-                                <label for="end-time" class="sr-only">@lang('modules.reservation.timeEnd'):</label>
-                                <x-time-picker wire:model.live.debounce.500ms="endTime" value="{{ $endTime }}" />
-                            </div>
-                        </div>
-                    </div>
-                </form>
-
-            </div>
-
-            <div class="inline-flex items-center gap-2 w-1/2 sm:w-auto ms-2 flex-wrap">
-                @if($isToday && $filteredShifts && $filteredShifts->count() > 0)
-                    <x-select class="text-sm" wire:model.live.debounce.250ms='filterShift'>
-                        <option value="">@lang('app.showAll') @lang('modules.settings.operationalShifts')</option>
-                        @foreach ($filteredShifts as $shift)
-                            <option value="{{ $shift->id }}">
-                                {{ $shift->shift_name ?: __('modules.settings.shift') . ' #' . $shift->id }}
-                                ({{ \Carbon\Carbon::parse($shift->start_time)->format(restaurant()->time_format ?? 'h:i A') }} -
-                                {{ \Carbon\Carbon::parse($shift->end_time)->format(restaurant()->time_format ?? 'h:i A') }})
-                            </option>
+                    <x-select wire:model.live="selectedHandler" wire:change="filterHandler" class="block w-full sm:w-fit min-w-[8.75rem] shrink-0">
+                        <option value="">@lang('modules.report.allHandlers')</option>
+                        @foreach($handlers ?? [] as $user)
+                            <option value="{{ $user->id }}">{{ $user->name }}</option>
                         @endforeach
                     </x-select>
-                @endif
 
-                <!-- Business Day Information Alert (Inline) - Only show if today is selected -->
-                @if($isToday && $businessDayInfo)
-                    <div class="relative inline-block" x-data="{ showTooltip: false }" @click.outside="showTooltip = false" @keydown.escape.window="showTooltip = false">
-                        @if($businessDayInfo['extends_to_next_day'])
-                        <div
-                            class="px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800 cursor-pointer sm:cursor-help whitespace-nowrap"
-                            @mouseenter="if (window.innerWidth >= 640) showTooltip = true"
-                            @mouseleave="if (window.innerWidth >= 640) showTooltip = false"
-                            @click="if (window.innerWidth < 640) showTooltip = !showTooltip"
-                            @keydown.enter.prevent="showTooltip = !showTooltip"
-                            @keydown.space.prevent="showTooltip = !showTooltip"
-                            tabindex="0"
-                        >
-                        @else
-                        <div
-                            class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-900/20 dark:border-gray-800 cursor-pointer sm:cursor-help whitespace-nowrap"
-                            @mouseenter="if (window.innerWidth >= 640) showTooltip = true"
-                            @mouseleave="if (window.innerWidth >= 640) showTooltip = false"
-                            @click="if (window.innerWidth < 640) showTooltip = !showTooltip"
-                            @keydown.enter.prevent="showTooltip = !showTooltip"
-                            @keydown.space.prevent="showTooltip = !showTooltip"
-                            tabindex="0"
-                        >
-                        @endif
-                            <div class="flex items-center">
-                                <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    <x-select wire:model.live="selectedWaiter" wire:change="filterWaiter" class="block w-full sm:w-fit min-w-[8.75rem] shrink-0">
+                        <option value="">@lang('modules.report.allWaiters')</option>
+                        @foreach($waiters ?? [] as $user)
+                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @endforeach
+                    </x-select>
+
+                    <x-select wire:model.live="selectedPaymentMethod" wire:change="filterPaymentMethod" class="block w-full sm:w-fit min-w-[12rem] max-w-[22rem] shrink-0">
+                        <option value="">@lang('app.showAll') @lang('modules.report.paymentMethods')</option>
+                        <option value="cash">@lang('modules.order.cash')</option>
+                        <option value="upi">@lang('modules.order.upi')</option>
+                        <option value="card">@lang('modules.order.card')</option>
+                        <option value="razorpay">@lang('modules.order.razorpay')</option>
+                        <option value="stripe">@lang('modules.order.stripe')</option>
+                        <option value="flutterwave">@lang('modules.order.flutterwave')</option>
+                    </x-select>
+
+                    <div class="flex flex-wrap items-center gap-2 min-w-0 w-full sm:w-auto">
+                        <div class="relative w-full sm:w-44 min-w-0" wire:key="start-date-{{ $startDate }}">
+                            <div class="absolute inset-y-0 flex items-center pointer-events-none start-0 ps-2.5 z-10">
+                                <svg class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z" />
                                 </svg>
-                                <span class="text-xs font-medium text-blue-900 dark:text-blue-200">
-                                    @lang('modules.settings.businessDayInfo')
-                                </span>
                             </div>
-                            <!-- Hover Tooltip -->
-                            <div
-                                x-show="showTooltip"
-                                x-transition:enter="transition ease-out duration-200"
-                                x-transition:enter-start="opacity-0"
-                                x-transition:enter-end="opacity-100"
-                                x-transition:leave="transition ease-in duration-150"
-                                x-transition:leave-start="opacity-100"
-                                x-transition:leave-end="opacity-0"
-                                class="absolute left-0 top-full mt-2 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50 pointer-events-none"
-                                style="display: none; width: 320px; max-width: 90vw; box-sizing: border-box; overflow: hidden;"
-                                x-cloak
-                            >
-                                <div style="word-wrap: break-word; overflow-wrap: break-word; width: 100%;">
-                                    <p class="font-semibold mb-2 text-white" style="word-wrap: break-word; overflow-wrap: break-word; width: 100%;">@lang('modules.settings.businessDayInfo')</p>
-                                    <p class="mb-2 leading-relaxed text-white" style="word-wrap: break-word; overflow-wrap: break-word; white-space: normal; width: 100%;">
-                                        @if($businessDayInfo['extends_to_next_day'])
-                                        @lang('modules.settings.businessDayResetsAt', ['time' => $businessDayInfo['start']])
-                                        @lang('app.to') {{ $businessDayInfo['end'] }}
-                                        (@lang('app.on') {{ \Carbon\Carbon::parse($businessDayInfo['end_date'])->translatedFormat(restaurant()->date_format ?? 'd-m-Y') }})
-                                        @else
-                                        @lang('modules.settings.businessDayResetsAt', ['time' => $businessDayInfo['start']])
-                                        @if($businessDayInfo['start'] != $businessDayInfo['end'])
-                                            @lang('app.to') {{ $businessDayInfo['end'] }}
-                                        @endif
-                                        @endif
-                                    </p>
-                                    <p class="text-gray-300 leading-relaxed mt-2 text-sm" style="word-wrap: break-word; overflow-wrap: break-word; white-space: normal; width: 100%;">
-                                        @lang('modules.settings.businessDayExtendsInfo')
-                                    </p>
-                                </div>
-                                @if($businessDayInfo['extends_to_next_day'])
-                                <div class="absolute -top-2 left-4 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-gray-900"></div>
-                                @else
-                                <div class="absolute -top-2 left-4 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-gray-900"></div>
-                                @endif
+                            <x-datepicker wire:model.change='startDate' placeholder="@lang('app.selectStartDate')" class="pl-9 text-xs" />
+                        </div>
+                        <span class="text-xs text-gray-500 dark:text-gray-300 whitespace-nowrap shrink-0 px-0.5">@lang('app.to')</span>
+                        <div class="relative w-full sm:w-44 min-w-0" wire:key="end-date-{{ $endDate }}">
+                            <div class="absolute inset-y-0 flex items-center pointer-events-none start-0 ps-2.5 z-10">
+                                <svg class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z" />
+                                </svg>
                             </div>
+                            <x-datepicker wire:model.live='endDate' placeholder="@lang('app.selectEndDate')" class="pl-9 text-xs" />
                         </div>
                     </div>
-                @endif
 
-            </div>
+                    <div class="flex flex-wrap items-center gap-2 min-w-0 w-full lg:w-auto">
+                        <div class="w-full sm:w-44 min-w-0" wire:key="start-time-{{ $startTime }}">
+                            <label for="start-time" class="sr-only">@lang('modules.reservation.timeStart'):</label>
+                            <x-time-picker wire:model.live.debounce.500ms="startTime" value="{{ $startTime }}" />
+                        </div>
+                        <span class="text-xs text-gray-500 dark:text-gray-300 whitespace-nowrap w-9 text-center shrink-0">@lang('app.to')</span>
+                        <div class="w-full sm:w-44 min-w-0" wire:key="end-time-{{ $endTime }}">
+                            <label for="end-time" class="sr-only">@lang('modules.reservation.timeEnd'):</label>
+                            <x-time-picker wire:model.live.debounce.500ms="endTime" value="{{ $endTime }}" />
+                        </div>
+                    </div>
 
-            <div>
-                <a href="javascript:;" wire:click='exportReport'
-                    class="inline-flex items-center  w-1/2 px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-primary-300 sm:w-auto dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-700">
-                    <svg class="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.414A2 2 0 0 0 15.414 6L12 2.586A2 2 0 0 0 10.586 2zm5 6a1 1 0 1 0-2 0v3.586l-1.293-1.293a1 1 0 1 0-1.414 1.414l3 3a1 1 0 0 0 1.414 0l3-3a1 1 0 0 0-1.414-1.414L11 11.586z" clip-rule="evenodd"/></svg>
-                    @lang('app.export')
-                </a>
-            </div>
+                    @if($isToday && $filteredShifts && $filteredShifts->count() > 0)
+                        <x-select class="block w-full sm:w-fit min-w-[10rem] max-w-[24rem] shrink-0" wire:model.live.debounce.250ms='filterShift'>
+                            <option value="">@lang('app.showAll') @lang('modules.settings.operationalShifts')</option>
+                            @foreach ($filteredShifts as $shift)
+                                <option value="{{ $shift->id }}">
+                                    {{ $shift->shift_name ?: __('modules.settings.shift') . ' #' . $shift->id }}
+                                    ({{ \Carbon\Carbon::parse($shift->start_time)->format(restaurant()->time_format ?? 'h:i A') }} -
+                                    {{ \Carbon\Carbon::parse($shift->end_time)->format(restaurant()->time_format ?? 'h:i A') }})
+                                </option>
+                            @endforeach
+                        </x-select>
+                    @endif
 
+                    @if($isToday && $businessDayInfo)
+                        <div class="relative inline-block shrink-0" x-data="{ showTooltip: false }" @click.outside="showTooltip = false" @keydown.escape.window="showTooltip = false">
+                            @if($businessDayInfo['extends_to_next_day'])
+                            <div
+                                class="px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-900/20 dark:border-blue-800 cursor-pointer sm:cursor-help whitespace-nowrap"
+                                @mouseenter="if (window.innerWidth >= 640) showTooltip = true"
+                                @mouseleave="if (window.innerWidth >= 640) showTooltip = false"
+                                @click="if (window.innerWidth < 640) showTooltip = !showTooltip"
+                                @keydown.enter.prevent="showTooltip = !showTooltip"
+                                @keydown.space.prevent="showTooltip = !showTooltip"
+                                tabindex="0"
+                            >
+                            @else
+                            <div
+                                class="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-md dark:bg-gray-900/20 dark:border-gray-800 cursor-pointer sm:cursor-help whitespace-nowrap"
+                                @mouseenter="if (window.innerWidth >= 640) showTooltip = true"
+                                @mouseleave="if (window.innerWidth >= 640) showTooltip = false"
+                                @click="if (window.innerWidth < 640) showTooltip = !showTooltip"
+                                @keydown.enter.prevent="showTooltip = !showTooltip"
+                                @keydown.space.prevent="showTooltip = !showTooltip"
+                                tabindex="0"
+                            >
+                            @endif
+                                <div class="flex items-center">
+                                    <svg class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <span class="text-[11px] font-medium text-blue-900 dark:text-blue-200">
+                                        @lang('modules.settings.businessDayInfo')
+                                    </span>
+                                </div>
+                                <div
+                                    x-show="showTooltip"
+                                    x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0"
+                                    x-transition:enter-end="opacity-100"
+                                    x-transition:leave="transition ease-in duration-150"
+                                    x-transition:leave-start="opacity-100"
+                                    x-transition:leave-end="opacity-0"
+                                    class="absolute left-0 top-full mt-2 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50 pointer-events-none"
+                                    style="display: none; width: 320px; max-width: 90vw; box-sizing: border-box; overflow: hidden;"
+                                    x-cloak
+                                >
+                                    <div style="word-wrap: break-word; overflow-wrap: break-word; width: 100%;">
+                                        <p class="font-semibold mb-2 text-white" style="word-wrap: break-word; overflow-wrap: break-word; width: 100%;">@lang('modules.settings.businessDayInfo')</p>
+                                        <p class="mb-2 leading-relaxed text-white" style="word-wrap: break-word; overflow-wrap: break-word; white-space: normal; width: 100%;">
+                                            @if($businessDayInfo['extends_to_next_day'])
+                                            @lang('modules.settings.businessDayResetsAt', ['time' => $businessDayInfo['start']])
+                                            @lang('app.to') {{ $businessDayInfo['end'] }}
+                                            (@lang('app.on') {{ \Carbon\Carbon::parse($businessDayInfo['end_date'])->translatedFormat(restaurant()->date_format ?? 'd-m-Y') }})
+                                            @else
+                                            @lang('modules.settings.businessDayResetsAt', ['time' => $businessDayInfo['start']])
+                                            @if($businessDayInfo['start'] != $businessDayInfo['end'])
+                                                @lang('app.to') {{ $businessDayInfo['end'] }}
+                                            @endif
+                                            @endif
+                                        </p>
+                                        <p class="text-gray-300 leading-relaxed mt-2 text-sm" style="word-wrap: break-word; overflow-wrap: break-word; white-space: normal; width: 100%;">
+                                            @lang('modules.settings.businessDayExtendsInfo')
+                                        </p>
+                                    </div>
+                                    @if($businessDayInfo['extends_to_next_day'])
+                                    <div class="absolute -top-2 left-4 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-gray-900"></div>
+                                    @else
+                                    <div class="absolute -top-2 left-4 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-gray-900"></div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <a href="javascript:;" wire:click='exportReport'
+                        class="inline-flex items-center justify-center shrink-0 px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-100 focus:ring-2 focus:ring-primary-300 w-full sm:w-auto dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-600">
+                        <svg class="w-4 h-4 mr-1.5 -ml-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M6 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.414A2 2 0 0 0 15.414 6L12 2.586A2 2 0 0 0 10.586 2zm5 6a1 1 0 1 0-2 0v3.586l-1.293-1.293a1 1 0 1 0-1.414 1.414l3 3a1 1 0 0 0 1.414 0l3-3a1 1 0 0 0-1.414-1.414L11 11.586z" clip-rule="evenodd"/></svg>
+                        @lang('app.export')
+                    </a>
+                </div>
+            </form>
         </div>
     </div>
 

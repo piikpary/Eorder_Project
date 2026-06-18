@@ -43,6 +43,12 @@ class UpdatePackage extends Component
         $this->packages = Package::all();
         $this->packageId = $this->restaurant->package_id;
         $this->initializeSelectedPackage();
+
+        if ($this->restaurant->license_expire_on) {
+            $existingExpiry = \Carbon\Carbon::parse($this->restaurant->license_expire_on);
+            $this->trialExpireOn = $existingExpiry->format(dateFormat());
+            $this->licenceExpireOn = $existingExpiry->format('Y-m-d');
+        }
     }
 
     public function updatedPackageId()

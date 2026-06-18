@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}">
 
+@php
+    $appLocale = app()->getLocale();
+@endphp
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +14,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'DejaVu Sans', 'Arial', sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'DejaVu Sans', 'Arial', sans-serif;
         }
 
         [dir="rtl"] {
@@ -328,7 +332,14 @@
 
                 @if ($receiptSettings->show_order_type)
                     <div class="summary-row">
-                        <span> {{ Str::title(ucwords(str_replace('_', ' ', $order->order_type))) }}
+                        @php
+                            $orderTypeKey = 'modules.order.' . $order->order_type;
+                            $orderTypeLabel = __($orderTypeKey);
+                            if ($orderTypeLabel === $orderTypeKey) {
+                                $orderTypeLabel = Str::title(str_replace('_', ' ', $order->order_type));
+                            }
+                        @endphp
+                        <span> {{ $orderTypeLabel }}
                             @if ($order->order_type === 'pickup')
                                 @if ($order->pickup_date)
                                     <span class="">
@@ -379,7 +390,11 @@
                     <tr>
                         <td class="qty">{{ $item->quantity }}</td>
                         <td class="description">
-                            {{ $item->menuItem->item_name }}
+                            @php
+                                $translatedItemName = $item->menuItem->getTranslatedValue('item_name', $appLocale);
+                                $translatedItemName = $translatedItemName ?: $item->menuItem->item_name;
+                            @endphp
+                            {{ $translatedItemName }}
                             @if (isset($item->menuItemVariation))
                                 <br><small>({{ $item->menuItemVariation->variation }})</small>
                             @endif
@@ -783,7 +798,14 @@
 
                 @if ($receiptSettings->show_order_type)
                     <div class="summary-row">
-                        <span> {{ Str::title(ucwords(str_replace('_', ' ', $order->order_type))) }}
+                        @php
+                            $orderTypeKey = 'modules.order.' . $order->order_type;
+                            $orderTypeLabel = __($orderTypeKey);
+                            if ($orderTypeLabel === $orderTypeKey) {
+                                $orderTypeLabel = Str::title(str_replace('_', ' ', $order->order_type));
+                            }
+                        @endphp
+                        <span> {{ $orderTypeLabel }}
                             @if ($order->order_type === 'pickup')
                                 @if ($order->pickup_date)
                                     <span class="">
@@ -849,7 +871,11 @@
                     <tr>
                         <td class="qty">{{ $itemData['allocated_quantity'] }}</td>
                         <td class="description">
-                            {{ $item->menuItem->item_name }}
+                            @php
+                                $translatedItemName = $item->menuItem->getTranslatedValue('item_name', $appLocale);
+                                $translatedItemName = $translatedItemName ?: $item->menuItem->item_name;
+                            @endphp
+                            {{ $translatedItemName }}
 
                             @if (isset($item->menuItemVariation))
                                 <br><small>({{ $item->menuItemVariation->variation }})</small>

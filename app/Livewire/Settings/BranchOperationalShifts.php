@@ -6,7 +6,6 @@ use App\Models\Branch;
 use App\Models\BranchOperationalShift;
 use App\Scopes\BranchScope;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 
@@ -131,13 +130,6 @@ class BranchOperationalShifts extends Component
         $this->isActive = $shift->is_active;
         $this->sortOrder = $shift->sort_order;
         $this->showShiftModal = true;
-        
-        // Debug: Log when opening edit modal
-        Log::info('Open Edit Modal', [
-            'shiftId' => $shiftId,
-            'selectedDays' => $this->selectedDays,
-            'days_from_db' => $days
-        ]);
     }
 
     public function closeModal()

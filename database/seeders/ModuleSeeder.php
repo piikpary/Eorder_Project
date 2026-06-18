@@ -24,7 +24,8 @@ class ModuleSeeder extends Seeder
             ['name' => 'SuperAdmin', 'is_superadmin' => 1],
             ['name' => 'Landing Site', 'is_superadmin' => 1],
             ['name' => 'Superadmin Settings', 'is_superadmin' => 1],
-            
+            ['name' => 'App Update', 'is_superadmin' => 1],
+
             // Admin/Restaurant modules (is_superadmin = 0)
             ['name' => 'Menu', 'is_superadmin' => 0],
             ['name' => 'Menu Item', 'is_superadmin' => 0],

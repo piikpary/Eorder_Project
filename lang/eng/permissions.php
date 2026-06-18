@@ -20,6 +20,8 @@ return [
         'Delete SuperAdmin' => 'Delete SuperAdmin',
         'Show Landing Site' => 'Show Landing Site',
         'Manage Superadmin Settings' => 'Manage Superadmin Settings',
+        'App Update' => 'App Update',
+        'Custom Modules' => 'Custom Modules',
 
         'Create Menu' => 'Create Menu',
         'Show Menu' => 'Show Menu',
@@ -152,6 +154,10 @@ return [
         'Update Hotel Room Type' => 'Update Hotel Room Type',
         'Delete Hotel Room Type' => 'Delete Hotel Room Type',
         'Show Hotel Reservations' => 'Show Hotel Reservations',
+        'Create Hotel Quotation' => 'Create Hotel Quotation',
+        'Show Hotel Quotations' => 'Show Hotel Quotations',
+        'Update Hotel Quotation' => 'Update Hotel Quotation',
+        'Delete Hotel Quotation' => 'Delete Hotel Quotation',
         'Create Hotel Reservation' => 'Create Hotel Reservation',
         'Update Hotel Reservation' => 'Update Hotel Reservation',
         'Delete Hotel Reservation' => 'Delete Hotel Reservation',
@@ -197,6 +203,7 @@ return [
         'SuperAdmin' => 'SuperAdmin',
         'Landing Site' => 'Landing Site',
         'Superadmin Settings' => 'Superadmin Settings',
+        'App Update' => 'App Update',
 
         'Menu' => 'Menu',
         'Menu Item' => 'Menu Item',

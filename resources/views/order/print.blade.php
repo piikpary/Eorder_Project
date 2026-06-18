@@ -1,5 +1,23 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}">
+
+@php
+    $appLocale = app()->getLocale();
+
+    if (!function_exists('flipText')) {
+        function flipText($text, $language = null, $printingChoice = 'browserPopupPrint') {
+            if ($printingChoice == 'browserPopupPrint') {
+                return $text;
+            }
+            if ($language && in_array($language, ['ar', 'fa', 'ur', 'he', 'ps', 'ku', 'sd', 'ckb'])) {
+                $arabic = new ArPHP\I18N\Arabic();
+                $text = $arabic->utf8Glyphs($text);
+                return $text;
+            }
+            return $text;
+        }
+    }
+@endphp
 
 <head>
     <meta charset="UTF-8">
@@ -10,7 +28,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'DejaVu Sans', 'Arial', sans-serif;
+            font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'DejaVu Sans', 'Arial', sans-serif;
         }
 
         [dir="rtl"] {
@@ -22,7 +40,7 @@
         }
 
         .receipt {
-            width: {{ $width - 5 }}mm;
+            width: {{ $width - 10 }}mm;
             padding: {{ $thermal ? '1mm' : '6.35mm' }};
             page-break-after: {{ !empty($generateImage) ? 'avoid' : 'always' }};
         }
@@ -282,7 +300,12 @@
             @if ($receiptSettings->show_branch_address)
                 <div class="restaurant-info">{!! nl2br($orderBranch->address ?? restaurant()->address ?? '') !!}</div>
             @endif
-            <div class="restaurant-info">@lang('modules.customer.phone'):<span dir="ltr" style="unicode-bidi: embed;">{{ $orderBranch->phone ?: restaurant()->phone_number }}</span></div>
+            <div class="restaurant-info">
+                {{ flipText(__('modules.customer.phone'), $appLocale, $printingChoice) }}
+                @if (count($receiptLanguages) > 1)
+                <br>{{ flipText(__('modules.customer.phone', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                @endif:
+            </span><span dir="ltr" style="unicode-bidi: embed;">{{ $orderBranch->phone ?: restaurant()->phone_number }}</span></div>
             @if ($receiptSettings->show_tax)
                 @if (empty($orderBranch->cr_number) && empty($orderBranch->vat_number))
                     @foreach ($taxDetails as $taxDetail)
@@ -291,10 +314,18 @@
                 @endif
             @endif
             @if ($receiptSettings->show_cr_number && !empty($orderBranch->cr_number))
-                <div class="restaurant-info">@lang('modules.settings.branchCrNumber'): {{ $orderBranch->cr_number }}</div>
+                <div class="restaurant-info">
+                    {{ flipText(__('modules.settings.branchCrNumber'), $appLocale, $printingChoice) }}
+                    @if (count($receiptLanguages) > 1)
+                    <br>{{ flipText(__('modules.settings.branchCrNumber', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                    @endif: <span dir="ltr" style="unicode-bidi: embed;">{{ $orderBranch->cr_number }}</span></div>
             @endif
             @if ($receiptSettings->show_vat_number && !empty($orderBranch->vat_number))
-                <div class="restaurant-info">@lang('modules.settings.branchVatNumber'): {{ $orderBranch->vat_number }}</div>
+                <div class="restaurant-info">
+                    {{ flipText(__('modules.settings.branchVatNumber'), $appLocale, $printingChoice) }}
+                    @if (count($receiptLanguages) > 1)
+                    <br>{{ flipText(__('modules.settings.branchVatNumber', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                    @endif: <span dir="ltr" style="unicode-bidi: embed;">{{ $orderBranch->vat_number }}</span></div>
             @endif
 
         </div>
@@ -317,7 +348,12 @@
                 @endphp
                 @if ($tokenNumber)
                     <div class="summary-row">
-                        <span>@lang('modules.order.tokenNumber') {{ $tokenNumber }}</span>
+                        <span>
+                            {{ flipText(__('modules.order.tokenNumber'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            <br>{{ flipText(__('modules.order.tokenNumber', [], $receiptLanguages[1]), $appLocale, $printingChoice) }}
+                            @endif
+                        </span>: {{ $tokenNumber }}</span>
                     </div>
                 @endif
                 @if($receiptSettings->show_table_number || $receiptSettings->show_total_guest)
@@ -326,12 +362,18 @@
                         <tr>
                             <td>
                                 @if ($receiptSettings->show_table_number && $order->table && $order->table->table_code)
-                                    @lang('modules.settings.tableNumber'): {{ $order->table->table_code }}
+                                    {{ flipText(__('modules.settings.tableNumber'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.settings.tableNumber', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif: {{ $order->table->table_code }}
                                 @endif
                             </td>
                             <td>
                                 @if ($receiptSettings->show_total_guest && $order->number_of_pax)
-                                    @lang('modules.order.noOfPax'): {{ $order->number_of_pax }}
+                                    {{ flipText(__('modules.order.noOfPax'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.order.noOfPax', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif: {{ $order->number_of_pax }}
                                 @endif
                             </td>
                         </tr>
@@ -340,13 +382,23 @@
                 @endif
                 @if ($receiptSettings->show_waiter && $order->waiter && $order->waiter->name)
                     <div class="summary-row">
-                            <span>@lang('modules.order.waiter'): <span class="">{{ $order->waiter->name }}</span></span>
+                                <span>{{ flipText(__('modules.order.waiter'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    {{ flipText(__('modules.order.waiter', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif: <span class="">{{ $order->waiter->name }}</span></span>
                     </div>
                 @endif
                 @if ($receiptSettings->show_order_type )
                     <div class="summary-row">
-
-                            <span> {{ Str::title(ucwords(str_replace('_', ' ', $order->order_type))) }}
+                            @php
+                                $billPrintOrderType = (string) $order->order_type;
+                                $billPrintOrderTypeKey = 'modules.order.' . $billPrintOrderType;
+                                $billPrintOrderTypeLabel = __($billPrintOrderTypeKey);
+                                if ($billPrintOrderTypeLabel === $billPrintOrderTypeKey) {
+                                    $billPrintOrderTypeLabel = Str::title(str_replace('_', ' ', $billPrintOrderType));
+                                }
+                            @endphp
+                            <span> {{ flipText($billPrintOrderTypeLabel, $appLocale, $printingChoice) }}
                                 @if ($order->order_type === 'pickup')
                                     @if ($order->pickup_date)
                                         <span class="">
@@ -360,21 +412,61 @@
                 @endif
                 @if ($receiptSettings->show_customer_name && $order->customer && $order->customer->name)
                     <div class="summary-row">
-                        <span class="showData">@lang('modules.customer.customer'): <span class="">{{ $order->customer->name }}</span></span>
+                        <span class="showData">{{ flipText(__('modules.customer.customer'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            {{ flipText(__('modules.customer.customer', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif: <span class="">{{ $order->customer->name }}</span></span>
                     </div>
                 @endif
 
 
                 @if ($receiptSettings->show_customer_address && $order->customer && $order->customer->delivery_address)
                     <div class="summary-row">
-                        <span>@lang('modules.customer.customerAddress'): <span class="">{{ $order->customer->delivery_address }}</span></span>
+                        <span>{{ flipText(__('modules.customer.customerAddress'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            {{ flipText(__('modules.customer.customerAddress', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif: <span class="">{{ $order->customer->delivery_address }}</span></span>
                     </div>
                 @endif
 
                 @if ($receiptSettings->show_customer_phone && $order->customer && $order->customer->phone)
                     <div class="summary-row">
-                        <span>@lang('modules.customer.phone'): <span dir="ltr" style="unicode-bidi: embed;">{{ $order->customer->phone }}</span></span>
+                        <span>{{ flipText(__('modules.customer.phone'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            {{ flipText(__('modules.customer.phone', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif: <span dir="ltr" style="unicode-bidi: embed;">{{ $order->customer->phone }}</span></span>
                     </div>
+                @endif
+
+                @if (function_exists('module_enabled') && module_enabled('Hotel') && in_array('Hotel', restaurant_modules()) && $order->order_type === 'room_service' && $order->context_type === 'HOTEL_ROOM' && $order->hotelStay)
+                    @php $hotelStay = $order->hotelStay; @endphp
+                    @if ($hotelStay->room)
+                        <div class="summary-row">
+                            <span>{{ flipText(__('hotel::modules.folio.room'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                {{ flipText(__('hotel::modules.folio.room', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif: <span class="">{{ $hotelStay->room->room_number }}</span></span>
+                        </div>
+                    @endif
+                    <div class="summary-row">
+                        <span>{{ flipText(__('hotel::modules.folio.stay'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            {{ flipText(__('hotel::modules.folio.stay', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif: <span class="">{{ $hotelStay->stay_number }}</span></span>
+                    </div>
+                    @if ($hotelStay->stayGuests && $hotelStay->stayGuests->isNotEmpty() && $hotelStay->stayGuests->first()?->guest)
+                        <div class="summary-row">
+                            <span>{{ flipText(__('hotel::modules.guest.guest'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                {{ flipText(__('hotel::modules.guest.guest', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif: <span class="">{{ $hotelStay->stayGuests->first()->guest->full_name }}</span></span>
+                        </div>
+                    @endif
+                    @if ($order->bill_to)
+                        <div class="summary-row">
+                            <span>{{ flipText(__('hotel::modules.roomService.billTo'), $appLocale, $printingChoice) }}: <span class="">{{ $order->bill_to === 'POST_TO_ROOM' ? __('hotel::modules.roomService.postToRoom') : __('hotel::modules.roomService.payNow') }}</span> </span>
+                        </div>
+                    @endif
                 @endif
             </div>
 
@@ -383,10 +475,26 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="qty">@lang('modules.order.qty')</th>
-                    <th class="description">@lang('modules.menu.itemName')</th>
-                    <th class="price">@lang('modules.order.price')</th>
-                    <th class="amount">@lang('modules.order.amount')</th>
+                    <th class="qty">{{ flipText(__('modules.order.qty'), $appLocale, $printingChoice) }}
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.order.qty', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                        @endif
+                    </th>
+                    <th class="description">{{ flipText(__('modules.menu.itemName'), $appLocale, $printingChoice) }}
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.menu.itemName', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}    
+                        @endif
+                    </th>
+                    <th class="price">{{ flipText(__('modules.order.price'), $appLocale, $printingChoice) }}
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.order.price', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                        @endif
+                    </th>
+                    <th class="amount">{{ flipText(__('modules.order.amount'), $appLocale, $printingChoice) }}
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.order.amount', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                        @endif
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -394,7 +502,14 @@
                     <tr>
                         <td class="qty">{{ $item->quantity }}</td>
                         <td class="description">
-                            {{ $item->menuItem->item_name }}
+                            @php
+                                $translatedItemName = $item->menuItem->getTranslatedValue('item_name', $appLocale);
+                                $translatedItemName = $translatedItemName ?: $item->menuItem->item_name;
+                            @endphp
+                            {{ flipText($translatedItemName, $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1 && $item->menuItem->translations->count() > 1)
+                            <br>{{ flipText($item->menuItem->getTranslatedValue('item_name', $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif
 
                             @if (isset($item->menuItemVariation))
                                 <br><small>({{ $item->menuItemVariation->variation }})</small>
@@ -423,7 +538,11 @@
             <div class="summary-row">
                 <table>
                     <tr>
-                        <td>@lang('modules.order.subTotal'):</td>
+                        <td>{{ flipText(__('modules.order.subTotal'), $appLocale, $printingChoice) }}
+                            @if (count($receiptLanguages) > 1)
+                            <br>{{ flipText(__('modules.order.subTotal', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                            @endif
+                        </td>
                         <td>{{ currency_format($order->sub_total, restaurant()->currency_id) }}</td>
                     </tr>
                 </table>
@@ -433,8 +552,11 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('modules.order.discount') @if ($order->discount_type == 'percent')
+                            <td>{{ flipText(__('modules.order.discount'), $appLocale, $printingChoice) }} @if ($order->discount_type == 'percent')
                                     ({{ rtrim(rtrim($order->discount_value, '0'), '.') }}%)
+                                @endif
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('modules.order.discount', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
                                 @endif
                             </td>
                             <td>-{{ currency_format($order->discount_amount, restaurant()->currency_id) }}</td>
@@ -447,7 +569,11 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('loyalty::app.loyaltyDiscount') ({{ number_format($order->loyalty_points_redeemed) }} @lang('loyalty::app.points'))</td>
+                            <td>{{ flipText(__('loyalty::app.loyaltyDiscount'), $appLocale, $printingChoice) }} ({{ number_format($order->loyalty_points_redeemed) }} @lang('loyalty::app.points'))
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('loyalty::app.loyaltyDiscount', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }} ({{ number_format($order->loyalty_points_redeemed) }} @lang('loyalty::app.points', [], $receiptLanguages[1]))
+                                @endif
+                            </td>
                             <td>-{{ currency_format($order->loyalty_discount_amount, restaurant()->currency_id) }}</td>
                         </tr>
                     </table>
@@ -458,16 +584,22 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('app.stampDiscount')
+                            <td>{{ flipText(__('app.stampDiscount'), $appLocale, $printingChoice) }}
                                 @if($order->items()->where('is_free_item_from_stamp', true)->exists())
                                     (@lang('app.freeItem'))
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('app.freeItem', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
                                 @endif
                             </td>
                             <td>
                                 @if($order->stamp_discount_amount > 0)
                                     -{{ currency_format($order->stamp_discount_amount, restaurant()->currency_id) }}
                                 @else
-                                    @lang('app.free')
+                                    {{ flipText(__('app.free'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('app.free', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
                                 @endif
                             </td>
                         </tr>
@@ -519,7 +651,11 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('modules.order.tip'):</td>
+                            <td>{{ flipText(__('modules.order.tip'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('modules.order.tip', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif
+                            </td>
                             <td>{{ currency_format($order->tip_amount, restaurant()->currency_id) }}</td>
                         </tr>
                     </table>
@@ -530,12 +666,19 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('modules.delivery.deliveryFee')</td>
+                            <td>{{ flipText(__('modules.delivery.deliveryFee'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('modules.delivery.deliveryFee', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif
+                            </td>
                             <td>
                                 @if($order->delivery_fee > 0)
                                     {{ currency_format($order->delivery_fee, restaurant()->currency_id) }}
                                 @else
-                                    @lang('modules.delivery.freeDelivery')
+                                    {{ flipText(__('modules.delivery.freeDelivery'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.delivery.freeDelivery', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
                                 @endif
                             </td>
                         </tr>
@@ -612,7 +755,11 @@
                     <div class="summary-row">
                         <table>
                             <tr>
-                                <td>@lang('modules.order.totalTax'):</td>
+                                <td>{{ flipText(__('modules.order.totalTax'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.order.totalTax', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
+                                </td>
                                 <td>{{ currency_format($totalTax, restaurant()->currency_id) }}</td>
                             </tr>
                         </table>
@@ -624,7 +771,11 @@
                 <div class="summary-row">
                     <table>
                         <tr>
-                            <td>@lang('modules.order.balanceReturn'):</td>
+                            <td>{{ flipText(__('modules.order.balanceReturn'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('modules.order.balanceReturn', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif
+                            </td>
                             <td>{{ currency_format($payment->balance, restaurant()->currency_id) }}</td>
                         </tr>
                     </table>
@@ -632,19 +783,65 @@
             @endif
 
             <div class="summary-row total">
-                <table>
-                    <tr>
-                        <td>@lang('modules.order.total'):</td>
-                        <td>{{ currency_format($order->total, restaurant()->currency_id) }}</td>
-                    </tr>
-                </table>
-            </div>
+    <table>
+        <tr>
+            <td>{{ flipText(__('modules.order.total'), $appLocale, $printingChoice) }}
+                @if (count($receiptLanguages) > 1)
+                <br>{{ flipText(__('modules.order.total', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                @endif
+            </td>
+            <td>{{ currency_format($order->total, restaurant()->currency_id) }}</td>
+        </tr>
+    </table>
+</div>
 
+@php
+    $receiptRestaurant = restaurant();
+
+    $showKhrOnReceipt =
+        (bool) ($receiptRestaurant->show_khr_on_receipt ?? false);
+
+    $usdToKhrRate =
+        (float) ($receiptRestaurant->usd_to_khr_rate ?? 0);
+
+    $totalInKhr =
+        round((float) $order->total * $usdToKhrRate);
+@endphp
+
+@if ($showKhrOnReceipt && $usdToKhrRate > 0)
+    <div class="summary-row total">
+        <table>
+            <tr>
+                <td lang="km">
+                    &#6047;&#6042;&#6075;&#6036;&#6023;&#6070;&#6042;&#6080;&#6043;
+                </td>
+                <td>
+                    {{ number_format($totalInKhr, 0) }} &#6107;
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="summary-row secondary">
+        <table>
+            <tr>
+                <td lang="km">អត្រាប្តូរប្រាក់</td>
+                <td>
+                    1 USD = {{ number_format($usdToKhrRate, 0) }} KHR
+                </td>
+            </tr>
+        </table>
+    </div>
+@endif
             @if ($receiptSettings->show_payment_status)
                 <div class="summary-row" style="margin-top: 2mm; padding-top: 2mm; border-top: 1px dashed #000;">
                     <table>
                         <tr>
-                            <td style="font-weight: bold;">@lang('modules.order.paymentStatus'):</td>
+                            <td style="font-weight: bold;">{{ flipText(__('modules.order.paymentStatus'), $appLocale, $printingChoice) }}
+                                @if (count($receiptLanguages) > 1)
+                                <br>{{ flipText(__('modules.order.paymentStatus', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                @endif
+                            </td>
                             <td style="font-weight: bold;">
                                 @if($order->status === 'paid')
                                     <span style="color: #10b981;">@lang('modules.order.paid')</span>
@@ -660,12 +857,20 @@
         </div>
 
         <div class="footer">
-            <p>@lang('messages.thankYouVisit')</p>
+            <p>{{ flipText(__('messages.thankYouVisit'), $appLocale, $printingChoice) }}
+                @if (count($receiptLanguages) > 1)
+                <br>{{ flipText(__('messages.thankYouVisit', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                @endif
+            </p>
 
             @if ($order->status != 'paid')
             <div>
                 @if ($receiptSettings->show_payment_qr_code)
-                    <p class="qr_code">@lang('modules.settings.payFromYourPhone')</p>
+                    <p class="qr_code">{{ flipText(__('modules.settings.payFromYourPhone'), $appLocale, $printingChoice) }}
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.settings.payFromYourPhone', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                        @endif
+                    </p>
                     @php
                         // Get the QR code image and convert to base64
                         $qrCodeUrl = $receiptSettings->payment_qr_code_url;
@@ -690,7 +895,11 @@
                     @else
                         <img class="qr-code-img" src="{{ $receiptSettings->payment_qr_code_url }}" alt="QR Code">
                     @endif
-                    <p class="">@lang('modules.settings.scanQrCode')</p>
+                    <p class="">@lang('modules.settings.scanQrCode')
+                        @if (count($receiptLanguages) > 1)
+                        <br>{{ flipText(__('modules.settings.scanQrCode', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                        @endif
+                    </p>
                 @endif
             </div>
             @endif
@@ -700,9 +909,24 @@
                     <table class="items-table">
                         <thead>
                             <tr>
-                                <th class="qty" style="text-align: center">@lang('modules.order.amount')</th>
-                                <th class="payment-method" style="text-align: center">@lang('modules.order.paymentMethod')</th>
-                                <th class="price" style="text-align: center">@lang('app.dateTime')</th>
+                                <th class="qty" style="text-align: center">
+                                    {{ flipText(__('modules.order.amount'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.order.amount', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
+                                </th>
+                                <th class="payment-method" style="text-align: center">
+                                    {{ flipText(__('modules.order.paymentMethod'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('modules.order.paymentMethod', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
+                                </th>
+                                <th class="price" style="text-align: center">
+                                    {{ flipText(__('app.dateTime'), $appLocale, $printingChoice) }}
+                                    @if (count($receiptLanguages) > 1)
+                                    <br>{{ flipText(__('app.dateTime', [], $receiptLanguages[1]), $receiptLanguages[1], $printingChoice) }}
+                                    @endif
+                                </th>
                             </tr>
                         </thead>
                         <tbody>

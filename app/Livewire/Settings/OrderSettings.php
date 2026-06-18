@@ -26,6 +26,8 @@ class OrderSettings extends Component
     public $resetDaily = false;
     public $hideMenuItemImageOnPos = false;
     public $hideMenuItemImageOnCustomerSite = false;
+
+    public bool $autoMarkOrderCompletedOnPaid = true;
     public $settings;
     public $tokenSettings = [];
     public array $orderNumberSettings = [];
@@ -38,12 +40,13 @@ class OrderSettings extends Component
             throw new \Exception('No branch found. Please ensure at least one branch exists.');
         }
 
-        $this->loadSettings($this->branchId);
+        $this->loadSettings();
         $this->loadTokenSettings();
         $this->activeTab = 'prefix';
 
         $this->hideMenuItemImageOnPos = (bool) restaurant()->hide_menu_item_image_on_pos ?? false;
         $this->hideMenuItemImageOnCustomerSite = (bool) restaurant()->hide_menu_item_image_on_customer_site ?? false;
+        $this->autoMarkOrderCompletedOnPaid = (bool) data_get(restaurant(), 'auto_mark_order_completed_on_paid', true);
     }
 
     public function setActiveTab($tab)
@@ -106,6 +109,28 @@ class OrderSettings extends Component
             ]);
         }
 
+
+        session()->forget('restaurant');
+
+        $this->alert('success', __('messages.settingsUpdated'), [
+            'position' => 'top-end',
+            'toast' => true,
+        ]);
+    }
+
+    public function saveOrderMarkCompletedSettings(): void
+    {
+        $this->validate([
+            'branchId' => 'required|exists:branches,id',
+            'autoMarkOrderCompletedOnPaid' => 'boolean',
+        ]);
+
+        $branch = Branch::find($this->branchId);
+        if ($branch && $branch->restaurant) {
+            $branch->restaurant->update([
+                'auto_mark_order_completed_on_paid' => $this->autoMarkOrderCompletedOnPaid,
+            ]);
+        }
 
         session()->forget('restaurant');
 
@@ -191,6 +216,7 @@ class OrderSettings extends Component
         if ($branch && $branch->restaurant) {
             $this->hideMenuItemImageOnPos = $branch->restaurant->hide_menu_item_image_on_pos ?? false;
             $this->hideMenuItemImageOnCustomerSite = $branch->restaurant->hide_menu_item_image_on_customer_site ?? false;
+            $this->autoMarkOrderCompletedOnPaid = (bool) data_get($branch->restaurant, 'auto_mark_order_completed_on_paid', true);
         }
     }
 

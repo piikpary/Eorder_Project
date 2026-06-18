@@ -24,13 +24,6 @@
             </div>
             <div class="mt-4">
                 <x-label for="restaurantPhoneNumber" value="{{ __('modules.settings.phone') }}" />
-
-                @if($phoneCodeDetected && $restaurantPhoneCode)
-                    <div class="text-xs text-green-600 dark:text-green-400 mb-1">
-                        🌍 @lang('messages.phoneCodeDetected', ['code' => '+' . $restaurantPhoneCode])
-                    </div>
-                @endif
-
                 <div class="flex gap-2 mt-2">
                     <!-- Phone Code Dropdown -->
                     <div x-data="{ isOpen: @entangle('phoneCodeIsOpen').live }" @click.away="isOpen = false" class="relative w-32">

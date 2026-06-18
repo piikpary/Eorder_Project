@@ -85,6 +85,7 @@
         <!-- Phone Number -->
         <div class="col-span-6 sm:col-span-4">
             <x-label for="phone_number" value="{{ __('modules.settings.phoneNumber') }}" />
+
             <div class="flex gap-2 mt-1">
                 <!-- Phone Code Dropdown -->
                 <div x-data="{ isOpen: false, search: '',

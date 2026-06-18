@@ -10,6 +10,7 @@ export default defineConfig({
                 "resources/js/app.js",
                 "resources/js/app.js", // your normal livewire/ui stuff
                 "resources/js/pos-app.js", // POS entry
+                "resources/js/pos-offline.js", // Blade POS offline queue
             ],
             refresh: true,
         }),

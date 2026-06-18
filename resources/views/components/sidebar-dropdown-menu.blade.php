@@ -1,6 +1,6 @@
 <li>
     <button type="button"
-        @class(['flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-medium cursor-pointer w-full text-gray-500', 'hover:text-gray-800  text-skin-base  font-bold bg-skin-base/[.20]' => $active])
+        @class(['flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-medium cursor-pointer w-full text-gray-500 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700', 'hover:text-gray-800  text-skin-base  font-bold bg-skin-base/[.20]' => $active])
         aria-controls="dropdown-{{ \Str::slug($name, '-', app()->getLocale()) }}" data-collapse-toggle="dropdown-{{ \Str::slug($name, '-', app()->getLocale()) }}">
         
         <span @class(['w-4 h-4 rounded bg-brand-600 flex items-center justify-center text-[9px]', 'text-skin-base' => $active])>{!! $customIcon ?? $icon !!}</span>

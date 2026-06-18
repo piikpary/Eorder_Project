@@ -24,6 +24,35 @@
             <x-input-error for="translations.{{ $globalLocale }}" class="mt-2" />
         </div>
 
+        <!-- Category Image -->
+        <div>
+            <x-label for="categoryImage" :value="__('modules.menu.itemImage')"/>
+
+            <input
+                id="categoryImage"
+                class="block w-full text-sm border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 text-slate-500 mt-1"
+                type="file"
+                wire:model.defer="categoryImageTemp"
+                accept="image/*"
+            >
+
+            <x-input-error for="categoryImageTemp" class="mt-2" />
+
+            @if($categoryImageTemp)
+                <div class="mt-2">
+                    <div class="relative inline-block">
+                        <img src="{{ $categoryImageTemp->temporaryUrl() }}" alt="Preview" class="w-24 h-24 object-cover rounded-lg border border-gray-300">
+                        <button type="button" wire:click="removeSelectedImage"
+                            class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            @endif
+        </div>
+
         <!-- Translation Preview -->
         @if(count($languages) > 1 && array_filter($translations))
         <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5">

@@ -52,6 +52,9 @@ class BulkImportPage extends Component
     public $previewRows = [];
     public $totalRows = 0;
 
+    /** Local copy path when the upload only exists on a non-local disk (e.g. S3) or path() must be resolved. */
+    private ?string $bulkImportScratchPath = null;
+
     public function mount()
     {
         // Initialize with empty values to prevent mount errors
@@ -92,6 +95,7 @@ class BulkImportPage extends Component
 
     public function resetUploadState()
     {
+        $this->releaseBulkImportScratchFile();
         $this->uploadFile = null;
         $this->uploadProgress = 0;
         $this->uploadStatus = '';
@@ -120,6 +124,99 @@ class BulkImportPage extends Component
         $this->loadAvailableData();
     }
 
+    private function releaseBulkImportScratchFile(): void
+    {
+        if ($this->bulkImportScratchPath && is_file($this->bulkImportScratchPath)) {
+            @unlink($this->bulkImportScratchPath);
+        }
+        $this->bulkImportScratchPath = null;
+    }
+
+    /**
+     * Readable absolute path for a Livewire temporary upload (local disk).
+     */
+    private function resolveUploadLivewireLocalPath(): ?string
+    {
+        if (!$this->uploadFile) {
+            return null;
+        }
+
+        $pathname = method_exists($this->uploadFile, 'getPathname') ? $this->uploadFile->getPathname() : null;
+        if ($pathname && is_readable($pathname)) {
+            return $pathname;
+        }
+
+        $real = $this->uploadFile->getRealPath();
+        if ($real && is_readable($real)) {
+            return $real;
+        }
+
+        if (!method_exists($this->uploadFile, 'path')) {
+            return null;
+        }
+
+        $relative = $this->uploadFile->path();
+        if (!$relative) {
+            return null;
+        }
+
+        $diskName = config('livewire.temporary_file_upload.disk', config('filesystems.default'));
+
+        try {
+            $disk = Storage::disk($diskName);
+            if (method_exists($disk, 'path')) {
+                $full = $disk->path($relative);
+                if (is_string($full) && is_readable($full)) {
+                    return $full;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /**
+     * Absolute path to read the current upload (Livewire tmp, local disk, or materialized copy).
+     *
+     * @throws \Exception
+     */
+    private function getBulkUploadAbsolutePath(): string
+    {
+        if ($this->bulkImportScratchPath && is_readable($this->bulkImportScratchPath)) {
+            return $this->bulkImportScratchPath;
+        }
+
+        $local = $this->resolveUploadLivewireLocalPath();
+        if ($local) {
+            return $local;
+        }
+
+        if (!method_exists($this->uploadFile, 'path')) {
+            throw new \Exception('Uploaded file is not accessible. Please try uploading again.');
+        }
+
+        $relative = $this->uploadFile->path();
+        $diskName = config('livewire.temporary_file_upload.disk', config('filesystems.default'));
+
+        if (!Storage::disk($diskName)->exists($relative)) {
+            throw new \Exception('Uploaded file not found. Please try uploading again.');
+        }
+
+        $tempDir = storage_path('app/temp-imports');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $extension = strtolower($this->uploadFile->getClientOriginalExtension() ?: pathinfo($this->uploadFile->getClientOriginalName(), PATHINFO_EXTENSION) ?: 'csv');
+        $tmp = $tempDir . '/import_' . uniqid('', true) . '.' . $extension;
+
+        file_put_contents($tmp, Storage::disk($diskName)->get($relative));
+        $this->bulkImportScratchPath = $tmp;
+
+        return $tmp;
+    }
+
     public function goToPreview()
     {
         if (!$this->uploadFile || ($this->availableKitchens->count() > 1 && !$this->selectedKitchenId)) {
@@ -138,7 +235,7 @@ class BulkImportPage extends Component
 
     private function parseCsvFile()
     {
-        $filePath = $this->uploadFile->getRealPath();
+        $filePath = $this->getBulkUploadAbsolutePath();
         $extension = strtolower($this->uploadFile->getClientOriginalExtension());
 
         // Handle Excel files
@@ -286,6 +383,8 @@ class BulkImportPage extends Component
 
     public function updatedUploadFile()
     {
+        $this->releaseBulkImportScratchFile();
+
         $this->validate([
             'uploadFile' => 'required|file|mimes:csv,xlsx,xls|max:10240', // 10MB max
         ], [
@@ -356,7 +455,7 @@ class BulkImportPage extends Component
     private function validateCsvContent()
     {
         try {
-            $filePath = $this->uploadFile->getRealPath();
+            $filePath = $this->getBulkUploadAbsolutePath();
             $handle = fopen($filePath, 'r');
 
             if (!$handle) {
@@ -608,13 +707,7 @@ class BulkImportPage extends Component
             $this->currentStage = __('modules.menu.uploadFile') . '...';
             $this->stageProgress = 50;
 
-            // Use the file's real path (Livewire already stores it temporarily)
-            $filePath = $this->uploadFile->getRealPath();
-
-            // Check if the file exists
-            if (!$filePath || !file_exists($filePath)) {
-                throw new \Exception('Uploaded file not found or invalid.');
-            }
+            $filePath = $this->getBulkUploadAbsolutePath();
 
             // Additional security check on the file
             $this->validateUploadedFile($filePath);
@@ -677,9 +770,6 @@ class BulkImportPage extends Component
             // in POS and any other cached menu listings, same as single create/update.
             cache()->flush();
 
-            // Clean up temporary file (Livewire handles this automatically)
-            // No need to manually delete as Livewire manages temporary files
-
             // Update rate limiting cache
             cache()->put($cacheKey, time(), 300); // 5 minutes
 
@@ -688,11 +778,11 @@ class BulkImportPage extends Component
             $this->uploadStage = 'failed';
             $this->uploadErrors = [$e->getMessage()];
             $this->uploadSuccess = false;
-
-            // Clean up temporary file (Livewire handles this automatically)
-            // No need to manually delete as Livewire manages temporary files
+            $this->isImporting = false;
 
             $this->alert('error', __('modules.menu.importFailed') . ': ' . $e->getMessage());
+        } finally {
+            $this->releaseBulkImportScratchFile();
         }
     }
 

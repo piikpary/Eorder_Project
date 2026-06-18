@@ -156,48 +156,80 @@ function currency()
 
 function dateFormat()
 {
-    // Always get fresh format from database to avoid stale cache
+    static $memo = null;
+
+    if ($memo !== null) {
+        return $memo;
+    }
+
+    if (session()->has('date_format')) {
+        return $memo = session('date_format');
+    }
+
     $user = auth()->user();
     if ($user && $user->restaurant_id) {
-        // Get fresh restaurant data to avoid stale cache
-        $restaurant = Restaurant::find($user->restaurant_id);
+        $restaurant = restaurant();
+        if (! $restaurant || (int) $restaurant->id !== (int) $user->restaurant_id) {
+            $restaurant = Restaurant::find($user->restaurant_id);
+            if ($restaurant) {
+                session(['restaurant' => $restaurant]);
+            }
+        }
+
         if ($restaurant && $restaurant->date_format) {
             session(['date_format' => $restaurant->date_format]);
-            return $restaurant->date_format;
+
+            return $memo = $restaurant->date_format;
         }
     }
 
-    // Fallback to global setting
-    $globalSetting = GlobalSetting::first();
+    $globalSetting = global_setting();
     if ($globalSetting && $globalSetting->date_format) {
         session(['date_format' => $globalSetting->date_format]);
-        return $globalSetting->date_format;
+
+        return $memo = $globalSetting->date_format;
     }
 
-    return 'd/m/Y';
+    return $memo = 'd/m/Y';
 }
 
 function timeFormat()
 {
-    // Always get fresh format from database to avoid stale cache
+    static $memo = null;
+
+    if ($memo !== null) {
+        return $memo;
+    }
+
+    if (session()->has('time_format')) {
+        return $memo = session('time_format');
+    }
+
     $user = auth()->user();
     if ($user && $user->restaurant_id) {
-        // Get fresh restaurant data to avoid stale cache
-        $restaurant = Restaurant::find($user->restaurant_id);
+        $restaurant = restaurant();
+        if (! $restaurant || (int) $restaurant->id !== (int) $user->restaurant_id) {
+            $restaurant = Restaurant::find($user->restaurant_id);
+            if ($restaurant) {
+                session(['restaurant' => $restaurant]);
+            }
+        }
+
         if ($restaurant && $restaurant->time_format) {
             session(['time_format' => $restaurant->time_format]);
-            return $restaurant->time_format;
+
+            return $memo = $restaurant->time_format;
         }
     }
 
-    // Fallback to global setting
-    $globalSetting = GlobalSetting::first();
+    $globalSetting = global_setting();
     if ($globalSetting && $globalSetting->time_format) {
         session(['time_format' => $globalSetting->time_format]);
-        return $globalSetting->time_format;
+
+        return $memo = $globalSetting->time_format;
     }
 
-    return 'h:i A';
+    return $memo = 'h:i A';
 }
 
 
@@ -959,6 +991,36 @@ if (!function_exists('getRestaurantOrderStats')) {
     }
 }
 
+if (!function_exists('branchOrderStatsAllowNewOrder')) {
+    /**
+     * Whether the branch daily order cap still allows another customer order.
+     * When the configured cap is zero or negative (and not the unlimited -1 flag),
+     * treat it as no positive cap so the customer menu is not stuck with a hidden Add button.
+     *
+     * @param  array<string, mixed>|null  $stats  Row from getRestaurantOrderStats()
+     */
+    function branchOrderStatsAllowNewOrder(?array $stats): bool
+    {
+        if ($stats === null) {
+            return true;
+        }
+
+        if (! empty($stats['unlimited'])) {
+            return true;
+        }
+
+        $limit = (int) ($stats['order_limit'] ?? 0);
+
+        if ($limit <= 0) {
+            return true;
+        }
+
+        $current = (int) ($stats['current_count'] ?? 0);
+
+        return $current < $limit;
+    }
+}
+
 if (!function_exists('getBranchOperationalShifts')) {
     /**
      * Get active operational shifts for a branch
@@ -1006,6 +1068,9 @@ if (!function_exists('getBusinessDayBoundaries')) {
      */
     function getBusinessDayBoundaries($branch = null, $date = null)
     {
+        static $operationalShiftsByBranchId = [];
+        static $boundaryResultCache = [];
+
         $branch = $branch ?? branch();
         
         if (!$branch) {
@@ -1019,9 +1084,32 @@ if (!function_exists('getBusinessDayBoundaries')) {
                 'calendar_date' => $date->toDateString()
             ];
         }
-        
+
+        $branchId = (int) $branch->id;
+        $branch->loadMissing('restaurant');
         $restaurant = $branch->restaurant;
         $restaurantTimezone = $restaurant->timezone ?? 'UTC';
+
+        $currentTime = $date
+            ? Carbon::parse($date, $restaurantTimezone)
+            : Carbon::now($restaurantTimezone);
+
+        $boundaryCacheKey = $branchId . '|' . $currentTime->format('Y-m-d H:i');
+        if (isset($boundaryResultCache[$boundaryCacheKey])) {
+            $row = $boundaryResultCache[$boundaryCacheKey];
+            $out = [
+                'start' => $row['start']->copy(),
+                'end' => $row['end']->copy(),
+                'timezone' => $row['timezone'],
+                'calendar_date' => $row['calendar_date'],
+            ];
+            if (isset($row['business_day_end'])) {
+                $out['business_day_end'] = $row['business_day_end']->copy();
+            }
+
+            return $out;
+        }
+
         $toRestaurantTime = function ($utcTime) use ($restaurantTimezone) {
             return Carbon::now('UTC')
                 ->setTimeFromTimeString($utcTime)
@@ -1029,20 +1117,18 @@ if (!function_exists('getBusinessDayBoundaries')) {
                 ->format('H:i:s');
         };
         
-        // Get current time in restaurant timezone
-        $currentTime = $date 
-            ? Carbon::parse($date, $restaurantTimezone)
-            : Carbon::now($restaurantTimezone);
-        
         $calendarDate = $currentTime->toDateString(); // e.g., "2024-12-30"
         $dayOfWeek = $currentTime->format('l'); // e.g., "Monday"
         
         // Get all active shifts (we'll filter by day of week manually)
-        $allShifts = BranchOperationalShift::where('branch_id', $branch->id)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('start_time')
-            ->get();
+        if (! isset($operationalShiftsByBranchId[$branchId])) {
+            $operationalShiftsByBranchId[$branchId] = BranchOperationalShift::where('branch_id', $branchId)
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('start_time')
+                ->get();
+        }
+        $allShifts = $operationalShiftsByBranchId[$branchId];
         
         // Filter shifts that apply to the current day of week
         $shifts = $allShifts->filter(function($shift) use ($dayOfWeek) {
@@ -1052,7 +1138,7 @@ if (!function_exists('getBusinessDayBoundaries')) {
         
         if ($shifts->isEmpty()) {
             // No shifts configured - use calendar day in restaurant timezone
-            return [
+            return $boundaryResultCache[$boundaryCacheKey] = [
                 'start' => $currentTime->copy()->startOfDay(),
                 'end' => $currentTime->copy()->endOfDay(),
                 'timezone' => $restaurantTimezone,
@@ -1180,7 +1266,7 @@ if (!function_exists('getBusinessDayBoundaries')) {
         $latestEnd = $latestEnd->copy()->setTimezone($restaurantTimezone);
         $businessDayEnd = $businessDayEnd->copy()->setTimezone($restaurantTimezone);
         
-        return [
+        return $boundaryResultCache[$boundaryCacheKey] = [
             'start' => $earliestStart,
             'end' => $latestEnd, // For queries - "now" if today, otherwise full business day end
             'business_day_end' => $businessDayEnd, // Full business day end for display (11:59 PM or shift end)
@@ -1286,5 +1372,12 @@ if (!function_exists('isWithinBusinessDay')) {
         }
         
         return $dt >= $boundaries['start'] && $dt <= $boundaries['end'];
+    }
+}
+
+if (! function_exists('image_upload_mimes')) {
+    function image_upload_mimes(): string
+    {
+        return \App\Support\ImageUpload::MIME_EXTENSIONS;
     }
 }

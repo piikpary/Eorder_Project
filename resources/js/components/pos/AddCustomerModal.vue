@@ -81,13 +81,36 @@
                                 />
                             </div>
 
-                            <!-- Search Results Dropdown -->
-                            <div class="relative mt-3" v-if="searchQuery && searchQuery.length >= 2">
+                            <!-- Search Results Dropdown (loading / results / empty) -->
+                            <div class="relative mt-3 min-h-0" v-if="searchQuery && searchQuery.length >= 2">
                                 <div
-                                    v-if="searchResults.length > 0"
                                     class="absolute z-50 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
                                 >
-                                    <div class="max-h-60 overflow-y-auto">
+                                    <div v-if="loadingSearch" class="flex flex-col items-center justify-center gap-2 px-4 py-8">
+                                        <svg
+                                            class="h-8 w-8 animate-spin text-skin-base"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                        >
+                                            <circle
+                                                class="opacity-25"
+                                                cx="12"
+                                                cy="12"
+                                                r="10"
+                                                stroke="currentColor"
+                                                stroke-width="4"
+                                            />
+                                            <path
+                                                class="opacity-75"
+                                                fill="currentColor"
+                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                            />
+                                        </svg>
+                                        <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Searching…</p>
+                                    </div>
+                                    <div v-else-if="searchResults.length > 0" class="max-h-60 overflow-y-auto">
                                         <div class="p-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                                             <p class="text-xs font-medium text-gray-700 dark:text-gray-300">
                                                 Found {{ searchResults.length }} customer(s)
@@ -168,12 +191,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div
-                                    v-else-if="!loadingSearch"
-                                    class="absolute z-50 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
-                                >
-                                    <div class="p-4 text-center">
+                                    <div v-else class="p-4 text-center">
                                         <div
                                             class="w-12 h-12 mx-auto mb-3 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center"
                                         >
@@ -200,9 +218,9 @@
                                         <button
                                             type="button"
                                             @click="createNewCustomer"
-                                            class="inline-flex items-center px-3 py-2 bg-skin-base hover:bg-skin-base/80 text-white text-sm font-medium rounded-lg transition-colors"
+                                            class="inline-flex items-center justify-center px-4 py-2.5 w-full sm:w-auto bg-skin-base hover:bg-skin-base/80 text-white text-sm font-medium rounded-lg transition-colors"
                                         >
-                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path
                                                     stroke-linecap="round"
                                                     stroke-linejoin="round"
@@ -210,7 +228,7 @@
                                                     d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                                                 />
                                             </svg>
-                                            Create New Customer
+                                            Add new customer
                                         </button>
                                     </div>
                                 </div>
@@ -761,14 +779,17 @@ watch(
 const handleSearch = () => {
     if (searchTimeout) {
         clearTimeout(searchTimeout);
+        searchTimeout = null;
     }
 
     if (searchQuery.value.length < 2) {
         searchResults.value = [];
+        loadingSearch.value = false;
         return;
     }
 
     loadingSearch.value = true;
+    searchResults.value = [];
     searchTimeout = setTimeout(async () => {
         try {
             const response = await axios.get("/api/pos/customers", {
@@ -809,6 +830,7 @@ const selectCustomer = (customer) => {
 
 const createNewCustomer = () => {
     const searchTerm = searchQuery.value;
+    loadingSearch.value = false;
     searchQuery.value = "";
     searchResults.value = [];
     selectedCustomerId.value = null;
@@ -860,6 +882,11 @@ const selectPhoneCode = (phonecode) => {
 };
 
 const resetForm = () => {
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+    }
+    loadingSearch.value = false;
     customerForm.value = {
         name: "",
         email: "",

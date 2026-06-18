@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ isRtl() ? 'rtl' : 'ltr' }}" class="h-full">
 
 <head>
    @php
@@ -39,6 +39,39 @@
     @livewireStyles
 
     @stack('styles')
+
+    @if (request()->routeIs('pos.*'))
+        {{-- POS cart uses position:fixed to dock to viewport top; overflow:hidden on #main-content can trap fixed layout in some browsers. --}}
+        <style id="pos-cart-dock-layout">
+            @media (min-width: 1024px) {
+                #main-content:has(#order-items-container) {
+                    overflow: visible !important;
+                }
+
+                #main-content #order-items-container {
+                    position: fixed !important;
+                    top: 0 !important;
+                    right: 0 !important;
+                    bottom: 0 !important;
+                    left: auto !important;
+                    width: 33.333333% !important;
+                    max-width: 33.333333% !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    min-height: 0 !important;
+                    z-index: 40 !important;
+                    padding-top: 0 !important;
+                    margin-top: 0 !important;
+                    box-sizing: border-box !important;
+                }
+
+                [dir="rtl"] #main-content #order-items-container {
+                    right: auto !important;
+                    left: 0 !important;
+                }
+            }
+        </style>
+    @endif
 
     @include('sections.theme_style', [
         'baseColor' => restaurantOrGlobalSetting()->theme_rgb,
@@ -99,12 +132,110 @@
         }
     </script>
 
+    <script>
+        window.recentOrdersModal = function () {
+            return {
+                showRecentOrdersModal: false,
+                loadingRecentOrders: false,
+                recentOrdersLoaded: false,
+                recentOrdersError: '',
+                recentOrders: [],
+                expandedOrderUuid: null,
+
+                async openRecentOrdersModal() {
+                    this.showRecentOrdersModal = true;
+                    await this.fetchRecentOrders();
+                },
+
+                closeRecentOrdersModal() {
+                    this.showRecentOrdersModal = false;
+                },
+
+                toggleRecentOrderDetails(orderUuid) {
+                    this.expandedOrderUuid = this.expandedOrderUuid === orderUuid ? null : orderUuid;
+                },
+
+                async fetchRecentOrders() {
+                    this.loadingRecentOrders = true;
+                    this.recentOrdersError = '';
+
+                    try {
+                        const recentOrdersUrl = '{{ route('orders.recent') }}' + '?_ts=' + Date.now();
+                        const response = await fetch(recentOrdersUrl, {
+                            cache: 'no-store',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Unable to load recent orders');
+                        }
+
+                        const data = await response.json();
+                        this.recentOrders = data.orders ?? [];
+                        this.expandedOrderUuid = null;
+                        this.recentOrdersLoaded = true;
+                    } catch (error) {
+                        this.recentOrdersError = @js(__('messages.invalidRequest'));
+                    } finally {
+                        this.loadingRecentOrders = false;
+                    }
+                },
+
+                handleRecentOrderView(order) {
+                    const isPosPage = @json(request()->routeIs('pos.*'));
+                    const orderId = order && order.id ? Number(order.id) : null;
+                    const lifecycleStatus = String(order && order.status_label ? order.status_label : '').toUpperCase();
+
+                    if (isPosPage && orderId) {
+                        this.closeRecentOrdersModal();
+
+                        // KOT requires full page context (route-bound data/bootstrap),
+                        // but we still keep it smooth via Livewire SPA navigation.
+                        if (lifecycleStatus === 'KOT' && order && order.pos_detail_url) {
+                            if (typeof Livewire !== 'undefined' && typeof Livewire.navigate === 'function') {
+                                Livewire.navigate(order.pos_detail_url);
+                                return;
+                            }
+                            window.location.href = order.pos_detail_url;
+                            return;
+                        }
+
+                        if (typeof Livewire !== 'undefined' && typeof Livewire.dispatch === 'function') {
+                            Livewire.dispatch('showOrderDetail', {
+                                id: orderId,
+                                fromPos: true,
+                            });
+                            // Keep navigation smooth: reflect selected order in URL without full reload.
+                            if (order && order.pos_detail_url && window.history && typeof window.history.pushState === 'function') {
+                                window.history.pushState({}, '', order.pos_detail_url);
+                            }
+                            return;
+                        }
+
+                        if (order && order.pos_detail_url) {
+                            window.location.href = order.pos_detail_url;
+                            return;
+                        }
+                    }
+
+                    if (order && order.view_url) {
+                        window.location.href = order.view_url;
+                    }
+                },
+            };
+        };
+    </script>
+
     {{-- Include file for widgets if exist --}}
     @includeIf('sections.custom_script_admin')
 </head>
 
 
-<body class="font-sans antialiased dark:bg-gray-900" id="main-body">
+<body class="font-sans antialiased dark:bg-gray-900 h-full min-h-0" id="main-body">
+    @include('sections.offline-banner')
 
     @if (user()->restaurant_id)
         @livewire('navigation-menu')
@@ -112,7 +243,12 @@
         @livewire('superadmin-navigation-menu')
     @endif
 
-    <div class="flex rtl:flex-row-reverse pt-16 overflow-hidden bg-gray-50 dark:bg-gray-900 h-screen">
+    <div @class([
+        'flex rtl:flex-row-reverse overflow-hidden bg-gray-50 dark:bg-gray-900 h-screen md:pt-12',
+        // POS: no lg top padding so fixed cart can span full viewport height (behind nav); menu adds its own lg:pt-16.
+        'lg:pt-16' => !request()->routeIs('pos.*'),
+        'lg:!pt-0' => request()->routeIs('pos.*'),
+    ])>
 
         @if (!request()->routeIs('pos.*'))
             @if (user()->restaurant_id)
@@ -125,11 +261,15 @@
 
         <div id="main-content"
             @class([
-                'relative w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900',
+                'relative w-full h-full bg-gray-50 dark:bg-gray-900',
+                'overflow-y-auto' => !request()->routeIs('pos.*'),
+                'overflow-hidden flex flex-col min-h-0' => request()->routeIs('pos.*'),
                 'ltr:lg:ml-0 rtl:lg:mr-0' => request()->routeIs('pos.*'),
                 'ltr:lg:ml-56 rtl:lg:mr-56' => !request()->routeIs('pos.*'),
             ])>
-            <main>
+             <main @class(['pt-16 lg:pt-0 md:pt-3 sm:pt-16' => !request()->routeIs('pos.*'),
+                'flex-1 min-h-0 flex flex-col min-w-0 max-lg:overflow-y-auto lg:overflow-hidden' => request()->routeIs('pos.*'),
+            ])>
                 @yield('content')
                 {{ $slot ?? '' }}
             </main>
@@ -142,12 +282,14 @@
 
     @stack('modals')
 
+    {{-- Must run before @livewireScripts so alpine:init listeners register before Alpine starts. --}}
+    @stack('before-livewire-scripts')
 
     @livewireScripts
 
     @include('layouts.update-uri')
 
-    @livewire('raise-support-ticket')
+    @include('livewire.raise-support-ticket')
 
     <script src="{{ asset('vendor/livewire-alert/livewire-alert.js') }}" defer data-navigate-track></script>
     <x-livewire-alert::flash />
@@ -162,13 +304,66 @@
 
         @livewire('order.OrderDetail')
 
-        @livewire('customer.addCustomer')
+        @include('customer.add-customer-modal')
 
         @livewire('settings.upgradeLicense')
 
         @livewire('order.addPayment')
 
         @include('sections.payment-gateway-include')
+
+        <script>
+            (function () {
+                function normalizeOptionalInt(value) {
+                    if (value === undefined || value === null || value === '' || value === 'null') {
+                        return null;
+                    }
+                    const n = parseInt(String(value), 10);
+                    return Number.isNaN(n) ? null : n;
+                }
+
+                function resolveOrderIdFromEnvironment() {
+                    if (typeof window.getCurrentPosOrderId === 'function') {
+                        const id = window.getCurrentPosOrderId();
+                        if (id) {
+                            return id;
+                        }
+                    }
+                    if (typeof window.posState !== 'undefined' && window.posState) {
+                        const raw = window.posState.orderID || (window.posState.orderDetail && window.posState.orderDetail.id);
+                        const n = parseInt(String(raw || ''), 10);
+                        if (!Number.isNaN(n) && n > 0) {
+                            return n;
+                        }
+                    }
+                    return null;
+                }
+
+                window.showAddCustomerModal = function (customerId, orderId, fromPos) {
+                    const argCount = arguments.length;
+                    const cid = argCount >= 1 ? normalizeOptionalInt(customerId) : null;
+                    // If the Blade onclick passed null (e.g. draft order id not in PHP scope), still resolve from POS JS state.
+                    let oid = argCount >= 2 ? normalizeOptionalInt(orderId) : null;
+                    if (oid === null || oid === undefined) {
+                        oid = resolveOrderIdFromEnvironment();
+                    }
+                    const fpos = argCount >= 3 ? Boolean(fromPos) : (typeof window.posState !== 'undefined' && !!window.posState);
+
+                    if (window.PosAddCustomerModal && typeof window.PosAddCustomerModal.open === 'function') {
+                        window.PosAddCustomerModal.open({
+                            customerId: cid,
+                            orderId: oid,
+                            fromPos: fpos,
+                        }).catch(function (error) {
+                            console.error('Unable to open add customer modal:', error);
+                        });
+                        return;
+                    }
+
+                    window.dispatchEvent(new CustomEvent('add-customer-modal-open'));
+                };
+            })();
+        </script>
 
     @endif
 
@@ -178,12 +373,14 @@
         <script src="https://js.pusher.com/beams/2.1.0/push-notifications-cdn.js"></script>
 
         <script>
-            var currentUserId = "{{ Str::slug(global_setting()->name) }}-{{ auth()->id() }}"; // Get this from your auth system
+            window.__beamsRegisterCurrentUser = async function () {
+                const currentUserId = "{{ Str::slug(global_setting()->name) }}-{{ auth()->id() }}";
 
-            // at this point the library has already run, but keep guard just in case
-            if (typeof PusherPushNotifications === 'undefined') {
-                console.warn('Pusher Beams SDK not available yet, skipping initialization');
-            } else {
+                if (typeof PusherPushNotifications === 'undefined') {
+                    console.warn('Pusher Beams SDK not available yet, skipping initialization');
+                    return;
+                }
+
                 const beamsClient = new PusherPushNotifications.Client({
                     instanceId: "{{ pusherSettings()->instance_id }}",
                 });
@@ -192,37 +389,45 @@
                     url: "{{ route('beam_auth') }}",
                 });
 
-                beamsClient.start()
-                    .then(() => beamsClient.addDeviceInterest('{{ Str::slug(global_setting()->name) }}'))
-                    .then(() => beamsClient.setUserId(currentUserId, beamsTokenProvider))
-                    .then(() => console.log('Successfully registered and subscribed!'))
-                    .catch(console.error);
-
-                beamsClient
-                    .getUserId()
-                    .then((userId) => {
-                        console.log(userId, currentUserId);
-                        // Check if the Beams user matches the user that is currently logged in
-                        if (userId !== currentUserId) {
-                            // Unregister for notifications
-                            return beamsClient.stop();
-                        }
-                    });
-            }
+                await beamsClient.start();
+                await beamsClient.addDeviceInterest('{{ Str::slug(global_setting()->name) }}');
+                await beamsClient.setUserId(currentUserId, beamsTokenProvider);
+            };
         </script>
     @endif
 
     <script>
         function getFullscreenElement() {
-            var elem = document.getElementById("main-body");
-            // Fallback to documentElement if main-body is not available
-            return elem || document.documentElement;
+            // Must use <html>: Livewire wire:navigate replaces document.body entirely
+            // (see swapCurrentPageWithNewHtml), which ends fullscreen if the target was <body>.
+            return document.documentElement;
         }
+
+        function isDocumentFullscreen() {
+            return !!(document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.msFullscreenElement ||
+                document.mozFullScreenElement);
+        }
+
+        /** After SPA navigation, wait two frames so the DOM is stable before re-requesting fullscreen. */
+        function afterNextPaint(callback) {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(callback);
+                });
+            } else {
+                setTimeout(callback, 0);
+            }
+        }
+
+        var fullscreenExitPersistTimer = null;
+        var FULLSCREEN_EXIT_PERSIST_MS = 450;
 
         function openFullscreen() {
             var elem = getFullscreenElement();
 
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+            if (!isDocumentFullscreen()) {
                 // Enter fullscreen
                 if (elem.requestFullscreen) {
                     elem.requestFullscreen().then(() => {
@@ -280,47 +485,53 @@
         function restoreFullscreen() {
             const fullscreenEnabled = localStorage.getItem('fullscreen-enabled');
             if (fullscreenEnabled === 'true') {
-                // Check if already in fullscreen
-                const isFullscreen = document.fullscreenElement ||
-                                   document.webkitFullscreenElement ||
-                                   document.msFullscreenElement ||
-                                   document.mozFullScreenElement;
-
-                if (!isFullscreen) {
-                    var elem = getFullscreenElement();
-                    // Small delay to ensure DOM is ready
-                    setTimeout(() => {
-                        if (elem && elem.requestFullscreen) {
-                            elem.requestFullscreen().catch(err => {
-                                // Chrome blocks automatic fullscreen without user interaction
-                                // This is expected behavior - user needs to click the button
-                                console.log('Fullscreen restoration requires user interaction:', err.message);
-                                // Don't clear the preference, let user manually toggle if needed
-                            });
-                        } else if (elem && elem.webkitRequestFullscreen) {
-                            elem.webkitRequestFullscreen();
-                        } else if (elem && elem.msRequestFullscreen) {
-                            elem.msRequestFullscreen();
-                        } else if (elem && elem.mozRequestFullScreen) {
-                            elem.mozRequestFullScreen();
-                        }
-                    }, 100);
+                if (isDocumentFullscreen()) {
+                    return;
                 }
+                var elem = getFullscreenElement();
+                afterNextPaint(function () {
+                    if (isDocumentFullscreen()) {
+                        return;
+                    }
+                    elem = getFullscreenElement();
+                    if (elem && elem.requestFullscreen) {
+                        elem.requestFullscreen().catch(err => {
+                            // Chrome blocks automatic fullscreen without user interaction
+                            // This is expected behavior - user needs to click the button
+                            console.log('Fullscreen restoration requires user interaction:', err.message);
+                            // Don't clear the preference, let user manually toggle if needed
+                        });
+                    } else if (elem && elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen();
+                    } else if (elem && elem.msRequestFullscreen) {
+                        elem.msRequestFullscreen();
+                    } else if (elem && elem.mozRequestFullScreen) {
+                        elem.mozRequestFullScreen();
+                    }
+                });
             }
         }
 
         // Listen for fullscreen changes (e.g., user presses ESC)
         function handleFullscreenChange() {
-            const isFullscreen = document.fullscreenElement ||
-                               document.webkitFullscreenElement ||
-                               document.msFullscreenElement ||
-                               document.mozFullScreenElement;
-
-            if (!isFullscreen) {
-                localStorage.setItem('fullscreen-enabled', 'false');
-            } else {
+            if (isDocumentFullscreen()) {
+                if (fullscreenExitPersistTimer) {
+                    clearTimeout(fullscreenExitPersistTimer);
+                    fullscreenExitPersistTimer = null;
+                }
                 localStorage.setItem('fullscreen-enabled', 'true');
+                return;
             }
+            // Avoid clearing preference on brief exits (e.g. Livewire wire:navigate) before restore runs.
+            if (fullscreenExitPersistTimer) {
+                clearTimeout(fullscreenExitPersistTimer);
+            }
+            fullscreenExitPersistTimer = setTimeout(function () {
+                fullscreenExitPersistTimer = null;
+                if (!isDocumentFullscreen()) {
+                    localStorage.setItem('fullscreen-enabled', 'false');
+                }
+            }, FULLSCREEN_EXIT_PERSIST_MS);
         }
 
         // Set up event listeners
@@ -336,10 +547,8 @@
         document.addEventListener('msfullscreenchange', handleFullscreenChange);
         document.addEventListener('mozfullscreenchange', handleFullscreenChange);
 
-        // Also restore on Livewire navigation
-        document.addEventListener('livewire:navigated', () => {
-            setTimeout(restoreFullscreen, 100);
-        });
+        // Also restore on Livewire navigation (without an extra delay — restore waits two rAF frames)
+        document.addEventListener('livewire:navigated', restoreFullscreen);
     </script>
 
     <script>
@@ -353,12 +562,22 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             hideNotificationIfResponded();
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register("{{ asset('service-worker.js') }}")
                     .then(registration => console.log("Service Worker registered:", registration))
                     .catch(error => console.error("Service Worker registration failed:", error));
+            }
+
+            // If notifications are already granted, try to register this device for Beams.
+            try {
+                if (Notification.permission === 'granted' && typeof window.__beamsRegisterCurrentUser === 'function') {
+                    await window.__beamsRegisterCurrentUser();
+                    console.log('✅ Beams registration complete (permission already granted)');
+                }
+            } catch (e) {
+                console.error('Beams registration failed:', e);
             }
         });
 
@@ -383,6 +602,12 @@
                         const registration = await navigator.serviceWorker.register("{{ asset('service-worker.js') }}");
                         console.log("Service Worker registered:", registration);
                         subscribeUserToPush(registration);
+
+                        // Also register with Pusher Beams (user-targeted browser push).
+                        if (typeof window.__beamsRegisterCurrentUser === 'function') {
+                            await window.__beamsRegisterCurrentUser();
+                            console.log('✅ Beams registration complete (after subscribe click)');
+                        }
                     } catch (error) {
                         console.error("Service Worker registration failed:", error);
                     }

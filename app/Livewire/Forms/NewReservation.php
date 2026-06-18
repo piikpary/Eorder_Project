@@ -7,6 +7,7 @@ use App\Models\Country;
 use App\Models\Customer;
 use App\Models\Reservation;
 use App\Models\ReservationSetting;
+use App\Models\User;
 use Carbon\Carbon;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Component;
@@ -31,6 +32,7 @@ class NewReservation extends Component
     public $customerPhone;
     public $customerEmail;
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -54,7 +56,11 @@ class NewReservation extends Component
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
-        $this->phoneCode = restaurant()->country->phonecode ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->phoneCode = $detectedPhoneCode
+            ?? restaurant()->country->phonecode
+            ?? $this->allPhoneCodes->first();
     }
 
     // Customer search methods
@@ -107,7 +113,11 @@ class NewReservation extends Component
         $this->customerName = '';
         $this->customerPhone = '';
         $this->customerEmail = '';
-        $this->phoneCode = restaurant()->phone_code ?? $this->allPhoneCodes->first();
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->phoneCode = $detectedPhoneCode
+            ?? restaurant()->phone_code
+            ?? $this->allPhoneCodes->first();
         $this->searchQuery = '';
         $this->customerSearchResults = [];
     }

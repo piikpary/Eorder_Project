@@ -8,6 +8,12 @@ use Livewire\Component;
 
 class StopImpersonateRestaurant extends Component
 {
+    public bool $menuStyle = false;
+
+    public function mount(bool $menuStyle = false): void
+    {
+        $this->menuStyle = $menuStyle;
+    }
 
     public function stopImpersonate()
     {

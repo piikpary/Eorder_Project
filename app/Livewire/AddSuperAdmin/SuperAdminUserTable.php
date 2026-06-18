@@ -24,8 +24,8 @@ class SuperAdminUserTable extends Component
 
     public function mount()
     {
-        // Only superadmin roles (restaurant_id = null), but keep Super Admin protected (not selectable)
-        $this->roles = Role::whereNull('restaurant_id')->get();
+        // Only superadmin roles (restaurant_id = null); Super Admin is shown as a badge, not in the dropdown
+        $this->roles = Role::whereNull('restaurant_id')->where('name', '<>', 'Super Admin')->get();
     }
 
     public function showEditUser($id)

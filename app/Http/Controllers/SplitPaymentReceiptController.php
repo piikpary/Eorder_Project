@@ -21,10 +21,10 @@ class SplitPaymentReceiptController extends Controller
     {
         // Load order with all necessary relationships
         $order = Order::with([
-            'items.menuItem',
+            'items.menuItem.translations',
             'items.menuItemVariation',
             'items.modifierOptions',
-            'splitOrders.items.orderItem.menuItem',
+            'splitOrders.items.orderItem.menuItem.translations',
             'splitOrders.items.orderItem.menuItemVariation',
             'splitOrders.items.orderItem.modifierOptions',
             'splitOrders.order', // For accessing parent order in splits
@@ -51,6 +51,8 @@ class SplitPaymentReceiptController extends Controller
             abort(500, 'Restaurant configuration not found');
         }
 
+        $receiptLanguage = $this->applyReceiptLanguage($restaurant);
+        $receiptLanguages = [$receiptLanguage];
         $receiptSettings = $restaurant->receiptSetting;
 
         if (!$receiptSettings) {
@@ -100,7 +102,8 @@ class SplitPaymentReceiptController extends Controller
             'splitType',
             'width',
             'thermal',
-            'includeSummary'
+            'includeSummary',
+            'receiptLanguages'
         ));
     }
 
@@ -323,7 +326,7 @@ class SplitPaymentReceiptController extends Controller
         // Ensure items are loaded with all necessary relationships
         if (!$splitOrder->relationLoaded('items')) {
             $splitOrder->load([
-                'items.orderItem.menuItem',
+                'items.orderItem.menuItem.translations',
                 'items.orderItem.menuItemVariation',
                 'items.orderItem.modifierOptions.modifier'
             ]);
@@ -370,7 +373,7 @@ class SplitPaymentReceiptController extends Controller
 
         if (!$splitOrder->relationLoaded('items')) {
             $splitOrder->load([
-                'items.orderItem.menuItem',
+                'items.orderItem.menuItem.translations',
                 'items.orderItem.menuItemVariation',
                 'items.orderItem.modifierOptions'
             ]);
@@ -729,4 +732,24 @@ class SplitPaymentReceiptController extends Controller
             'total' => $total,
         ];
     }
+    /**
+     * Apply the language selected for printed receipts only.
+     */
+    private function applyReceiptLanguage($restaurant): string
+    {
+        $receiptLanguage = strtolower(trim((string) ($restaurant?->receipt_language ?? 'en')));
+
+        if (in_array($receiptLanguage, ['kh', 'khmer'], true)) {
+            $receiptLanguage = 'km';
+        }
+
+        if (!in_array($receiptLanguage, ['en', 'km'], true)) {
+            $receiptLanguage = 'en';
+        }
+
+        app()->setLocale($receiptLanguage);
+
+        return $receiptLanguage;
+    }
+
 }

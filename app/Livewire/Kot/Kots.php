@@ -11,7 +11,6 @@ use App\Models\KotPlace;
 use App\Models\KotSetting;
 use Livewire\Attributes\On;
 use App\Models\KotCancelReason;
-use Illuminate\Support\Facades\Log;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Illuminate\Support\Facades\DB;
 
@@ -322,32 +321,12 @@ class Kots extends Component
         $finalReasonText = $this->cancelItemReasonText ?: $cancelReasonText;
 
         // Update cancel reason info for the KOT item
-        Log::info('About to save with cancelItemReason: ' . ($this->cancelItemReason ?? 'null') . ', cancelItemReasonText: ' . ($this->cancelItemReasonText ?? 'null') . ', finalReasonText: ' . ($finalReasonText ?? 'null'));
-
         $kotItem->cancel_reason_id = $this->cancelItemReason;
         $kotItem->cancel_reason_text = $finalReasonText;
         $kotItem->status = 'cancelled';
         $kotItem->cancelled_by = auth()->id();
 
-        Log::info('KotItem before save:', [
-            'id' => $kotItem->id,
-            'cancel_reason_id' => $kotItem->cancel_reason_id,
-            'cancel_reason_text' => $kotItem->cancel_reason_text,
-            'status' => $kotItem->status,
-            'cancelled_by' => $kotItem->cancelled_by,
-            'auth_id' => auth()->id()
-        ]);
-
-        $result = $kotItem->save();
-
-        Log::info('KotItem save result: ' . ($result ? 'true' : 'false'));
-        Log::info('KotItem after save:', [
-            'id' => $kotItem->id,
-            'cancel_reason_id' => $kotItem->cancel_reason_id,
-            'cancel_reason_text' => $kotItem->cancel_reason_text,
-            'status' => $kotItem->status,
-            'cancelled_by' => $kotItem->cancelled_by
-        ]);
+        $kotItem->save();
 
         // Handle corresponding order item if it exists
         $this->handleOrderItemCancellation($kotItem, $order);

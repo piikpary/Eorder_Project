@@ -151,6 +151,16 @@ async function processOrderImageQueue() {
 
     const item = window.orderImageQueue.shift();
     console.log("Processing Order image from queue:", item.orderId);
+    try {
+        const m = (item.content || "").match(/\(ID:\s*(\d+)\)/);
+        const embeddedId = m && m[1] ? parseInt(m[1], 10) : null;
+        if (embeddedId && embeddedId !== item.orderId) {
+            console.warn("[PrintImageHandler] Order ID mismatch between queue and HTML content", {
+                queueOrderId: item.orderId,
+                embeddedId,
+            });
+        }
+    } catch (e) {}
 
     await saveOrderImageFromPrint(item.orderId, item.content);
 

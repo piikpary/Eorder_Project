@@ -18,6 +18,7 @@ class ThemeSettings extends Component
     public $themeColor;
     public $themeColorRgb;
     public $photo;
+    public $darkPhoto;
     public bool $showLogoText;
     public $upload_fav_icon_android_chrome_192;
     public $upload_fav_icon_android_chrome_512;
@@ -31,6 +32,7 @@ class ThemeSettings extends Component
     {
         return [
             'photo' => 'nullable|image|max:1024',
+            'darkPhoto' => 'nullable|image|max:1024',
             'upload_fav_icon_android_chrome_192' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
             'upload_fav_icon_android_chrome_512' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
             'upload_fav_icon_apple_touch_icon' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:2048',
@@ -58,32 +60,39 @@ class ThemeSettings extends Component
 
     public function updatedPhoto()
     {
-        $this->validateLogo();
+        $this->validateLogo('photo');
     }
 
-    public function validateLogo()
+    public function updatedDarkPhoto()
     {
-        // Clear any existing errors for this field
-        $this->resetErrorBag('photo');
+        $this->validateLogo('darkPhoto');
+    }
 
-        if ($this->photo) {
-            // Validate image dimensions
-            $imageInfo = @getimagesize($this->photo->getRealPath());
-            if ($imageInfo) {
-                $width = $imageInfo[0];
-                $height = $imageInfo[1];
+    public function validateLogo(string $field = 'photo')
+    {
+        $this->resetErrorBag($field);
 
-                // Only show error if dimensions are smaller than recommended (97 × 96)
-                // Images larger than recommended size are acceptable and will not show an error
-                if ($width < 97 || $height < 96) {
-                    $this->addError('photo', __('modules.settings.imageDimensionsTooSmall', [
-                        'width' => 97,
-                        'height' => 96,
-                        'currentWidth' => $width,
-                        'currentHeight' => $height
-                    ]));
-                }
-            }
+        $upload = $this->{$field};
+
+        if (! $upload) {
+            return;
+        }
+
+        $imageInfo = @getimagesize($upload->getRealPath());
+        if (! $imageInfo) {
+            return;
+        }
+
+        $width = $imageInfo[0];
+        $height = $imageInfo[1];
+
+        if ($width < 97 || $height < 96) {
+            $this->addError($field, __('modules.settings.imageDimensionsTooSmall', [
+                'width' => 97,
+                'height' => 96,
+                'currentWidth' => $width,
+                'currentHeight' => $height,
+            ]));
         }
     }
 
@@ -91,11 +100,10 @@ class ThemeSettings extends Component
     {
         $this->validate();
 
-        // Validate logo dimensions if it's an image
-        $this->validateLogo();
+        $this->validateLogo('photo');
+        $this->validateLogo('darkPhoto');
 
-        // Check if there are validation errors
-        if ($this->getErrorBag()->has('photo')) {
+        if ($this->getErrorBag()->has('photo') || $this->getErrorBag()->has('darkPhoto')) {
             return;
         }
 
@@ -109,6 +117,10 @@ class ThemeSettings extends Component
 
         if ($this->photo) {
             $this->settings->logo = Files::uploadLocalOrS3($this->photo, dir: 'logo', width: 150, height: 150);
+        }
+
+        if ($this->darkPhoto) {
+            $this->settings->dark_logo = Files::uploadLocalOrS3($this->darkPhoto, dir: 'logo', width: 150, height: 150);
         }
 
         $faviconBasePath = $this->settings->getFaviconBasePath();
@@ -161,6 +173,23 @@ class ThemeSettings extends Component
 
         $this->settings->forceFill([
             'logo' => null,
+        ])->save();
+
+        session()->forget(['restaurant']);
+
+        $this->redirect(route('settings.index') . '?tab=theme', navigate: true);
+    }
+
+    public function deleteDarkLogo()
+    {
+        if (is_null($this->settings->dark_logo)) {
+            return;
+        }
+
+        Files::deleteFile($this->settings->dark_logo, 'logo');
+
+        $this->settings->forceFill([
+            'dark_logo' => null,
         ])->save();
 
         session()->forget(['restaurant']);

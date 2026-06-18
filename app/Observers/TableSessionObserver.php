@@ -2,7 +2,9 @@
 
 namespace App\Observers;
 
+use App\Models\Table;
 use App\Models\TableSession;
+use App\Services\Tables\TablesIndexCache;
 use Illuminate\Support\Facades\Cache;
 
 class TableSessionObserver
@@ -17,11 +19,18 @@ class TableSessionObserver
         }
     }
 
+    public function created(TableSession $tableSession): void
+    {
+        TablesIndexCache::forgetForBranch($tableSession->branch_id);
+    }
+
     /**
      * Handle the TableSession "updated" event.
      */
     public function updated(TableSession $tableSession): void
     {
+        TablesIndexCache::forgetForBranch($tableSession->branch_id);
+
         // Only auto-cleanup expired sessions occasionally to avoid performance issues
         if (rand(1, 10) === 1) { // 10% chance to run cleanup
             $this->cleanupExpiredSessions();
@@ -44,6 +53,7 @@ class TableSessionObserver
      */
     public function deleting(TableSession $tableSession): void
     {
+        TablesIndexCache::forgetForBranch($tableSession->branch_id);
         Cache::forget("table_session_{$tableSession->table_id}");
     }
 
@@ -52,6 +62,6 @@ class TableSessionObserver
      */
     private function cleanupExpiredSessions(): void
     {
-        \App\Models\Table::cleanupExpiredLocks();
+        Table::cleanupExpiredLocks();
     }
 }

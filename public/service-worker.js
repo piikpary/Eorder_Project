@@ -55,6 +55,14 @@ self.addEventListener("fetch", (event) => {
         return event.respondWith(fetch(event.request));
     }
 
+    // POS / admin JSON: never cache (avoids stale menu catalog without embedded modifiers).
+    if (url.pathname.includes("/ajax/pos/")) {
+        event.respondWith(
+            fetch(event.request).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
     event.respondWith(
         fetch(event.request)
             .then((response) => {

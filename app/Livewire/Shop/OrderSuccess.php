@@ -18,11 +18,19 @@ class OrderSuccess extends Component
 
     public function mount()
     {
-        $this->order = Order::with('taxes.tax', 'items.menuItem', 'orderCashCollection')->where('id', $this->id)->firstOrFail();
+        $this->order = Order::with([
+            'taxes.tax',
+            'items.menuItem',
+            'items.menuItemVariation',
+            'items.modifierOptions',
+            'orderCashCollection',
+        ])->where('id', $this->id)->firstOrFail();
 
         if (is_null(customer()) && $this->restaurant->customer_login_required) {
             return $this->redirect(route('home'));
         }
+
+        $this->restaurant->loadMissing('euAllergenSetting');
 
         if (request()->branch && request()->branch != '') {
             $this->shopBranch = Branch::find(request()->branch);
@@ -37,7 +45,9 @@ class OrderSuccess extends Component
 
     public function render()
     {
-        return view('livewire.shop.order-success');
+        return view('livewire.shop.order-success', [
+            'taxMode' => $this->order->tax_mode ?? ($this->restaurant->tax_mode ?? 'order'),
+        ]);
     }
 
     public function refreshOrderSuccess()

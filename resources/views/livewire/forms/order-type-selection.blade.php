@@ -130,6 +130,7 @@
                             hover:border-skin-base/50 hover:shadow-lg hover:scale-[1.02]">
                             <div class="flex items-center gap-3">
                                 <div class="h-12 w-12 rounded-lg bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                    
                                     @if(!empty($platform->logo))
                                         <img src="{{ $platform->logo_url }}" alt="{{ $platform->name }}" class="h-12 w-12 object-contain"/>
                                     @else

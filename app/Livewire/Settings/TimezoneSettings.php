@@ -68,6 +68,7 @@ class TimezoneSettings extends Component
 
         session()->forget('restaurant');
         session()->forget('timezone');
+        session()->forget(['date_format', 'time_format']);
 
         session()->forget('customer_locale');
         session()->forget('customer_site_language');

@@ -2,7 +2,7 @@
     <form wire:submit="submitForm">
         @csrf
         <div class="space-y-4">
-               
+
             <div>
                 <x-label for="memberName" value="{{ __('modules.staff.name') }}" />
                 <x-input id="memberName" class="block mt-1 w-full" type="text" autofocus wire:model='memberName' />
@@ -75,8 +75,8 @@
                 <x-label for="status" value="{{ __('app.status') }}" />
 
                 <x-select  class="mt-1 block w-full" wire:model='status'>
-                    <option value="available">@lang('modules.staff.available')</option>
-                    <option value="inactive">@lang('modules.staff.inactive')</option>
+                    <option value="{{ \App\Models\DeliveryExecutive::STATUS_ACTIVE }}">@lang('modules.staff.active')</option>
+                    <option value="{{ \App\Models\DeliveryExecutive::STATUS_INACTIVE }}">@lang('modules.staff.inactive')</option>
                 </x-select>
 
                 <x-input-error for="status" class="mt-2" />
@@ -92,7 +92,7 @@
             </div>
 
         </div>
-           
+
         <div class="flex w-full pb-4 space-x-4 mt-6 rtl:space-x-reverse">
             <x-button>@lang('app.save')</x-button>
             <button type="button" @click="$dispatch('close-add-executive-modal')"

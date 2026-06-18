@@ -18,14 +18,17 @@ class AreaSeeder extends Seeder
             [
                 'area_name' => 'Lounge',
                 'branch_id' => $branch->id,
+                'image' => 'lounge.webp',
             ],
             [
                 'area_name' => 'Roof Top',
                 'branch_id' => $branch->id,
+                'image' => 'roof-top.webp',
             ],
             [
                 'area_name' => 'Garden',
                 'branch_id' => $branch->id,
+                'image' => 'garden.webp',
             ]
         ];
 

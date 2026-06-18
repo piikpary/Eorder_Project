@@ -10,6 +10,7 @@ use App\Models\AdminPaystackPayment;
 use App\Models\Order;
 use App\Events\SendNewOrderReceived;
 use App\Events\SendOrderBillEvent;
+use App\Services\ShopCartKotPrintUrls;
 
 class PaystackPaymentController extends Controller
 {
@@ -160,6 +161,8 @@ class PaystackPaymentController extends Controller
         $order->amount_paid = $order->amount_paid + $payment->amount;
         $order->status = 'paid';
         $order->save();
+
+        ShopCartKotPrintUrls::flashDeferredKotPrintForShopOrder($order);
 
         SendNewOrderReceived::dispatch($order);
 

@@ -13,6 +13,16 @@ class OrderNumberSetting extends BaseModel
 
     protected $guarded = ['id'];
 
+    protected static function booted(): void
+    {
+        static::saved(function (self $model) {
+            cache()->forget('order_number_setting_' . (int) $model->branch_id);
+        });
+
+        static::deleted(function (self $model) {
+            cache()->forget('order_number_setting_' . (int) $model->branch_id);
+        });
+    }
 
     // Cast attributes to proper types
     protected $casts = [

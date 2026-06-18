@@ -139,8 +139,9 @@
                         @endif
 
                         @if ($this->hasModule('Expense') && user_can('Show Expense'))
-                            <x-sidebar-dropdown-menu :name='__("menu.expenses")' icon='expenses' :active='request()->routeIs(["payments.expenses", "payments.expenseCategory"])'>
+                            <x-sidebar-dropdown-menu :name='__("menu.expenses")' icon='expenses' :active='request()->routeIs(["payments.expenses", "payments.recurring-expenses", "payments.expenseCategory"])'>
                                 @livewire('sidebar-dropdown-menu', ['name' => __('menu.expenses'), 'link' => route('payments.expenses'), 'active' => request()->routeIs('payments.expenses')])
+                                @livewire('sidebar-dropdown-menu', ['name' => __('menu.recurringExpenses'), 'link' => route('payments.recurring-expenses'), 'active' => request()->routeIs('payments.recurring-expenses')])
                                 @livewire('sidebar-dropdown-menu', ['name' => __('menu.expensesCategory'), 'link' => route('payments.expenseCategory'), 'active' => request()->routeIs('payments.expenseCategory')])
                             </x-sidebar-dropdown-menu>
                         @endif

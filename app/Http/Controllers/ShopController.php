@@ -4,10 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Order;
+use App\Models\OrderType;
 use App\Models\Restaurant;
 use App\Models\Table;
 use App\Models\LanguageSetting;
+use App\Services\Shop\BrowseCartMutator;
 use App\Traits\HasLanguageSettings;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 
 class ShopController extends Controller
@@ -25,23 +30,36 @@ class ShopController extends Controller
      * Get the branch for the shop based on request or default to first branch
      */
     private function getShopBranch(Restaurant $restaurant): Branch
-    {
-        if (request()->filled('branch')) {
-            $branchParam = request('branch');
+{
+    $branch = null;
 
-            // Try to find by unique_hash first, then by ID
-            $branch = Branch::withoutGlobalScopes()->where('unique_hash', $branchParam)->first();
+    if (request()->filled('branch')) {
+        $branchParam = (string) request('branch');
 
-            if (!$branch) {
-                $branch = Branch::withoutGlobalScopes()->find($branchParam);
-            }
+        $branch = Branch::withoutGlobalScopes()
+            ->where('restaurant_id', $restaurant->id)
+            ->where('unique_hash', $branchParam)
+            ->first();
 
-            return $branch;
+        if (!$branch && ctype_digit($branchParam)) {
+            $branch = Branch::withoutGlobalScopes()
+                ->where('restaurant_id', $restaurant->id)
+                ->where('id', (int) $branchParam)
+                ->first();
         }
-
-        return $restaurant->branches->first();
     }
 
+    if (!$branch) {
+        $branch = Branch::withoutGlobalScopes()
+            ->where('restaurant_id', $restaurant->id)
+            ->orderBy('id')
+            ->first();
+    }
+
+    abort_if(!$branch, 404, 'Branch not found.');
+
+    return $branch;
+}
     /**
      * Get enabled package modules and features for the restaurant
      */
@@ -58,6 +76,32 @@ class ShopController extends Controller
     }
 
     /**
+     * Send reservation-intent visitors to the book-a-table flow (not the order menu).
+     */
+    private function redirectToBookTableIfRequested(
+        Request $request,
+        Restaurant $restaurant,
+        Branch $shopBranch,
+        array $packageModules,
+    ): ?RedirectResponse {
+        $wantsBooking = $request->boolean('book_table')
+            || $request->query('intent') === 'book'
+            || $request->query('intent') === 'reservation';
+
+        if (! $wantsBooking) {
+            return null;
+        }
+
+        if (! in_array('Table Reservation', $packageModules, true) || ! $restaurant->enable_customer_reservation) {
+            return null;
+        }
+
+        return redirect()->to(
+            route('book_a_table', ['hash' => $restaurant->hash]) . '?branch=' . $shopBranch->id
+        );
+    }
+
+    /**
      * Show shopping cart page
      */
     public function cart(string $hash)
@@ -70,12 +114,97 @@ class ShopController extends Controller
 
         $this->redirectIfSubdomainIsEnabled($restaurant);
 
+        if ($redirect = $this->redirectToBookTableIfRequested(request(), $restaurant, $shopBranch, $packageModules)) {
+            return $redirect;
+        }
+
         return view('shop.index', [
             'restaurant' => $restaurant,
             'shopBranch' => $shopBranch,
             'getTable' => $restaurant->table_required,
             'canCreateOrder' => in_array('Order', $packageModules)
         ]);
+    }
+
+    /**
+     * Persist customer order type from the client-side menu (no Livewire round-trip).
+     * The shop Cart component applies this on the next request via hydrate().
+     */
+    public function syncBrowseOrderType(Request $request, string $hash): JsonResponse
+    {
+        $restaurant = Restaurant::where('hash', $hash)->firstOrFail();
+
+        $validated = $request->validate([
+            'order_type_id' => ['required', 'integer'],
+            'branch_id' => ['required', 'integer'],
+        ]);
+
+        $branch = Branch::withoutGlobalScopes()
+            ->where('id', $validated['branch_id'])
+            ->where('restaurant_id', $restaurant->id)
+            ->firstOrFail();
+
+        $orderTypeQuery = OrderType::query()
+            ->where('id', $validated['order_type_id'])
+            ->where('branch_id', $branch->id)
+            ->where('enable_from_customer_site', true)
+            ->availableForRestaurant()
+            ->where('type', '!=', 'room_service')
+            ->where('slug', '!=', 'room_service');
+
+        if (session('shop_force_dine_in')) {
+            $orderTypeQuery->where('type', 'dine_in');
+        }
+
+        $orderType = $orderTypeQuery->firstOrFail();
+
+        session([
+            'shop_browse_order_type_id' => $orderType->id,
+            'shop_order_type_slug' => $orderType->slug,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'slug' => $orderType->slug,
+        ]);
+    }
+
+    /**
+     * Add / increment / decrement simple cart lines from the JS client catalog (no Livewire $call).
+     */
+    public function browseCartMutate(Request $request, string $hash): JsonResponse
+    {
+        $validated = BrowseCartMutator::validateBrowseCartRequest($request);
+
+        $restaurant = Restaurant::with(['currency', 'package.modules'])->where('hash', $hash)->firstOrFail();
+
+        $branch = Branch::withoutGlobalScopes()
+            ->where('id', $validated['branch_id'])
+            ->where('restaurant_id', $restaurant->id)
+            ->firstOrFail();
+
+        $packageModules = $this->getPackageModules($restaurant);
+        $canCreateOrder = in_array('Order', $packageModules, true);
+
+        $cameFromQr = (bool) ($validated['came_from_qr'] ?? false);
+        $lat = isset($validated['address_lat']) ? (float) $validated['address_lat'] : null;
+        $lng = isset($validated['address_lng']) ? (float) $validated['address_lng'] : null;
+
+        $result = BrowseCartMutator::mutate(
+            $restaurant,
+            $branch,
+            $validated['action'],
+            (int) $validated['menu_item_id'],
+            $canCreateOrder,
+            (bool) ($restaurant->allow_customer_orders ?? false),
+            $cameFromQr,
+            $lat,
+            $lng,
+        );
+
+        $status = ($result['ok'] ?? false) ? 200 : 422;
+
+        return response()->json($result, $status);
     }
 
     /**
@@ -91,13 +220,14 @@ class ShopController extends Controller
             ? Branch::withoutGlobalScopes()->find(request('branch'))
             : $order->branch;
 
-        $restaurant = $order->branch->restaurant;
+        $restaurant = $order->branch->restaurant->loadMissing('euAllergenSetting');
 
 
         return view('shop.order_success', [
             'restaurant' => $restaurant,
             'id' => $id,
-            'shopBranch' => $shopBranch
+            'shopBranch' => $shopBranch,
+            'deferredKotPrintOrderId' => session()->pull('shop_print_kot_order_id'),
         ]);
     }
 

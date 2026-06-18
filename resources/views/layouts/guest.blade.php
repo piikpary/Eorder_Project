@@ -37,6 +37,20 @@
             --color-base: {{ $restaurant->theme_rgb }};
             --livewire-progress-bar-color: {{ $restaurant->theme_hex }};
         }
+
+        @if (session('customer_is_rtl'))
+        /* Customer site RTL (e.g. Arabic): iOS Safari PWA often gains horizontal scroll from
+           broken flex min-width, long words, and absolute + translate centering. */
+        html {
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+        body {
+            overflow-x: hidden;
+            max-width: 100%;
+            overflow-wrap: break-word;
+        }
+        @endif
     </style>
 
     @if (File::exists(public_path() . '/css/app-custom.css'))
@@ -48,14 +62,24 @@
 
 </head>
 
-<body class="font-sans antialiased dark:bg-gray-900">
+<body @class([
+    'font-sans antialiased dark:bg-gray-900',
+    'max-w-full' => session('customer_is_rtl'),
+])>
+    @include('sections.offline-banner')
 
-    <div class="mx-auto max-w-lg lg:max-w-screen-xl min-h-svh shadow-md lg:shadow-none">
+    <div @class([
+        'mx-auto min-h-svh shadow-md lg:shadow-none w-full min-w-0 max-w-lg lg:max-w-screen-xl',
+        'overflow-x-hidden' => session('customer_is_rtl'),
+    ])>
         @livewire('shopNavigation', ['restaurant' => $restaurant, 'shopBranch' => $shopBranch])
         @livewire('shopDesktopNavigation', ['restaurant' => $restaurant, 'shopBranch' => $shopBranch])
 
-        <div class="flex mt-4 overflow-hidden  dark:bg-gray-900">
-            <div id="main-content" class="w-full h-full overflow-y-auto dark:bg-gray-900">
+        <div class="flex mt-4 min-w-0 overflow-hidden dark:bg-gray-900">
+            <div id="main-content" @class([
+                'w-full h-full min-w-0 max-w-full overflow-y-auto dark:bg-gray-900',
+                'overflow-x-hidden' => session('customer_is_rtl'),
+            ])>
                 <main>
                     @yield('content')
 
@@ -67,10 +91,13 @@
     </div>
     @stack('modals')
 
-    <footer class="p-4 bg-white sm:p-6 dark:bg-gray-800 border-t dark:border-gray-600">
-        <div class="mx-auto max-w-screen-xl">
+    <footer @class([
+        'p-4 bg-white sm:p-6 dark:bg-gray-800 border-t dark:border-gray-600',
+        'max-w-full min-w-0 overflow-x-hidden' => session('customer_is_rtl'),
+    ])>
+        <div class="mx-auto max-w-screen-xl min-w-0">
             <div class="sm:flex sm:items-center sm:justify-between">
-                <span class="text-sm text-gray-500 sm:text-center dark:text-gray-400">&copy; {{ now()->year }} <a
+                <span class="text-sm text-gray-500 sm:text-center dark:text-gray-400 break-words">&copy; {{ now()->year }} <a
                         href="" class="hover:underline">{{ $restaurant->name }}</a>. @lang('app.allRightsReserved')
                 </span>
                 <div class="flex items-center mt-4 space-x-6 sm:justify-center sm:mt-0 rtl:space-x-reverse">

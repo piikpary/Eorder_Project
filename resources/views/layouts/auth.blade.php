@@ -24,6 +24,18 @@
     <meta name="keyword" content="{{ global_setting()->meta_keyword ?? '' }}">
     <meta name="description" content="{{ global_setting()->meta_description ?? global_setting()->name }}">
 
+    @php
+        $authMetaTitle = global_setting()->meta_title ?? global_setting()->name;
+        $authMetaImage = restaurantOrGlobalSetting()->meta_image_url
+            ?? restaurantOrGlobalSetting()->upload_fav_icon_android_chrome_512_url;
+    @endphp
+    <meta property="og:title" content="{{ $authMetaTitle }}">
+    <meta property="og:image" content="{{ $authMetaImage }}">
+    <meta property="og:image:alt" content="{{ $authMetaTitle }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $authMetaTitle }}">
+    <meta name="twitter:image" content="{{ $authMetaImage }}">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
@@ -52,6 +64,7 @@
 </head>
 
 <body>
+    @include('sections.offline-banner')
     <div class="font-sans text-gray-900 dark:text-gray-100 antialiased">
         <button id="theme-toggle" data-tooltip-target="tooltip-toggle" type="button"
             class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 absolute top-2 right-2">
@@ -76,7 +89,7 @@
             class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
             <div class="flex flex-col justify-center items-center space-y-4">
                 <a class="flex gap-2 items-center text-xl font-medium dark:text-white app-logo">
-                    <img src="{{ $appTheme->logoUrl }}" class="h-8" alt="Logo" />
+                    <x-restaurant-logo :restaurant="$appTheme" class="h-8" />
                     @if ($appTheme->show_logo_text)
                         {{ $appTheme->name }}
                     @endif

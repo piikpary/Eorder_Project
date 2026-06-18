@@ -12,7 +12,10 @@ use Livewire\Component;
 use App\Models\Restaurant;
 use App\Notifications\WelcomeRestaurantEmail;
 use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class AddRestaurant extends Component
 {
@@ -37,6 +40,7 @@ class AddRestaurant extends Component
     public $phone;
     public $restaurantPhoneNumber;
     public $restaurantPhoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -65,7 +69,9 @@ class AddRestaurant extends Component
             $defaultCountry = Country::first();
         }
         $this->country = $defaultCountry->id;
-        $this->phoneCode = user()?->phone_code ?? $defaultCountry->phonecode;
+        $detectedPhoneCode = (new User)->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = !empty($detectedPhoneCode);
+        $this->phoneCode = user()?->phone_code ?? $detectedPhoneCode ?? $defaultCountry->phonecode;
         $this->restaurantPhoneCode = $this->phoneCode; // Set default for select box
         $this->status = 1; // Set default status to active
 
@@ -129,95 +135,115 @@ class AddRestaurant extends Component
     {
         abort_if((!user_can('Create Restaurant')), 403);
 
-        // Prevent double submission
         if ($this->isSubmitting) {
             return;
         }
 
         $this->isSubmitting = true;
 
-        $timezone = (new User)->getTimezoneFromIp();
+        $lock = Cache::lock('add-restaurant:' . md5(strtolower(trim($this->email))), 120);
+
+        if (!$lock->get()) {
+            return;
+        }
 
         try {
-
+            if (User::where('email', $this->email)->exists()) {
+                return $this->redirect(route('superadmin.restaurants.index'), navigate: false);
+            }
 
             $this->validate([
                 'address' => 'required',
                 'branchName' => 'required',
+                'email' => 'required|email|unique:users,email',
             ]);
 
-            $restaurant = new Restaurant();
-        $restaurant->name = $this->restaurantName;
+            $timezone = (new User)->getTimezoneFromIp();
 
-        $package = Package::firstWhere('package_type', PackageType::DEFAULT);
+            $result = DB::transaction(function () use ($timezone) {
+                if (User::where('email', $this->email)->lockForUpdate()->exists()) {
+                    return null;
+                }
 
-        if (module_enabled('Subdomain')) {
-            $restaurant->sub_domain = strtolower($this->sub_domain . $this->domain);
-        }
+                $restaurant = new Restaurant();
+                $restaurant->name = $this->restaurantName;
 
-        $restaurant->hash = md5(microtime() . rand(1, 99999999));
-        $restaurant->address = $this->address;
-        $restaurant->timezone = $timezone ?? 'UTC';
-        $restaurant->theme_hex = global_setting()->theme_hex;
-        $restaurant->theme_rgb = global_setting()->theme_rgb;
-        $restaurant->email = $this->email;
-        $restaurant->country_id = $this->country;
-        $restaurant->license_type = $this->licenseType;
-        $restaurant->phone_number = $this->restaurantPhoneNumber;
-        $restaurant->phone_code = $this->restaurantPhoneCode;
-        $restaurant->is_active = (bool)$this->status;
-        $restaurant->facebook_link = $this->facebook;
-        $restaurant->instagram_link = $this->instagram;
-        $restaurant->twitter_link = $this->twitter;
-        $restaurant->google_business_link = $this->googleBusinessLink;
-        $restaurant->customer_site_language = 'en';
-        $restaurant->save();
+                if (module_enabled('Subdomain')) {
+                    $restaurant->sub_domain = strtolower($this->sub_domain . $this->domain);
+                }
 
-        $branch = Branch::create([
-            'name' => $this->branchName,
-            'restaurant_id' => $restaurant->id,
-            'address' => $this->address,
-        ]);
+                $restaurant->hash = md5(microtime() . rand(1, 99999999));
+                $restaurant->address = $this->address;
+                $restaurant->timezone = $timezone ?? 'UTC';
+                $restaurant->theme_hex = global_setting()->theme_hex;
+                $restaurant->theme_rgb = global_setting()->theme_rgb;
+                $restaurant->email = $this->email;
+                $restaurant->country_id = $this->country;
+                $restaurant->license_type = $this->licenseType;
+                $restaurant->phone_number = $this->restaurantPhoneNumber;
+                $restaurant->phone_code = $this->restaurantPhoneCode;
+                $restaurant->is_active = (bool) $this->status;
+                $restaurant->facebook_link = $this->facebook;
+                $restaurant->instagram_link = $this->instagram;
+                $restaurant->twitter_link = $this->twitter;
+                $restaurant->google_business_link = $this->googleBusinessLink;
+                $restaurant->customer_site_language = 'en';
+                $restaurant->save();
 
-        $user = User::create([
-            'name' => $this->fullName,
-            'email' => $this->email,
-            'phone_number' => $this->restaurantPhoneNumber,
-            'phone_code' => $this->restaurantPhoneCode,
-            'password' => bcrypt($this->password),
-            'facebook' => $this->facebook,
-            'instagram' => $this->instagram,
-            'twitter' => $this->twitter,
-            'restaurant_id' => $restaurant->id,
-            'branch_id' => $branch->id,
-        ]);
+                $branch = Branch::create([
+                    'name' => $this->branchName,
+                    'restaurant_id' => $restaurant->id,
+                    'address' => $this->address,
+                ]);
 
-        $adminRole = Role::create(['name' => 'Admin_' . $restaurant->id, 'display_name' => 'Admin', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
-        $branchHeadRole = Role::create(['name' => 'Branch Head_' . $restaurant->id, 'display_name' => 'Branch Head', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
+                $user = User::create([
+                    'name' => $this->fullName,
+                    'email' => $this->email,
+                    'phone_number' => $this->restaurantPhoneNumber,
+                    'phone_code' => $this->restaurantPhoneCode,
+                    'password' => bcrypt($this->password),
+                    'facebook' => $this->facebook,
+                    'instagram' => $this->instagram,
+                    'twitter' => $this->twitter,
+                    'restaurant_id' => $restaurant->id,
+                    'branch_id' => $branch->id,
+                ]);
 
-        Role::create(['name' => 'Waiter_' . $restaurant->id, 'display_name' => 'Waiter', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
-        Role::create(['name' => 'Chef_' . $restaurant->id, 'display_name' => 'Chef', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
+                $adminRole = Role::create(['name' => 'Admin_' . $restaurant->id, 'display_name' => 'Admin', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
+                $branchHeadRole = Role::create(['name' => 'Branch Head_' . $restaurant->id, 'display_name' => 'Branch Head', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
 
-        $allPermissions = Permission::get()->pluck('name')->toArray();
+                Role::create(['name' => 'Waiter_' . $restaurant->id, 'display_name' => 'Waiter', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
+                Role::create(['name' => 'Chef_' . $restaurant->id, 'display_name' => 'Chef', 'guard_name' => 'web', 'restaurant_id' => $restaurant->id]);
 
-        $adminRole->syncPermissions($allPermissions);
-        $branchHeadRole->syncPermissions($allPermissions);
+                $allPermissions = Permission::get()->pluck('name')->toArray();
 
-        $user->assignRole('Admin_' . $restaurant->id);
+                $adminRole->syncPermissions($allPermissions);
+                $branchHeadRole->syncPermissions($allPermissions);
 
+                $user->assignRole('Admin_' . $restaurant->id);
 
-        try {
-            $user->notify(new WelcomeRestaurantEmail($restaurant, $this->password));
-        } catch (\Exception $e) {
-            Log::error('Error sending restaurant welcome email: ' . $e->getMessage());
-        }
+                return compact('restaurant', 'user');
+            });
 
-            // Reset isSubmitting and redirect with page reload
-            $this->isSubmitting = false;
+            if ($result === null) {
+                return $this->redirect(route('superadmin.restaurants.index'), navigate: false);
+            }
+
+            try {
+                $result['user']->notify(new WelcomeRestaurantEmail($result['restaurant'], $this->password));
+            } catch (\Exception $e) {
+                Log::error('Error sending restaurant welcome email: ' . $e->getMessage());
+            }
+
             return $this->redirect(route('superadmin.restaurants.index'), navigate: false);
+        } catch (ValidationException $e) {
+            $this->isSubmitting = false;
+            throw $e;
         } catch (\Exception $e) {
             $this->isSubmitting = false;
             throw $e;
+        } finally {
+            $lock->release();
         }
     }
 

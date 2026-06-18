@@ -183,7 +183,7 @@
         </div>
     </div>
 
-    <x-right-modal wire:model.live="showEditCustomerModal">
+    <x-right-modal wire:model.live="showEditCustomerModal" :content-scroll="false">
         <x-slot name="title">
             {{ __("modules.customer.editCustomer") }}
         </x-slot>
@@ -195,9 +195,14 @@
         </x-slot>
 
         <x-slot name="footer">
-            <x-secondary-button wire:click="$set('showEditCustomerModal', false)" wire:loading.attr="disabled">
-                {{ __('app.close') }}
-            </x-secondary-button>
+            <div class="flex flex-wrap items-center justify-end gap-3 w-full">
+                <x-button-cancel type="button" wire:click="$dispatch('hideEditCustomer')" wire:loading.attr="disabled">
+                    {{ __('app.cancel') }}
+                </x-button-cancel>
+                <x-button type="submit" form="edit-customer-form">
+                    @lang('app.save')
+                </x-button>
+            </div>
         </x-slot>
     </x-right-modal>
 

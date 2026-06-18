@@ -73,6 +73,15 @@ class Customer extends BaseModel
         return null;
     }
 
+    public function routeNotificationForTwilio()
+    {
+        if (!is_null($this->phone) && !is_null($this->phone_code)) {
+            return '+' . $this->phone_code . $this->phone;
+        }
+
+        return null;
+    }
+
     public function routeNotificationForMsg91($notification)
     {
         if (!is_null($this->phone) && !is_null($this->phone_code)) {

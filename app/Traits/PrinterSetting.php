@@ -15,6 +15,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\KotController;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Helper\Files;
+use Illuminate\Support\Facades\File;
 
 trait PrinterSetting
 {
@@ -59,6 +60,16 @@ trait PrinterSetting
         //  Log::info("generateKotImage called for KOT ID: {$kotId}, Place ID: {$kotPlaceId}");
 
         try {
+            // Pre-delete old image to avoid stale content reuse if capture/upload is skipped.
+            try {
+                $fullPath = public_path(Files::UPLOAD_FOLDER . '/' . 'print/kot-' . $kotId . '.png');
+                if (File::exists($fullPath)) {
+                    File::delete($fullPath);
+                }
+            } catch (\Throwable $e) {
+                // fail-safe
+            }
+
             // Add a small delay to prevent race conditions when multiple KOTs are printed simultaneously
             usleep(200000); // 200ms delay
 
@@ -208,8 +219,34 @@ trait PrinterSetting
         Log::info("generateOrderImage called for Order ID: {$orderId}");
 
         try {
+            // Pre-delete old image to avoid stale content reuse if capture/upload is skipped.
+            try {
+                $fullPath = public_path(Files::UPLOAD_FOLDER . '/' . 'print/order-' . $orderId . '.png');
+                if (File::exists($fullPath)) {
+                    File::delete($fullPath);
+                }
+            } catch (\Throwable $e) {
+                // fail-safe
+            }
+
             // Add a delay to prevent conflicts with KOT image generation
             usleep(500000); // 500ms delay
+
+            // Regenerate content from the incoming order id as final source of truth.
+            // This prevents accidental stale/mismatched HTML payloads being captured.
+            try {
+                $width = $this->getPrintWidth();
+                $thermal = true;
+                $content = (new OrderController())->printOrder(
+                    $orderId,
+                    $width,
+                    $thermal,
+                    $this->checkGeneratePdf()
+                )->render();
+            } catch (\Throwable $e) {
+                Log::warning("Order image content regeneration failed for Order ID {$orderId}: " . $e->getMessage());
+                // Fall back to provided $content if regeneration fails.
+            }
 
             // Use html-to-image approach by dispatching a JavaScript event
             // This will trigger the image capture in the frontend
@@ -388,6 +425,8 @@ trait PrinterSetting
      */
     public function ifPWA()
     {
+
+
         // Check session variable (set by frontend when PWA is detected)
         if (session()->has('is_pwa') && session('is_pwa') === true) {
             return true;
@@ -396,7 +435,8 @@ trait PrinterSetting
         // Check for custom header set by frontend
         if (
             request()->header('X-PWA-Mode') === 'standalone' ||
-            request()->header('X-PWA-Mode') === 'true'
+            request()->header('X-PWA-Mode') === 'true' ||
+            request()->header('X-PWA') === 'true'
         ) {
             return true;
         }

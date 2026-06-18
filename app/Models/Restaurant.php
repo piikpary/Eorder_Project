@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\EuAnnexIiAllergens;
 use App\Traits\FaviconTrait;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,11 +43,28 @@ class Restaurant extends BaseModel
 
     protected $appends = [
         'logo_url',
+        'dark_logo_url',
     ];
 
     public function getFaviconBasePath(): string
     {
         return self::FAVICON_BASE_PATH_RESTAURANT . $this->hash . '/';
+    }
+
+    private static function appendAssetVersion(string $url, ?int $version): string
+    {
+        if ($version === null) {
+            return $url;
+        }
+
+        // Pre-signed object URLs (S3, etc.) sign the exact query string; extra params break the signature.
+        if (in_array(config('filesystems.default'), StorageSetting::S3_COMPATIBLE_STORAGE, true)) {
+            return $url;
+        }
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url . $separator . 'v=' . $version;
     }
 
     protected $casts = [
@@ -66,6 +84,8 @@ class Restaurant extends BaseModel
         'ai_monthly_reset_at' => 'date',
         'is_temporarily_closed' => 'boolean',
         'restaurant_manual_open_close_type' => 'string',
+        'disable_menu_item_default_image' => 'boolean',
+        'auto_mark_order_completed_on_paid' => 'boolean',
     ];
 
     public function logoUrl(): Attribute
@@ -73,6 +93,28 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             return $this->logo ? asset_url_local_s3('logo/' . $this->logo) : global_setting()->logoUrl;
         });
+    }
+
+    public function darkLogoUrl(): Attribute
+    {
+        return Attribute::get(function (): string {
+            if ($this->dark_logo) {
+                return asset_url_local_s3('logo/' . $this->dark_logo);
+            }
+
+            if ($this->logo) {
+                return asset_url_local_s3('logo/' . $this->logo);
+            }
+
+            $global = global_setting();
+
+            return $global->dark_logo ? $global->dark_logo_url : $global->logoUrl;
+        });
+    }
+
+    public function hasDarkLogo(): bool
+    {
+        return filled($this->dark_logo);
     }
 
     public function currency(): BelongsTo
@@ -93,6 +135,29 @@ class Restaurant extends BaseModel
     public function paymentGateways(): HasOne
     {
         return $this->hasOne(PaymentGatewayCredential::class)->withoutGlobalScopes();
+    }
+
+    public function euAllergenSetting(): HasOne
+    {
+        return $this->hasOne(RestaurantEuAllergenSetting::class)->withoutGlobalScopes();
+    }
+
+    /**
+     * Annex II allergen keys enabled for menu item forms (EU 1169/2011), or empty when feature is off.
+     *
+     * @return list<string>
+     */
+    public function selectableEuAllergenKeys(): array
+    {
+        $setting = $this->relationLoaded('euAllergenSetting')
+            ? $this->getRelation('euAllergenSetting')
+            : $this->euAllergenSetting()->first();
+
+        if (!$setting || !$setting->enabled) {
+            return [];
+        }
+
+        return EuAnnexIiAllergens::normalizedSelection($setting->allergen_keys);
     }
 
     public function androidSmsGatewaySetting(): HasOne
@@ -174,7 +239,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom favicon if exists, otherwise use global setting
             return $this->upload_fav_icon_android_chrome_192
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_android_chrome_192)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_android_chrome_192),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->upload_fav_icon_android_chrome_192_url;
         });
     }
@@ -188,7 +256,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom favicon if exists, otherwise use global setting
             return $this->upload_fav_icon_android_chrome_512
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_android_chrome_512)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_android_chrome_512),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->upload_fav_icon_android_chrome_512_url;
         });
     }
@@ -202,7 +273,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom icon if exists, otherwise use global setting
             return $this->upload_fav_icon_apple_touch_icon
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_apple_touch_icon)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->upload_fav_icon_apple_touch_icon),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->upload_fav_icon_apple_touch_icon_url;
         });
     }
@@ -216,7 +290,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom favicon if exists, otherwise use global setting
             return $this->upload_favicon_16
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->upload_favicon_16)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->upload_favicon_16),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->upload_fav_icon_16_url;
         });
     }
@@ -230,7 +307,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom favicon if exists, otherwise use global setting
             return $this->upload_favicon_32
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->upload_favicon_32)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->upload_favicon_32),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->upload_fav_icon_32_url;
         });
     }
@@ -244,7 +324,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom favicon if exists, otherwise use global setting
             return $this->favicon
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->favicon)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->favicon),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->favicon_url;
         });
     }
@@ -258,7 +341,10 @@ class Restaurant extends BaseModel
         return Attribute::get(function (): string {
             // Use restaurant's custom webmanifest if exists, otherwise use global setting
             return $this->webmanifest
-                ? asset_url_local_s3($this->getFaviconBasePath() . $this->webmanifest)
+                ? self::appendAssetVersion(
+                    asset_url_local_s3($this->getFaviconBasePath() . $this->webmanifest),
+                    $this->updated_at?->getTimestamp()
+                )
                 : global_setting()->webmanifest_url;
         });
     }

@@ -38,9 +38,14 @@ class Table extends BaseModel
         return $this->belongsTo(Area::class);
     }
 
+    /**
+     * Latest order that still holds the table (includes paid until order_status completed).
+     */
     public function activeOrder(): HasOne
     {
-        return $this->hasOne(Order::class)->whereIn('status', ['billed', 'kot'])->orderBy('id', 'desc');
+        return $this->hasOne(Order::class)
+            ->occupyingTableSeats()
+            ->orderByDesc('id');
     }
 
     public function qRCodeUrl(): Attribute

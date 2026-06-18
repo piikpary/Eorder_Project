@@ -10,6 +10,7 @@ use App\Models\ItemCategory;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 use App\Scopes\AvailableMenuItemScope;
+use App\Services\Pos\PosBranchCacheInvalidation;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
 use Livewire\Features\SupportPagination\WithoutUrlPagination;
 
@@ -68,8 +69,11 @@ class MenuItems extends Component
     {
         $menuItem = MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)->find($id);
         $restaurantId = $menuItem && $menuItem->branch ? $menuItem->branch->restaurant_id : null;
+        $branchId = $menuItem && $menuItem->branch_id ? (int) $menuItem->branch_id : null;
 
-        MenuItem::withoutGlobalScope(AvailableMenuItemScope::class)->where('id', $id)->delete();
+        if ($menuItem) {
+            $menuItem->delete();
+        }
         $languages = languages()->pluck('language_code')->toArray();
 
         // Clear cache for all languages for this menu item
@@ -83,9 +87,9 @@ class MenuItems extends Component
             cache()->forget('restaurant_' . $restaurantId . '_menu_item_stats');
         }
 
-        // Clear cache so deleted menu item is immediately removed from
-        // POS and any other cached menu listings, consistent with create/update/import.
-        cache()->flush();
+        if ($branchId) {
+            PosBranchCacheInvalidation::invalidateForBranch($branchId);
+        }
 
         $this->menuItem = null;
         $this->confirmDeleteMenuItem = false;

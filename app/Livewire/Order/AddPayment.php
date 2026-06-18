@@ -5,7 +5,6 @@ namespace App\Livewire\Order;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SplitOrder;
-use App\Models\Table;
 use App\Models\PredefinedAmount;
 use App\Notifications\SendOrderBill;
 use Jantinnerezo\LivewireAlert\LivewireAlert;
@@ -14,10 +13,19 @@ use Livewire\Component;
 use Illuminate\Support\Facades\Log;
 use App\Events\SendOrderBillEvent;
 use App\Services\RestaurantAvailabilityService;
+use App\Events\CustomerDisplayUpdated;
+use Illuminate\Support\Facades\Cache;
 
 class AddPayment extends Component
 {
     use LivewireAlert;
+    public $khqrPayload = null;
+    public $khqrMd5 = null;
+    public $khqrImage = null;
+    public $showKhqrModal = false;
+    public $khqrReference = null;
+    public $khqrStatus = null;
+    public $khqrMessage = null;
 
     public $order;
     public $showAddPaymentModal = false;
@@ -313,10 +321,213 @@ class AddPayment extends Component
     }
 
     public function setPaymentMethod($method)
-    {
-        $this->paymentMethod = $method;
-        $this->updatedPaymentAmount();
+{
+    if (
+        $this->paymentMethod === 'khqr' &&
+        $method !== 'khqr'
+    ) {
+        $this->clearKhqrCustomerDisplay();
     }
+
+    $this->paymentMethod = $method;
+
+    if ($method === 'khqr') {
+        $this->paymentAmount = $this->dueAmount;
+        $this->updatedPaymentAmount();
+
+        // Do not show a QR popup on the cashier screen.
+        $this->showKhqrModal = false;
+
+        // Send the uploaded QR to the customer display.
+        $this->generateKhqr();
+
+        return;
+    }
+
+    $this->khqrImage = null;
+    $this->khqrStatus = null;
+    $this->khqrMessage = null;
+    $this->showKhqrModal = false;
+
+    $this->updatedPaymentAmount();
+}
+   public function generateKhqr(): void
+{
+    try {
+        $amount = (float) (
+            $this->paymentAmount ?: $this->dueAmount
+        );
+
+        if ($amount <= 0) {
+            $this->alert(
+                'error',
+                'Invalid payment amount.',
+                ['toast' => true]
+            );
+
+            return;
+        }
+
+        // Read the QR uploaded in:
+        // Settings -> Payment -> QR Code Payment
+        $paymentGateway = restaurant()->paymentGateways;
+
+        $qrImageUrl = $paymentGateway?->qr_code_image_url;
+
+        if (
+            !$paymentGateway ||
+            !$paymentGateway->is_qr_payment_enabled ||
+            empty($qrImageUrl)
+        ) {
+            $this->khqrImage = null;
+            $this->khqrStatus = 'error';
+            $this->khqrMessage =
+                'Please enable QR payment and upload a QR image in Payment Settings.';
+
+            $this->alert(
+                'error',
+                $this->khqrMessage,
+                [
+                    'toast' => true,
+                    'position' => 'top-end',
+                ]
+            );
+
+            return;
+        }
+
+        $this->khqrImage = $qrImageUrl;
+        $this->khqrStatus = 'waiting';
+        $this->khqrMessage =
+            'QR image is displayed on the customer screen.';
+
+        $userId = auth()->id();
+        $cacheKey =
+            'customer_display_cart_user_' . $userId;
+
+        $cart = Cache::get($cacheKey, []);
+
+        if (!is_array($cart)) {
+            $cart = [];
+        }
+
+        if (($cart['status'] ?? null) !== 'khqr') {
+            $cart['customer_display_previous_status'] =
+                $cart['status'] ?? 'idle';
+        }
+
+        $cart['order_number'] =
+            $cart['order_number'] ?? $this->order?->id;
+
+        $cart['formatted_order_number'] =
+            $cart['formatted_order_number']
+            ?? (string) ($this->order?->id ?? '');
+
+        $cart['items'] = $cart['items'] ?? [];
+        $cart['taxes'] = $cart['taxes'] ?? [];
+        $cart['extra_charges'] =
+            $cart['extra_charges'] ?? [];
+
+        $cart['sub_total'] =
+            $cart['sub_total'] ?? $amount;
+
+        $cart['total'] =
+            $cart['total'] ?? $amount;
+
+        $cart['discount'] =
+            $cart['discount'] ?? 0;
+
+        $cart['tip'] =
+            $cart['tip'] ?? 0;
+
+        $cart['delivery_fee'] =
+            $cart['delivery_fee'] ?? 0;
+
+        $cart['order_type'] =
+            $cart['order_type'] ?? null;
+
+        $cart['status'] = 'khqr';
+        $cart['cash_due'] = $amount;
+        $cart['qr_code_image_url'] = $qrImageUrl;
+
+        Cache::put(
+            $cacheKey,
+            $cart,
+            now()->addHours(2)
+        );
+
+        event(
+            new CustomerDisplayUpdated(
+                $cart,
+                $userId
+            )
+        );
+    } catch (\Throwable $e) {
+        Log::error(
+            'Customer-display QR error: ' .
+            $e->getMessage()
+        );
+
+        $this->alert(
+            'error',
+            'Could not display the QR image.',
+            [
+                'toast' => true,
+                'position' => 'top-end',
+            ]
+        );
+    }
+}
+
+
+public function closePaymentModal(): void
+{
+    if ($this->paymentMethod === 'khqr') {
+        $this->clearKhqrCustomerDisplay();
+    }
+
+    $this->showKhqrModal = false;
+    $this->showAddPaymentModal = false;
+}
+private function clearKhqrCustomerDisplay(): void
+{
+    $userId = auth()->id();
+    $cacheKey = 'customer_display_cart_user_' . $userId;
+
+    $cart = Cache::get($cacheKey);
+
+    if (!is_array($cart)) {
+        return;
+    }
+
+    $cart['status'] =
+        $cart['customer_display_previous_status'] ?? 'idle';
+
+    unset(
+        $cart['customer_display_previous_status'],
+        $cart['cash_due'],
+        $cart['qr_code_image_url']
+    );
+
+    Cache::put(
+        $cacheKey,
+        $cart,
+        now()->addHours(2)
+    );
+
+    event(new CustomerDisplayUpdated($cart, $userId));
+}
+public function closeKhqrModal(): void
+{
+    $this->clearKhqrCustomerDisplay();
+
+    $this->showKhqrModal = false;
+    $this->khqrImage = null;
+    $this->khqrStatus = null;
+    $this->khqrMessage = null;
+}
+
+
 
     public function quickAmount($amount)
     {
@@ -468,12 +679,27 @@ class AddPayment extends Component
         }
     }
 
-    public function submitForm()
+    public function submitForm(bool $shouldPrint = false)
     {
         $this->order = $this->order->fresh(['items', 'items.menuItem', 'taxes', 'payments', 'splitOrders.items']);
         if ($this->order->status === 'paid') {
             return;
         }
+	 if (
+    $this->paymentMethod === 'khqr'
+    && empty($this->khqrImage)
+) {
+    $this->alert(
+        'error',
+        'Please enable QR payment and upload a QR image in Payment Settings.',
+        [
+            'toast' => true,
+            'position' => 'top-end',
+        ]
+    );
+
+    return;
+}
 
         $restaurant = $this->order->branch?->restaurant ?? restaurant();
         $availability = RestaurantAvailabilityService::getAvailability($restaurant, $this->order->branch);
@@ -547,6 +773,7 @@ class AddPayment extends Component
         // Fire event when order becomes paid (for loyalty points)
         if ($this->order->status === 'paid' && !$wasPaid) {
             \App\Events\SendNewOrderReceived::dispatch($this->order);
+	    $this->addLoyaltyStampForPaidOrder($this->order);
         }
 
         // Handle due payments - always delete existing due payments first
@@ -561,17 +788,7 @@ class AddPayment extends Component
             ]);
         }
 
-        // Update table status
-        $table = Table::find($this->order->table_id);
-
-        if ($table) {
-            $table->update(['available_status' => 'available']);
-
-            // Release table session lock if exists
-            if ($table->tableSession) {
-                $table->tableSession->releaseLock();
-            }
-        }
+        // Dine-in table + lock: released when order_status is completed (see OrderObserver).
 
         if ($this->order->customer_id) {
             try {
@@ -581,11 +798,392 @@ class AddPayment extends Component
             }
         }
 
-        $this->dispatch('showOrderDetail', id: $this->order->id);
-        $this->dispatch('refreshOrders');
-        $this->dispatch('resetPos');
-        $this->dispatch('refreshPayments');
-        $this->showAddPaymentModal = false;
+        $shouldDispatchPrint = $shouldPrint && $this->order->status === 'paid';
+
+       if ($this->paymentMethod === 'khqr') {
+    $this->clearKhqrCustomerDisplay();
+
+    $this->khqrImage = null;
+    $this->khqrStatus = null;
+    $this->khqrMessage = null;
+    $this->showKhqrModal = false;
+}
+
+$this->dispatch('showOrderDetail', id: $this->order->id);
+$this->dispatch('refreshOrders');
+$this->dispatch('resetPos');
+$this->dispatch('refreshPayments');
+
+$this->showAddPaymentModal = false;
+        if ($shouldDispatchPrint) {
+            // Let POS JS use its existing printOrder() flow (same behavior as Pos.php / ajax print pipeline).
+            $this->dispatch('posPaymentCompletedPrint', id: $this->order->id);
+        }
+    }
+
+	private function addLoyaltyStampForPaidOrder($order): void
+{
+    try {
+        if (!$order || !$order->customer_id) {
+            return;
+        }
+
+        if (
+            !\Illuminate\Support\Facades\Schema::hasTable('loyalty_stamp_rules')
+            || !\Illuminate\Support\Facades\Schema::hasTable('customer_stamps')
+            || !\Illuminate\Support\Facades\Schema::hasTable('loyalty_stamp_transactions')
+        ) {
+            return;
+        }
+
+        $customer = \App\Models\Customer::find($order->customer_id);
+
+        if (!$customer) {
+            return;
+        }
+
+        $restaurantId = $customer->restaurant_id ?? null;
+
+        if (!$restaurantId && method_exists($order, 'branch')) {
+            $restaurantId = $order->branch?->restaurant_id ?? null;
+        }
+
+        if (!$restaurantId && !empty($order->branch_id)) {
+            $restaurantId = \Illuminate\Support\Facades\DB::table('branches')
+                ->where('id', $order->branch_id)
+                ->value('restaurant_id');
+        }
+
+        if (!$restaurantId) {
+            \Illuminate\Support\Facades\Log::error(
+                'Loyalty stamp skipped: restaurant not found.',
+                [
+                    'order_id' => $order->id ?? null,
+                    'customer_id' => $order->customer_id ?? null,
+                    'branch_id' => $order->branch_id ?? null,
+                ]
+            );
+
+            return;
+        }
+
+        $rules = \Illuminate\Support\Facades\DB::table('loyalty_stamp_rules')
+            ->where('restaurant_id', $restaurantId)
+            ->where('is_active', 1)
+            ->get();
+
+        if ($rules->isEmpty()) {
+            return;
+        }
+
+        foreach ($rules as $rule) {
+            $alreadyEarned = \Illuminate\Support\Facades\DB::table(
+                'loyalty_stamp_transactions'
+            )
+                ->where('customer_id', $order->customer_id)
+                ->where('stamp_rule_id', $rule->id)
+                ->where('order_id', $order->id)
+                ->where('type', 'EARN')
+                ->exists();
+
+            if ($alreadyEarned) {
+                continue;
+            }
+
+            $customerStamp = \Illuminate\Support\Facades\DB::table(
+                'customer_stamps'
+            )
+                ->where('restaurant_id', $restaurantId)
+                ->where('customer_id', $order->customer_id)
+                ->where('stamp_rule_id', $rule->id)
+                ->first();
+
+            $availableBefore = 0;
+
+            if ($customerStamp) {
+                $availableBefore = max(
+                    0,
+                    (int) $customerStamp->stamps_earned
+                    - (int) $customerStamp->stamps_redeemed
+                );
+
+                \Illuminate\Support\Facades\DB::table('customer_stamps')
+                    ->where('id', $customerStamp->id)
+                    ->update([
+                        'stamps_earned' =>
+                            ((int) $customerStamp->stamps_earned) + 1,
+                        'last_earned_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+            } else {
+                \Illuminate\Support\Facades\DB::table(
+                    'customer_stamps'
+                )->insert([
+                    'restaurant_id' => $restaurantId,
+                    'customer_id' => $order->customer_id,
+                    'stamp_rule_id' => $rule->id,
+                    'stamps_earned' => 1,
+                    'stamps_redeemed' => 0,
+                    'last_earned_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            \Illuminate\Support\Facades\DB::table(
+                'loyalty_stamp_transactions'
+            )->insert([
+                'restaurant_id' => $restaurantId,
+                'customer_id' => $order->customer_id,
+                'stamp_rule_id' => $rule->id,
+                'order_id' => $order->id,
+                'type' => 'EARN',
+                'stamps' => 1,
+                'reason' => 'Stamp earned from paid order',
+                'created_at' => now(),
+            ]);
+
+            $updatedCustomerStamp = \Illuminate\Support\Facades\DB::table(
+                'customer_stamps'
+            )
+                ->where('restaurant_id', $restaurantId)
+                ->where('customer_id', $order->customer_id)
+                ->where('stamp_rule_id', $rule->id)
+                ->first();
+
+            if (!$updatedCustomerStamp) {
+                continue;
+            }
+
+            $availableAfter = max(
+                0,
+                (int) $updatedCustomerStamp->stamps_earned
+                - (int) $updatedCustomerStamp->stamps_redeemed
+            );
+
+            $requiredStamps = max(
+                1,
+                (int) (
+                    $rule->stamps_required
+                    ?? $rule->required_stamps
+                    ?? 1
+                )
+            );
+
+            $this->sendStampEarnedTelegramAlert(
+                $customer,
+                $order,
+                $availableAfter,
+                $requiredStamps
+            );
+
+            $rewardsBefore = intdiv(
+                $availableBefore,
+                $requiredStamps
+            );
+
+            $rewardsAfter = intdiv(
+                $availableAfter,
+                $requiredStamps
+            );
+
+            if ($rewardsAfter > $rewardsBefore) {
+                $this->sendRewardReachedTelegramAlert(
+                    $customer,
+                    $updatedCustomerStamp,
+                    $rule
+                );
+            }
+        }
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error(
+            'Auto loyalty stamp error.',
+            [
+                'order_id' => $order->id ?? null,
+                'customer_id' => $order->customer_id ?? null,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]
+        );
+    }
+}
+private function sendStampEarnedTelegramAlert(
+    $customer,
+    $order,
+    int $availableStamps,
+    int $requiredStamps
+): void {
+    $token = config('services.telegram_loyalty.bot_token');
+
+    $chatId = $customer->telegram_chat_id ?? null;
+
+    if (
+        !$token
+        || !$chatId
+        || (int) ($customer->telegram_notify_enabled ?? 0) !== 1
+    ) {
+        return;
+    }
+
+    $cycleStamps = $availableStamps % $requiredStamps;
+
+    if (
+        $availableStamps >= $requiredStamps
+        && $cycleStamps === 0
+    ) {
+        $cycleStamps = $requiredStamps;
+    }
+
+    $message =
+    "⭐ <b>Stamp Earned</b>\n\n" .
+    "👤 Hello " . ($customer->name ?? 'Customer') . ",\n\n" .
+    "✅ You earned 1 loyalty stamp.\n" .
+    "📊 <b>Current Progress:</b> {$cycleStamps}/{$requiredStamps}\n" .
+    "🧾 <b>Order Number:</b> #" .
+    ($order->order_number ?? $order->id) . "\n\n" .
+    "💜 Thank you for using eOrder.";
+
+    try {
+        $response = \Illuminate\Support\Facades\Http::timeout(10)
+            ->post(
+                "https://api.telegram.org/bot{$token}/sendMessage",
+                [
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                    'parse_mode' => 'HTML',
+                ]
+            );
+
+        if (!$response->successful()) {
+            \Illuminate\Support\Facades\Log::error(
+                'Stamp Telegram API rejected message.',
+                [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'customer_id' => $customer->id ?? null,
+                ]
+            );
+        }
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error(
+            'Stamp Telegram alert failed.',
+            [
+                'customer_id' => $customer->id ?? null,
+                'error' => $e->getMessage(),
+            ]
+        );
+    }
+}
+private function sendRewardReachedTelegramAlert(
+    $customer,
+    $customerStamp,
+    $rule
+): void {
+    $token = config('services.telegram_loyalty.bot_token');
+
+    $chatId = $customer->telegram_chat_id ?? null;
+
+    if (
+        !$token
+        || !$chatId
+        || (int) ($customer->telegram_notify_enabled ?? 0) !== 1
+    ) {
+        \Illuminate\Support\Facades\Log::error(
+            'Reward Telegram alert skipped.',
+            [
+                'customer_id' => $customer->id ?? null,
+                'has_token' => !empty($token),
+                'chat_id' => $chatId,
+                'notify_enabled' =>
+                    $customer->telegram_notify_enabled ?? null,
+            ]
+        );
+
+        return;
+    }
+
+    $requiredStamps = max(
+        1,
+        (int) (
+            $rule->stamps_required
+            ?? $rule->required_stamps
+            ?? 1
+        )
+    );
+
+    $availableStamps = max(
+        0,
+        (int) ($customerStamp->stamps_earned ?? 0)
+        - (int) ($customerStamp->stamps_redeemed ?? 0)
+    );
+
+    $rewardText = match ($rule->reward_type ?? null) {
+        'free_item' => 'Free Item',
+
+        'discount_percent' =>
+            ($rule->reward_value ?? 0) . '% Discount',
+
+        'discount_amount' =>
+            '$' . number_format(
+                (float) ($rule->reward_value ?? 0),
+                2
+            ) . ' Discount',
+
+        default =>
+            ucfirst(
+                str_replace(
+                    '_',
+                    ' ',
+                    $rule->reward_type ?? 'Reward'
+                )
+            ),
+    };
+
+    $message =
+    "🎉 <b>Reward Available</b>\n\n" .
+    "👤 Hello " . ($customer->name ?? 'Customer') . ",\n\n" .
+    "🏆 Congratulations! You reached the loyalty reward target.\n\n" .
+    "⭐ <b>Stamps:</b> {$availableStamps}/{$requiredStamps}\n" .
+    "🎁 <b>Reward:</b> {$rewardText}\n\n" .
+    "📱 Please show your loyalty card to the cashier to claim your reward.";
+
+    try {
+        $response = \Illuminate\Support\Facades\Http::timeout(10)
+            ->post(
+                "https://api.telegram.org/bot{$token}/sendMessage",
+                [
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                    'parse_mode' => 'HTML',
+                ]
+            );
+
+        if (!$response->successful()) {
+            \Illuminate\Support\Facades\Log::error(
+                'Reward Telegram API rejected message.',
+                [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'customer_id' => $customer->id ?? null,
+                    'rule_id' => $rule->id ?? null,
+                ]
+            );
+        }
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error(
+            'Reward Telegram alert failed.',
+            [
+                'customer_id' => $customer->id ?? null,
+                'rule_id' => $rule->id ?? null,
+                'error' => $e->getMessage(),
+            ]
+        );
+    }
+}
+    public function submitFormAndPrint()
+    {
+        $this->submitForm(true);
     }
 
     public function render()

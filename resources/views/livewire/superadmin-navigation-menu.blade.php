@@ -19,7 +19,7 @@
             </svg>
           </button>
           <a href="{{ route('superadmin.dashboard') }}" class="flex ltr:ml-2 rtl:mr-24 items-center app-logo">
-            <img src="{{ restaurantOrGlobalSetting()->logoUrl }}" class="h-8 ltr:mr-3 rtl:ml-3" alt="App Logo" />
+            <x-global-logo :setting="restaurantOrGlobalSetting()" class="h-8 ltr:mr-3 rtl:ml-3" />
             @if (restaurantOrGlobalSetting()->show_logo_text)
               <span class="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white hidden lg:block">{{
                 Str::limit(restaurantOrGlobalSetting()->name, 10) }}</span>
@@ -107,15 +107,17 @@
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white"
                     role="menuitem">@lang('menu.profile')</a>
                 </li>
+              
+                @if (user_can('Custom Modules'))
+                
                 <li>
                     <a href="{{ route('superadmin.custom-modules.index') }}"
                       class="flex justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white"
                       role="menuitem">
                       @lang('modules.settings.customModules')
-
-
                     </a>
                   </li>
+                @endif
                 <li>
                   <a href="{{ route('superadmin.app-update.index') }}"
                     class="flex justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white"

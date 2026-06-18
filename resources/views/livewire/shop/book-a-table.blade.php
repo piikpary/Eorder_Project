@@ -20,7 +20,7 @@
         </div>
     </section>
 
-    <div class="space-y-8 max-w-4xl mx-auto lg:mt-20 p-4">
+    <div class="space-y-8 w-full mx-auto lg:mt-20 pb-4 px-4">
         <h4 class="text-2xl font-bold dark:text-white">@lang('messages.selectBookingDetail')</h4>
 
         <div class="grid lg:grid-cols-3 lg:gap-6 gap-4">
@@ -32,7 +32,7 @@
                     $maxDate = now()->timezone(timezone())->addDays(6)->format($dateFormat);
                 @endphp
                 <x-datepicker
-                    wire:model.defer="date"
+                    wire:model.live="date"
                     minDate="{{ $minDate }}"
                     maxDate="{{ $maxDate }}"
                     :restaurant="$restaurant"
@@ -45,26 +45,34 @@
             </div>
 
             {{-- Guest Selection --}}
-            <div class="relative">
-                <button wire:key='reservation-date-2' id="dropdownHoverButton2" data-dropdown-toggle="dropdownHover2" data-dropdown-trigger="click" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-lg text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150 w-full justify-between" type="button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-people mr-2" viewBox="0 0 16 16">
+            <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false">
+                <button type="button"
+                    @click="open = !open"
+                    :aria-expanded="open"
+                    class="inline-flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs text-gray-700 shadow-sm transition ease-in-out duration-150 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-25 dark:border-gray-500 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-people mr-2 shrink-0" viewBox="0 0 16 16" aria-hidden="true">
                         <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
                     </svg>
 
-                    {{ $numberOfGuests }} @lang('modules.reservation.guests')
-                    <svg class="w-2.5 h-2.5 ms-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                    <span>{{ $numberOfGuests }} @lang('modules.reservation.guests')</span>
+                    <svg class="ms-3 h-2.5 w-2.5 shrink-0 transition-transform" :class="{ 'rotate-180': open }" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
                     </svg>
                 </button>
 
-                <!-- Dropdown menu -->
-                <div wire:key='reservation-date-2' id="dropdownHover2" class="z-10 hidden bg-white divide-y divide-gray-100 rounded-lg shadow w-full dark:bg-gray-700 max-w-60">
-                    <ul class="py-2 text-gray-700 dark:text-gray-200 max-h-72 overflow-auto" aria-labelledby="dropdownHoverButton2">
+                <div x-show="open"
+                    x-cloak
+                    @click.outside="open = false"
+                    class="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
+                    <ul class="text-gray-700 dark:text-gray-200">
                         @for ($i = 1; $i <= 30; $i++)
                             <li>
-                                <a href="javascript:;" wire:click="setReservationGuest('{{ $i }}')" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white text-md">
+                                <button type="button"
+                                    wire:click="setReservationGuest('{{ $i }}')"
+                                    @click="open = false"
+                                    class="block w-full px-4 py-2 text-start text-sm hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white">
                                     {{ $i }} @lang('modules.reservation.guests')
-                                </a>
+                                </button>
                             </li>
                         @endfor
                     </ul>
@@ -77,46 +85,56 @@
             </div>
 
             {{-- Slot Type Selection --}}
-            <div class="relative">
-                <button wire:key='reservation-date-3' id="dropdownHoverButton3" data-dropdown-toggle="dropdownHover3" data-dropdown-trigger="click" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-lg text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150 w-full justify-between" type="button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clock mr-2" viewBox="0 0 16 16">
+            @php
+                $slotTypes = \App\Livewire\Shop\BookATable::SLOT_TYPES;
+                $selectedDay = 'Unknown';
+                try {
+                    if (!empty($date) && strtotime($date)) {
+                        $selectedDay = \Carbon\Carbon::parse($date)->format('l');
+                    }
+                } catch (\Exception $e) {
+                    $selectedDay = 'Unknown';
+                }
+            @endphp
+            <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false">
+                <button type="button"
+                    @click="open = !open"
+                    :aria-expanded="open"
+                    class="inline-flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs text-gray-700 shadow-sm transition ease-in-out duration-150 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-25 dark:border-gray-500 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clock mr-2 shrink-0" viewBox="0 0 16 16" aria-hidden="true">
                         <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/>
                         <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/>
                     </svg>
 
-                    @lang('modules.reservation.' . $slotType)
-                    <svg class="w-2.5 h-2.5 ms-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                    <span>@lang('modules.reservation.' . $slotType)</span>
+                    <svg class="ms-3 h-2.5 w-2.5 shrink-0 transition-transform" :class="{ 'rotate-180': open }" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
                     </svg>
                 </button>
 
-                <!-- Dropdown menu -->
-                <div wire:key='reservation-date-3' id="dropdownHover3" class="z-10 hidden bg-white divide-y divide-gray-100 rounded-lg shadow w-full dark:bg-gray-700 max-w-60">
-                    <ul class="py-2 text-gray-700 dark:text-gray-200 max-h-72 overflow-auto" aria-labelledby="dropdownHoverButton3">
-                        @php
-                            $slotTypes = \App\Livewire\Shop\BookATable::SLOT_TYPES;
-                            $selectedDay = 'Unknown';
-                            try {
-                                if (!empty($date) && strtotime($date)) {
-                                    $selectedDay = \Carbon\Carbon::parse($date)->format('l');
-                                }
-                            } catch (\Exception $e) {
-                                $selectedDay = 'Unknown';
-                            }
-                        @endphp
+                <div x-show="open"
+                    x-cloak
+                    @click.outside="open = false"
+                    class="absolute left-0 right-0 top-full z-20 mt-1 rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-600 dark:bg-gray-700">
+                    <ul class="text-gray-700 dark:text-gray-200">
                         @foreach($slotTypes as $type)
                             @php
                                 $isSlotTypeDisabled = !isset($availableSlotTypes[$type]) || !in_array($selectedDay, $availableSlotTypes[$type] ?? []);
                             @endphp
                             <li>
-                                <a href="javascript:;"
-                                    wire:click="setReservationSlotType('{{ $type }}')"
+                                <button type="button"
+                                    @if (! $isSlotTypeDisabled)
+                                        wire:click="setReservationSlotType('{{ $type }}')"
+                                        @click="open = false"
+                                    @endif
+                                    @disabled($isSlotTypeDisabled)
                                     @class([
-                                        'block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white text-md',
-                                        'opacity-50 bg-gray-50 dark:bg-gray-600' => $isSlotTypeDisabled
+                                        'block w-full px-4 py-2 text-start text-sm',
+                                        'hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white' => ! $isSlotTypeDisabled,
+                                        'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-600' => $isSlotTypeDisabled,
                                     ])>
                                     @lang('modules.reservation.' . $type)
-                                </a>
+                                </button>
                             </li>
                         @endforeach
                     </ul>
@@ -126,7 +144,7 @@
 
         {{-- Time Slots --}}
         <div class="relative">
-            <h4 class="text-xl font-semibold dark:text-white mt-10">@lang('messages.selectTimeSlot')</h4>
+            <h4 class="text-xl font-semibold dark:text-white mt-6">@lang('messages.selectTimeSlot')</h4>
 
             <div wire:loading.class="opacity-50 pointer-events-none" class="mt-2 space-y-2">
                 @if (empty($timeSlots) || !$this->isSlotTypeAvailable())
@@ -155,9 +173,7 @@
                                             $safeTime = '--';
                                             try {
                                                 if (!empty($timeSlot)) {
-                                                    // Get time format from restaurant or use default
                                                     $timeFormat = $restaurant->time_format ?? 'h:i A';
-                                                    // Parse time slot from H:i:s format (database format)
                                                     $timeObj = \Carbon\Carbon::createFromFormat('H:i:s', $timeSlot);
                                                     $safeTime = $timeObj->translatedFormat($timeFormat);
                                                 }
@@ -179,6 +195,172 @@
                 @enderror
             </div>
         </div>
+
+        @if ($branchAreas->isNotEmpty())
+        <div class="relative"
+            wire:key="preferred-areas-{{ $date }}-{{ $slotType }}-{{ $availableTimeSlots }}"
+            x-data="{ areaImageModalOpen: false, areaImageModalSrc: '', areaImageModalTitle: '' }"
+            @keydown.escape.window="areaImageModalOpen = false">
+            <h4 class="text-xl font-semibold dark:text-white mt-6">@lang('modules.reservation.selectPreferredArea')</h4>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">@lang('modules.reservation.selectPreferredAreaHelp')</p>
+            @if (empty($availableTimeSlots))
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">@lang('modules.reservation.selectTimeForTableAvailability')</p>
+            @endif
+
+            <ul class="mt-3 grid w-full items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <li wire:key="area-preference-none">
+                    <input type="radio" id="areaPreferenceNone" wire:model.live="selectedAreaId" value="" class="hidden peer" />
+                    <label for="areaPreferenceNone"
+                        @class([
+                            'flex min-h-[8.75rem] cursor-pointer flex-col rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800',
+                            'peer-checked:border-skin-base peer-checked:ring-2 peer-checked:ring-skin-base/30',
+                            'hover:bg-gray-50 dark:hover:bg-gray-700',
+                        ])>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">@lang('modules.reservation.noAreaPreference')</span>
+                        <span class="mt-1 text-xs font-medium text-gray-600 dark:text-gray-300">@lang('modules.reservation.noAreaPreferenceScope')</span>
+                        <span class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">@lang('modules.reservation.noAreaPreferenceSeats')</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">@lang('modules.reservation.noAreaPreferenceAssign')</span>
+                        <span class="mt-2 inline-flex min-h-[1.25rem] items-center text-xs text-gray-400 dark:text-gray-500">@lang('modules.reservation.noAreaPreferenceHelp')</span>
+                    </label>
+                </li>
+                @foreach ($branchAreas as $area)
+                @php
+                    $areaTables = $area->tables;
+                    $hasSelectedTime = filled($availableTimeSlots);
+                    $availableAreaTables = $hasSelectedTime
+                        ? $areaTables->reject(fn ($table) => in_array($table->id, $reservedTableIds, true))
+                        : $areaTables;
+                    $minSeats = $availableAreaTables->min('seating_capacity');
+                    $maxSeats = $availableAreaTables->max('seating_capacity');
+                    $totalSeats = $availableAreaTables->sum('seating_capacity');
+                    $availableTableCount = $availableAreaTables->count();
+                @endphp
+                <li wire:key="area-preference-{{ $area->id }}-{{ $date }}-{{ $availableTimeSlots }}" x-data="{ showTables: false }">
+                    <input type="radio" id="areaPreference{{ $area->id }}" wire:model.live="selectedAreaId" value="{{ $area->id }}" class="hidden peer" />
+                    <label for="areaPreference{{ $area->id }}"
+                        @class([
+                            'flex min-h-[8.75rem] cursor-pointer flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800',
+                            'peer-checked:border-skin-base peer-checked:ring-2 peer-checked:ring-skin-base/30',
+                            'hover:bg-gray-50 dark:hover:bg-gray-700',
+                        ])>
+                        @if ($area->area_photo_url)
+                            <button type="button"
+                                @click.stop="areaImageModalSrc = @js($area->area_photo_url); areaImageModalTitle = @js($area->area_name); areaImageModalOpen = true"
+                                class="group relative -mx-4 -mt-4 mb-3 block w-[calc(100%+2rem)] cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-skin-base focus:ring-inset"
+                                aria-label="{{ trans('modules.reservation.viewAreaImage', ['area' => $area->area_name]) }}">
+                                <img src="{{ $area->area_photo_url }}" alt="{{ $area->area_name }}" class="h-28 w-full object-cover transition-opacity group-hover:opacity-90">
+                                <span class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
+                                    <svg class="h-9 w-9 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/>
+                                    </svg>
+                                </span>
+                            </button>
+                        @endif
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ $area->area_name }}</span>
+                        <span class="mt-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                            @if ($hasSelectedTime)
+                                {{ trans('modules.reservation.areaTableCount', ['count' => $availableTableCount]) }}
+                            @else
+                                {{ trans('modules.reservation.areaTableCount', ['count' => $area->tables_count]) }}
+                            @endif
+                        </span>
+                        @if ($areaTables->isNotEmpty())
+                            @if ($hasSelectedTime && $availableAreaTables->isNotEmpty())
+                                <span class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                    @if ($minSeats === $maxSeats)
+                                        {{ trans('modules.reservation.areaSeatsUniform', ['seats' => $minSeats]) }}
+                                    @else
+                                        {{ trans('modules.reservation.areaSeatsRange', ['min' => $minSeats, 'max' => $maxSeats]) }}
+                                    @endif
+                                </span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ trans('modules.reservation.areaTotalSeats', ['total' => $totalSeats]) }}
+                                </span>
+                            @elseif (! $hasSelectedTime)
+                                <span class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                    @if ($minSeats === $maxSeats)
+                                        {{ trans('modules.reservation.areaSeatsUniform', ['seats' => $areaTables->min('seating_capacity')]) }}
+                                    @else
+                                        {{ trans('modules.reservation.areaSeatsRange', ['min' => $areaTables->min('seating_capacity'), 'max' => $areaTables->max('seating_capacity')]) }}
+                                    @endif
+                                </span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ trans('modules.reservation.areaTotalSeats', ['total' => $areaTables->sum('seating_capacity')]) }}
+                                </span>
+                            @elseif ($hasSelectedTime && $availableAreaTables->isEmpty())
+                                <span class="mt-0.5 text-xs text-red-600 dark:text-red-400">@lang('modules.reservation.areaFullyReserved')</span>
+                            @endif
+                            <button type="button"
+                                @click.stop="showTables = !showTables"
+                                class="mt-2 inline-flex min-h-[1.25rem] w-fit items-center text-xs font-medium text-skin-base hover:underline">
+                                <span x-show="!showTables">@lang('modules.reservation.viewAreaTables')</span>
+                                <span x-show="showTables" x-cloak>@lang('modules.reservation.hideAreaTables')</span>
+                                <svg class="ms-1 h-3 w-3 transition-transform" :class="{ 'rotate-180': showTables }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                            <ul x-show="showTables" x-cloak x-collapse
+                                class="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-2 dark:border-gray-600 dark:bg-gray-900/40">
+                                @foreach ($areaTables as $table)
+                                @php
+                                    $tableReserved = $hasSelectedTime && in_array($table->id, $reservedTableIds, true);
+                                @endphp
+                                <li @class([
+                                    'flex items-center justify-between gap-2 text-xs',
+                                    'text-gray-400 line-through dark:text-gray-500' => $tableReserved,
+                                    'text-gray-600 dark:text-gray-400' => ! $tableReserved,
+                                ])>
+                                    <span @class([
+                                        'font-medium',
+                                        'text-gray-500 dark:text-gray-500' => $tableReserved,
+                                        'text-gray-800 dark:text-gray-200' => ! $tableReserved,
+                                    ])>{{ $table->table_code }}</span>
+                                    <span class="flex shrink-0 items-center gap-2">
+                                        @if ($tableReserved)
+                                            <span class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">@lang('modules.reservation.tableAlreadyReserved')</span>
+                                        @endif
+                                        <span>{{ trans('modules.reservation.tableSeats', ['seats' => $table->seating_capacity]) }}</span>
+                                    </span>
+                                </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </label>
+                </li>
+                @endforeach
+            </ul>
+            @error('selectedAreaId')
+                <div class="p-2 mt-2 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
+                    {{ $message }}
+                </div>
+            @enderror
+
+            {{-- Area image lightbox --}}
+            <div x-show="areaImageModalOpen"
+                x-cloak
+                x-transition.opacity
+                class="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-8 bg-black/75"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="areaImageModalTitle"
+                @click="areaImageModalOpen = false">
+                <div class="relative flex w-full max-w-4xl max-h-[90vh] flex-col" @click.stop>
+                    <button type="button"
+                        @click="areaImageModalOpen = false"
+                        class="absolute -top-2 right-0 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow hover:bg-white sm:-top-12"
+                        aria-label="{{ __('app.close') }}">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    <img :src="areaImageModalSrc"
+                        :alt="areaImageModalTitle"
+                        class="max-h-[calc(90vh-3rem)] w-full rounded-lg object-contain shadow-2xl">
+                    <p class="mt-3 text-center text-sm font-medium text-white" x-text="areaImageModalTitle"></p>
+                </div>
+            </div>
+        </div>
+        @endif
 
         {{-- Reservation Form (only shown when slots are available) --}}
         @if (!empty($timeSlots) && $this->isSlotTypeAvailable())

@@ -39,13 +39,12 @@
     @livewire('dashboard.universal-bundle-alert')
 </div>
 
-<!-- Legacy Restaurant Count Cards - Top Section -->
-<div class="grid w-full grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+<!-- Restaurant count metrics: compact row, equal-height cells -->
+<div class="grid w-full grid-cols-1 items-stretch gap-3 p-4 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
     @livewire('dashboard.restaurantCount')
     @livewire('dashboard.totalRestaurantCount')
     @livewire('dashboard.totalFreeRestaurantCount')
     @livewire('dashboard.totalPaidRestaurantCount')
-
 </div>
 <div class="p-4 ">
     @livewire('dashboard.superadmin-system-stats')

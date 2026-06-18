@@ -27,6 +27,8 @@
                 execToCustomerRenderer: null,
                 lastRouteKey: null,
                 mapApiKey: (@js($mapApiKey) || '').trim(),
+                mapProvider: @js($mapProvider ?? 'google'),
+                leafletRouteLine: null,
                 errors: {
                     missingCoordinates: @js(__('messages.trackingCoordinatesMissing')),
                     missingMapKey: @js(__('messages.googleMapKeyMissing')),
@@ -109,7 +111,7 @@
                             throw new Error(this.errors.missingCoordinates);
                         }
 
-                        await this.ensureGoogleMapsLoaded();
+                        await this.ensureMapLibraryLoaded();
                         this.initializeMap();
                         this.renderBranchAndCustomerMarkers();
                         this.renderRouteToCustomer();
@@ -147,6 +149,10 @@
                     this.branchToExecRenderer = null;
                     this.execToCustomerRenderer = null;
                     this.lastRouteKey = null;
+                    if (this.leafletRouteLine && this.map?.removeLayer) {
+                        this.map.removeLayer(this.leafletRouteLine);
+                    }
+                    this.leafletRouteLine = null;
                 },
 
                 normalizeOrderLabel(label) {
@@ -156,6 +162,15 @@
                     value = value.replace(/^#\s*/, '').trim();
 
                     return `#${value}`;
+                },
+
+                async ensureMapLibraryLoaded() {
+                    if (this.mapProvider === 'osm') {
+                        await this.ensureLeafletLoaded();
+                        return;
+                    }
+
+                    await this.ensureGoogleMapsLoaded();
                 },
 
                 async ensureGoogleMapsLoaded() {
@@ -181,6 +196,25 @@
                     await window.__ttGoogleMapsInitPromise;
                 },
 
+                async ensureLeafletLoaded() {
+                    if (window.L?.map) return;
+
+                    if (!document.querySelector('link[data-map-provider="leaflet"]')) {
+                        const leafletCss = document.createElement('link');
+                        leafletCss.rel = 'stylesheet';
+                        leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                        leafletCss.setAttribute('data-map-provider', 'leaflet');
+                        document.head.appendChild(leafletCss);
+                    }
+
+                    await new Promise((resolve) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                        script.onload = () => resolve();
+                        document.head.appendChild(script);
+                    });
+                },
+
                 initializeMap() {
                     if (this.map) {
                         this.isMapReady = true;
@@ -192,18 +226,40 @@
                         throw new Error('Map container is not available.');
                     }
 
-                    this.map = new google.maps.Map(mapElement, {
-                        center: { lat: this.branchLat, lng: this.branchLng },
-                        zoom: 14,
-                        streetViewControl: false,
-                        mapTypeControl: false
-                    });
+                    if (this.mapProvider === 'osm') {
+                        this.map = L.map(mapElement).setView([this.branchLat, this.branchLng], 14);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }).addTo(this.map);
+                    } else {
+                        this.map = new google.maps.Map(mapElement, {
+                            center: { lat: this.branchLat, lng: this.branchLng },
+                            zoom: 14,
+                            streetViewControl: false,
+                            mapTypeControl: false
+                        });
+                    }
                     this.isMapReady = true;
                 },
 
                 renderBranchAndCustomerMarkers() {
                     const branchPos = { lat: this.branchLat, lng: this.branchLng };
                     const customerPos = { lat: this.customerLat, lng: this.customerLng };
+                    if (this.mapProvider === 'osm') {
+                        if (!this.branchMarker) {
+                            this.branchMarker = L.marker([branchPos.lat, branchPos.lng], { title: 'Branch' }).addTo(this.map);
+                        } else {
+                            this.branchMarker.setLatLng([branchPos.lat, branchPos.lng]);
+                        }
+
+                        if (!this.customerMarker) {
+                            this.customerMarker = L.marker([customerPos.lat, customerPos.lng], { title: 'Customer' }).addTo(this.map);
+                        } else {
+                            this.customerMarker.setLatLng([customerPos.lat, customerPos.lng]);
+                        }
+                        return;
+                    }
+
                     const branchIcon = {
                         url: this.svgDataUrl('restaurant'),
                         scaledSize: new google.maps.Size(34, 34),
@@ -242,6 +298,15 @@
 
                 renderExecutiveMarker() {
                     const execPos = { lat: this.executiveLat, lng: this.executiveLng };
+                    if (this.mapProvider === 'osm') {
+                        if (!this.executiveMarker) {
+                            this.executiveMarker = L.marker([execPos.lat, execPos.lng], { title: 'Delivery Executive' }).addTo(this.map);
+                        } else {
+                            this.executiveMarker.setLatLng([execPos.lat, execPos.lng]);
+                        }
+                        return;
+                    }
+
                     const executiveIcon = {
                         url: this.svgDataUrl('bike'),
                         scaledSize: new google.maps.Size(42, 42),
@@ -298,6 +363,34 @@
                     const executivePoint = { lat: this.executiveLat, lng: this.executiveLng };
                     const pathToExecutive = this.samplePathPoints(this.executivePath, 20);
                     const routeKey = `${this.branchLat},${this.branchLng}|${pathToExecutive.map((p) => `${p.lat},${p.lng}`).join(';')}|${executivePoint.lat},${executivePoint.lng}|${this.customerLat},${this.customerLng}`;
+
+                    if (this.mapProvider === 'osm') {
+                        if (this.lastRouteKey === routeKey && this.leafletRouteLine) {
+                            return;
+                        }
+
+                        const pathPoints = [
+                            [this.branchLat, this.branchLng],
+                            ...pathToExecutive.map((p) => [p.lat, p.lng]),
+                            [executivePoint.lat, executivePoint.lng],
+                            [this.customerLat, this.customerLng],
+                        ];
+
+                        if (this.leafletRouteLine) {
+                            this.map.removeLayer(this.leafletRouteLine);
+                        }
+
+                        this.leafletRouteLine = L.polyline(pathPoints, {
+                            color: '#0ea5e9',
+                            weight: 6,
+                            opacity: 0.9
+                        }).addTo(this.map);
+
+                        const bounds = L.latLngBounds(pathPoints);
+                        this.map.fitBounds(bounds, { padding: [20, 20] });
+                        this.lastRouteKey = routeKey;
+                        return;
+                    }
 
                     if (this.lastRouteKey === routeKey && (this.directionsRenderer || this.pathPolyline)) {
                         return;

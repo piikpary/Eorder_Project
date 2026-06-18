@@ -3,6 +3,7 @@
 namespace App\Livewire\Profile;
 
 use App\Models\Country;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\UpdatesUserProfileInformation;
 use Laravel\Jetstream\Http\Livewire\UpdateProfileInformationForm as JetstreamUpdateProfileInformationForm;
@@ -10,6 +11,7 @@ use Laravel\Jetstream\Http\Livewire\UpdateProfileInformationForm as JetstreamUpd
 class UpdateProfileInformationForm extends JetstreamUpdateProfileInformationForm
 {
     public $phoneCode;
+    public $phoneCodeDetected = false;
     public $phoneCodeSearch = '';
     public $phoneCodeIsOpen = false;
     public $allPhoneCodes;
@@ -34,6 +36,13 @@ class UpdateProfileInformationForm extends JetstreamUpdateProfileInformationForm
         // Initialize phone codes
         $this->allPhoneCodes = collect(Country::pluck('phonecode')->unique()->filter()->values());
         $this->filteredPhoneCodes = $this->allPhoneCodes;
+
+        $detectedPhoneCode = (new User())->getPhoneCodeFromIp();
+        $this->phoneCodeDetected = empty($this->state['phone_code']) && !empty($detectedPhoneCode);
+        if ($this->phoneCodeDetected) {
+            $this->phoneCode = $detectedPhoneCode;
+            $this->state['phone_code'] = $detectedPhoneCode;
+        }
     }
 
     public function updatedPhoneCodeIsOpen($value)

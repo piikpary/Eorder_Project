@@ -2,53 +2,60 @@
 
 namespace App\Livewire\Table;
 
-use App\Models\Area;
-use App\Models\Table;
-use App\Models\Order;
-use App\Models\User;
-use App\Scopes\BranchScope;
-use Livewire\Component;
 use App\Models\Reservation;
-use Livewire\Attributes\On;
-use Jantinnerezo\LivewireAlert\LivewireAlert;
+use App\Models\ReservationSetting;
+use App\Models\Order;
+use App\Models\Table;
+use App\Models\User;
+use App\Services\Pos\PosWaitersCache;
+use App\Services\Tables\TablesIndexCache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Jantinnerezo\LivewireAlert\LivewireAlert;
+use Livewire\Attributes\On;
+use Livewire\Component;
 
 class Tables extends Component
 {
-
     use LivewireAlert;
 
     public $activeTable;
-    public $areaID = null;
+
     public $showAddTableModal = false;
+
     public $showEditTableModal = false;
+
     public $confirmDeleteTableModal = false;
+
     public $showAssignWaiterModal = false;
+
     public $showUpdateWaiterModal = false;
+
     public $showUpdateConfirmationModal = false;
+
     public $selectedTableId = null;
+
     public $selectedTable = null;
+
     public $currentWaiter = null;
-    public $filterAvailable = null;
-    public $viewType = 'list';
+
     public $reservations;
+
     public $reservedTables;
+
     public $timeSlotDifference;
+
     public $existingAssignment = false;
 
     protected $listeners = [
         'tableLockUpdated' => 'handleTableLockUpdate',
-        'refreshTables' => '$refresh'
+        'refreshTables' => '$refresh',
     ];
 
     public function mount()
     {
-        // Get the saved view type from session, default to 'list' if not set
-        $this->viewType = session('table_view_type', 'list');
         $this->reservations = Reservation::where('table_id', '!=', null)->get();
-        // dd($this->reservations);
         $this->reservedTables = $this->reservations->pluck('table_id', 'reservation_date_time', 'reservation_status');
-        // dd($this->reservedTables);
 
         $this->refreshDataWithCleanup();
     }
@@ -68,20 +75,6 @@ class Tables extends Component
     public function handleTableLockUpdate()
     {
         $this->refreshDataWithCleanup();
-    }
-
-    public function updatedViewType($value)
-    {
-        $this->refreshDataWithCleanup();
-
-        // Save the view type preference to session whenever it changes
-        session(['table_view_type' => $value]);
-    }
-
-    #[On('refreshTables')]
-    public function refreshTables()
-    {
-        $this->render();
     }
 
     #[On('hideAddTable')]
@@ -104,22 +97,21 @@ class Tables extends Component
 
     public function showTableOrder($id)
     {
-        // Check if table is locked before allowing access
         $table = Table::find($id);
 
-        if ($table && !$table->canBeAccessedByUser(user()->id)) {
+        if ($table && ! $table->canBeAccessedByUser(user()->id)) {
             $session = $table->tableSession;
             $lockedByUser = $session?->lockedByUser;
             $lockedUserName = $lockedByUser?->name ?? 'Admin';
 
             $this->alert('error', __('messages.tableLockedByUser', ['user' => $lockedUserName]), [
                 'toast' => true,
-                'position' => 'top-end'
+                'position' => 'top-end',
             ]);
+
             return;
         }
 
-        // Full navigation so POS @push('scripts') runs and window.posState / AJAX handlers exist.
         return $this->redirect(route('pos.show', $id));
     }
 
@@ -128,31 +120,63 @@ class Tables extends Component
         return $this->redirect(route('pos.order', [$id]));
     }
 
+    public function showSpecificOrder($orderId)
+    {
+        $order = Order::query()->find((int) $orderId);
+
+        if (! $order) {
+            $this->alert('error', __('messages.orderNotFound'), [
+                'toast' => true,
+                'position' => 'top-end',
+            ]);
+
+            return;
+        }
+
+        return $this->redirect(route('pos.kot', ['id' => $order->id, 'show-order-detail' => 'true']));
+    }
+
+    public function newKotForSpecificOrder($orderId)
+    {
+        $order = Order::query()->find((int) $orderId);
+
+        if (! $order) {
+            $this->alert('error', __('messages.orderNotFound'), [
+                'toast' => true,
+                'position' => 'top-end',
+            ]);
+
+            return;
+        }
+
+        return $this->redirect(route('pos.kot', ['id' => $order->id]));
+    }
+
     public function forceUnlockTable($tableId)
     {
         $table = Table::find($tableId);
 
-        if (!$table) {
+        if (! $table) {
             $this->alert('error', __('messages.tableNotFound'), [
                 'toast' => true,
-                'position' => 'top-end'
+                'position' => 'top-end',
             ]);
+
             return;
         }
 
-        // Check permissions in one condition
-        $hasPermission = user()->hasRole('Admin_' . user()->restaurant_id) ||
+        $hasPermission = user()->hasRole('Admin_'.user()->restaurant_id) ||
                         ($table->tableSession && $table->tableSession->locked_by_user_id == user()->id);
 
-        if (!$hasPermission) {
+        if (! $hasPermission) {
             $this->alert('error', __('messages.tableUnlockFailed'), [
                 'toast' => true,
-                'position' => 'top-end'
+                'position' => 'top-end',
             ]);
+
             return;
         }
 
-        // Force unlock and handle result
         $result = $table->unlock(null, true);
 
         $this->alert(
@@ -172,13 +196,11 @@ class Tables extends Component
         $this->selectedTable = Table::find($tableId);
         $this->currentWaiter = $this->selectedTable?->activeOrder?->waiter_id;
 
-        // Check for existing active assignment
         $existingAssignment = DB::table('assign_waiter_to_tables')
             ->where('table_id', $tableId)
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // Show appropriate modal based on existing assignment
         if ($existingAssignment) {
             $this->existingAssignment = true;
             $this->showUpdateWaiterModal = true;
@@ -187,7 +209,6 @@ class Tables extends Component
             $this->showAssignWaiterModal = true;
         }
     }
-
 
     #[On('waiterAssigned')]
     public function handleWaiterAssigned()
@@ -210,17 +231,14 @@ class Tables extends Component
 
     public function showUpdateConfirmation()
     {
-        // Close update modal and show confirmation modal
         $this->showUpdateWaiterModal = false;
         $this->showUpdateConfirmationModal = true;
     }
 
     public function confirmUpdateWaiter()
     {
-        // Close confirmation modal - the component will handle the update
         $this->showUpdateConfirmationModal = false;
         $this->showUpdateWaiterModal = true;
-        // Dispatch event to trigger update in the component
         $this->dispatch('confirmUpdate');
     }
 
@@ -229,97 +247,104 @@ class Tables extends Component
         if ($this->currentWaiter) {
             return User::find($this->currentWaiter);
         }
+
         return null;
     }
 
     public function refreshDataWithCleanup()
     {
         try {
-            // First, clean up expired locks and get the result
-            \App\Models\Table::cleanupExpiredLocks();
-            // Then refresh the data
+            Table::cleanupExpiredLocks();
             $this->refreshData();
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('SetTable: Error in refreshDataWithCleanup', [
+            Log::error('SetTable: Error in refreshDataWithCleanup', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
         }
     }
 
+    /**
+     * @param  array{areas: array<int, array<string, mixed>>}  $payload
+     * @return array{areas: array<int, array<string, mixed>>}
+     */
+    private function filterPayloadForWaiter(array $payload): array
+    {
+        $user = user();
+        if (! $user || ! $user->hasRole('Waiter_'.$user->restaurant_id)) {
+            return $payload;
+        }
+
+        // Scope waiter assignments to tables visible in this payload (current branch).
+        // Without this, assignments from other branches can produce an empty board.
+        $payloadTableIds = collect($payload['areas'] ?? [])
+            ->flatMap(fn ($area) => collect($area['tables'] ?? [])->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($payloadTableIds === []) {
+            return $payload;
+        }
+
+        $today = now()->format('Y-m-d');
+        $assignedTableIds = DB::table('assign_waiter_to_tables')
+            ->where(function ($q) use ($user) {
+                $q->where('waiter_id', $user->id)
+                    ->orWhere('backup_waiter_id', $user->id);
+            })
+            ->whereIn('table_id', $payloadTableIds)
+            ->where('is_active', true)
+            ->where('effective_from', '<=', $today)
+            ->where(function ($q) use ($today) {
+                $q->whereNull('effective_to')
+                    ->orWhere('effective_to', '>=', $today);
+            })
+            ->pluck('table_id')
+            ->map(fn ($id) => (int) $id)
+            ->toArray();
+
+        if ($assignedTableIds === []) {
+            return $payload;
+        }
+
+        $areasOut = [];
+        foreach ($payload['areas'] as $area) {
+            $tables = array_values(array_filter($area['tables'], function (array $t) use ($assignedTableIds) {
+                return in_array((int) $t['id'], $assignedTableIds, true);
+            }));
+            if ($tables !== []) {
+                $areasOut[] = [
+                    'id' => $area['id'],
+                    'area_name' => $area['area_name'],
+                    'tables' => $tables,
+                ];
+            }
+        }
+
+        return ['areas' => $areasOut];
+    }
+
     public function render()
     {
-        // Get assigned table IDs if logged in user is a waiter
-        $assignedTableIds = null;
-        $user = user();
-        if ($user && $user->hasRole('Waiter_' . $user->restaurant_id)) {
-            $today = now()->format('Y-m-d');
-            $assignedTableIds = DB::table('assign_waiter_to_tables')
-                ->where(function ($q) use ($user) {
-                    $q->where('waiter_id', $user->id)
-                        ->orWhere('backup_waiter_id', $user->id);
-                })
-                ->where('is_active', true)
-                ->where('effective_from', '<=', $today)
-                ->where(function ($q) use ($today) {
-                    $q->whereNull('effective_to')
-                        ->orWhere('effective_to', '>=', $today);
-                })
-                ->pluck('table_id')
-                ->toArray();
+        $branchId = (int) branch()->id;
+        $payload = TablesIndexCache::get($branchId);
+        $tablesPayload = $this->filterPayloadForWaiter($payload);
 
-            // If waiter has no assigned tables, show all tables
-            if (empty($assignedTableIds)) {
-                $assignedTableIds = null;
-            }
-        }
+        $waiters = PosWaitersCache::remember((int) restaurant()->id, $branchId)
+            ->map(fn (User $w) => ['id' => $w->id, 'name' => $w->name])
+            ->values()
+            ->all();
 
-        $query = Area::with(['tables' => function ($query) use ($assignedTableIds) {
-            if (!is_null($this->filterAvailable)) {
-                $query->where('available_status', $this->filterAvailable);
-            }
+        $tableIds = collect($tablesPayload['areas'])->flatMap(fn ($a) => collect($a['tables'])->pluck('id'))->all();
 
-            // If user is a waiter, only show assigned tables
-            if (!is_null($assignedTableIds)) {
-                if (empty($assignedTableIds)) {
-                    // Waiter has no assigned tables, return empty result
-                    $query->whereRaw('1 = 0');
-                } else {
-                    $query->whereIn('id', $assignedTableIds);
-                }
-            }
-        }, 'tables.activeOrder', 'tables.tableSession.lockedByUser']);
-
-        if (!is_null($this->areaID)) {
-            $query = $query->where('id', $this->areaID);
-        }
-
-        $query = $query->get();
-
-        // Filter out areas that have no tables after waiter filtering
-        if (!is_null($assignedTableIds)) {
-            $query = $query->map(function($area) use ($assignedTableIds) {
-                $area->setRelation('tables', $area->tables->filter(function($table) use ($assignedTableIds) {
-                    return in_array($table->id, $assignedTableIds);
-                }));
-                return $area;
-            })->filter(function($area) {
-                return $area->tables->count() > 0;
-            });
-        }
-
-        // Get all table IDs to check for reservations
-        $tableIds = $query->flatMap(function($area) {
-            return $area->tables->pluck('id');
-        });
-
-        // Get reservations for these tables
         $tableReservations = $this->reservations->whereIn('table_id', $tableIds)
             ->keyBy('table_id')
-            ->map(function($reservation) {
-                // Get the time slot difference for this reservation's slot type
-                $timeSlotDifference = \App\Models\ReservationSetting::where('slot_type', $reservation->reservation_slot_type)->first();
+            ->map(function ($reservation) {
+                $timeSlotDifference = ReservationSetting::where('slot_type', $reservation->reservation_slot_type)->first();
 
                 $dateFormat = restaurant()->date_format ?? dateFormat();
                 $timeFormat = restaurant()->time_format ?? timeFormat();
@@ -327,31 +352,53 @@ class Tables extends Component
                 return [
                     'date' => $reservation->reservation_date_time->translatedFormat($dateFormat),
                     'time' => $reservation->reservation_date_time->translatedFormat($timeFormat),
-                    'datetime' => $reservation->reservation_date_time->translatedFormat($dateFormat . ' ' . $timeFormat),
+                    'datetime' => $reservation->reservation_date_time->translatedFormat($dateFormat.' '.$timeFormat),
                     'status' => $reservation->reservation_status,
                     'reservation_slot_type' => $reservation->reservation_slot_type,
-                    'timeSlotDifference' => $timeSlotDifference ? $timeSlotDifference->time_slot_difference : null
+                    'timeSlotDifference' => $timeSlotDifference ? $timeSlotDifference->time_slot_difference : null,
                 ];
             });
 
-        // Load waiters for the restaurant
-        $waiters = cache()->remember('waiters_' . restaurant()->id, 60 * 60 * 24, function () {
-            return User::withoutGlobalScope(BranchScope::class)
-                ->where(function ($q) {
-                    return $q->where('branch_id', branch()->id)
-                        ->orWhereNull('branch_id');
-                })
-                ->role('waiter_' . restaurant()->id)
-                ->where('restaurant_id', restaurant()->id)
-                ->get();
-        });
-
         return view('livewire.table.tables', [
-            'tables' => $query,
-            'areas' => Area::get(),
+            'tablesPayload' => $tablesPayload,
+            'tablesPayloadSignature' => hash('xxh128', (string) json_encode($tablesPayload, JSON_INVALID_UTF8_SUBSTITUTE)),
+            'areasList' => collect($payload['areas'])->map(fn ($a) => ['id' => $a['id'], 'area_name' => $a['area_name']])->values()->all(),
             'tableReservations' => $tableReservations,
-            'waiters' => $waiters
+            'waiters' => $waiters,
+            'authUserId' => (int) user()->id,
+            'isRestaurantAdmin' => user()->hasRole('Admin_'.user()->restaurant_id),
+            'isWaiterRole' => user()->hasRole('Waiter_'.user()->restaurant_id),
+            'canCreateTable' => user_can('Create Table'),
+            'canUpdateTable' => user_can('Update Table'),
+            'canShowOrder' => user_can('Show Order'),
+            'canCreateOrder' => user_can('Create Order'),
+            'tablesUi' => [
+                'list' => __('app.list'),
+                'grid' => __('app.grid'),
+                'layout' => __('app.layout'),
+                'filterAvailable' => __('modules.table.filterAvailable'),
+                'showing' => __('app.showing'),
+                'showAll' => __('app.showAll'),
+                'available' => __('modules.table.available'),
+                'running' => __('modules.table.running'),
+                'reserved' => __('modules.table.reserved'),
+                'allAreas' => __('modules.table.allAreas'),
+                'tableView' => __('modules.table.tableView'),
+                'addTable' => __('modules.table.addTable'),
+                'seats' => __('modules.table.seats'),
+                'inactive' => __('app.inactive'),
+                'kot' => __('modules.order.kot'),
+                'orderNumber' => __('modules.order.orderNumber'),
+                'pax' => __('modules.order.noOfPax'),
+                'remaining' => __('modules.order.remaining'),
+                'assignWaiter' => __('modules.table.assignWaiter'),
+                'showOrder' => __('modules.order.showOrder'),
+                'newKot' => __('modules.order.newKot'),
+                'awaitingPayment' => __('modules.order.infobilled'),
+                'lockedByYou' => __('modules.table.lockedByYou'),
+                'forceUnlock' => __('modules.table.forceUnlock'),
+                'locked' => __('modules.table.locked'),
+            ],
         ]);
     }
-
 }

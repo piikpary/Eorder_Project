@@ -9,6 +9,12 @@ use App\Models\LanguageSetting;
 
 class LanguageSwitcher extends Component
 {
+    public string $variant = 'navbar';
+
+    public function mount(string $variant = 'navbar'): void
+    {
+        $this->variant = $variant;
+    }
 
     public function setLanguage($locale)
     {

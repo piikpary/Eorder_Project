@@ -1,4 +1,11 @@
-<div x-data="{ addAreaOpen: false, openAddArea() { this.addAreaOpen = true }, closeAddArea() { this.addAreaOpen = false } }">
+<div x-data="{
+    addAreaOpen: false,
+    openAddArea() { this.addAreaOpen = true },
+    closeAddArea() { this.addAreaOpen = false },
+    areaImageModalOpen: false,
+    areaImageModalSrc: '',
+    areaImageModalTitle: '',
+}">
     <div class="p-4 bg-white block sm:flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
         <div class="w-full mb-1">
             <div class="mb-4">
@@ -40,8 +47,20 @@
                             @forelse ($areas as $item)
                             <tr class="hover:bg-gray-100 dark:hover:bg-gray-700" wire:key='menu-item-{{ $item->id . microtime() }}' wire:loading.class.delay='opacity-10'>
 
-                                <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
-                                    {{ $item->area_name }}
+                                <td class="py-2.5 px-4 text-sm text-gray-900 dark:text-white">
+                                    <div class="flex items-center gap-3">
+                                        @if ($item->image)
+                                            <button type="button"
+                                                @click.stop="areaImageModalSrc = @js($item->area_photo_url); areaImageModalTitle = @js($item->area_name); areaImageModalOpen = true"
+                                                class="group shrink-0 cursor-zoom-in rounded-md focus:outline-none focus:ring-2 focus:ring-skin-base focus:ring-offset-2"
+                                                aria-label="{{ trans('modules.reservation.viewAreaImage', ['area' => $item->area_name]) }}">
+                                                <img src="{{ $item->area_photo_url }}" alt="{{ $item->area_name }}" class="h-12 w-12 rounded-md object-cover transition-opacity group-hover:opacity-80">
+                                            </button>
+                                        @else
+                                            <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs text-gray-400 dark:bg-gray-700 dark:text-gray-500">—</span>
+                                        @endif
+                                        <span class="font-medium">{{ $item->area_name }}</span>
+                                    </div>
                                 </td>
 
                                 <td class="py-2.5 px-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">{{
@@ -100,7 +119,7 @@
         class="jetstream-modal fixed inset-0 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-0 z-40"
         style="display: none;"
         x-show="addAreaOpen"
-        x-on:keydown.escape.window="closeAddArea()"
+        x-on:keydown.escape.window="if (areaImageModalOpen) { areaImageModalOpen = false } else { closeAddArea() }"
         @close-add-area-modal.window="closeAddArea()"
     >
         <div
@@ -184,5 +203,31 @@
         </x-slot>
     </x-confirmation-modal>
     @endif
+
+    {{-- Area image preview modal --}}
+    <div x-show="areaImageModalOpen"
+        x-cloak
+        x-transition.opacity
+        class="fixed inset-0 z-[50] flex items-center justify-center p-4 sm:p-8 bg-black/75"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="areaImageModalTitle"
+        @click="areaImageModalOpen = false"
+        @keydown.escape.window="areaImageModalOpen = false">
+        <div class="relative flex w-full max-w-4xl max-h-[90vh] flex-col" @click.stop>
+            <button type="button"
+                @click="areaImageModalOpen = false"
+                class="absolute -top-2 right-0 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-700 shadow hover:bg-gray-50 sm:-top-12"
+                aria-label="{{ __('app.close') }}">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+            <img :src="areaImageModalSrc"
+                :alt="areaImageModalTitle"
+                class="max-h-[calc(90vh-3rem)] w-full rounded-lg object-contain shadow-2xl">
+            <p class="mt-3 text-center text-sm font-medium text-white" x-text="areaImageModalTitle"></p>
+        </div>
+    </div>
 
 </div>

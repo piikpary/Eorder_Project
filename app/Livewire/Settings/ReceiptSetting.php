@@ -13,6 +13,7 @@ class ReceiptSetting extends Component
 {
     use LivewireAlert;
     use WithFileUploads;
+
     public $settings;
     public bool $customerName;
     public bool $customerAddress;
@@ -34,28 +35,99 @@ class ReceiptSetting extends Component
     public bool $showPaymentDetails;
     public bool $showPaymentStatus;
     public bool $showOrderType;
+    public array $receiptLanguages = [];
+    public array $availableReceiptLanguages = [];
+
+    public $usdToKhrRate = null;
+    public bool $showKhrOnReceipt = false;
 
     public function mount()
     {
         $this->receiptSetting = branch()->receiptSetting()->first();
-        $this->customerName = (bool)$this->receiptSetting->show_customer_name;
-        $this->customerAddress = (bool)$this->receiptSetting->show_customer_address;
-        $this->customerPhone = (bool)$this->receiptSetting->show_customer_phone;
-        $this->tableNumber = (bool)$this->receiptSetting->show_table_number;
-        $this->showPaymentQrCode = (bool)$this->receiptSetting->show_payment_qr_code;
-        $this->waiter = (bool)$this->receiptSetting->show_waiter;
-        $this->totalGuest = (bool)$this->receiptSetting->show_total_guest;
-        $this->restaurantLogo = (bool)$this->receiptSetting->show_restaurant_logo;
-        $this->showRestaurantName = (bool)$this->receiptSetting->show_restaurant_name;
-        $this->showBranchName = (bool)$this->receiptSetting->show_branch_name;
-        $this->showBranchAddress = (bool)$this->receiptSetting->show_branch_address;
-        $this->restaurantTax = (bool)$this->receiptSetting->show_tax;
-        $this->showCrNumber = (bool)$this->receiptSetting->show_cr_number;
-        $this->showVatNumber = (bool)$this->receiptSetting->show_vat_number;
-        $this->showPaymentDetails = (bool)$this->receiptSetting->show_payment_details;
-        $this->showPaymentStatus = (bool)$this->receiptSetting->show_payment_status;
-        $this->paymentQrCode = $this->receiptSetting->payment_qr_code_url;
-        $this->showOrderType = (bool)$this->receiptSetting->show_order_type;
+
+        $this->availableReceiptLanguages = languages()
+    ->pluck('language_name', 'language_code')
+    ->toArray();
+
+$this->availableReceiptLanguages['en'] =
+    $this->availableReceiptLanguages['en']
+    ?? 'English';
+
+$this->availableReceiptLanguages['km'] =
+    $this->availableReceiptLanguages['km']
+    ?? 'Khmer';
+
+        $this->customerName =
+            (bool) $this->receiptSetting->show_customer_name;
+
+        $this->customerAddress =
+            (bool) $this->receiptSetting->show_customer_address;
+
+        $this->customerPhone =
+            (bool) $this->receiptSetting->show_customer_phone;
+
+        $this->tableNumber =
+            (bool) $this->receiptSetting->show_table_number;
+
+        $this->showPaymentQrCode =
+            (bool) $this->receiptSetting->show_payment_qr_code;
+
+        $this->waiter =
+            (bool) $this->receiptSetting->show_waiter;
+
+        $this->totalGuest =
+            (bool) $this->receiptSetting->show_total_guest;
+
+        $this->restaurantLogo =
+            (bool) $this->receiptSetting->show_restaurant_logo;
+
+        $this->showRestaurantName =
+            (bool) $this->receiptSetting->show_restaurant_name;
+
+        $this->showBranchName =
+            (bool) $this->receiptSetting->show_branch_name;
+
+        $this->showBranchAddress =
+            (bool) $this->receiptSetting->show_branch_address;
+
+        $this->restaurantTax =
+            (bool) $this->receiptSetting->show_tax;
+
+        $this->showCrNumber =
+            (bool) $this->receiptSetting->show_cr_number;
+
+        $this->showVatNumber =
+            (bool) $this->receiptSetting->show_vat_number;
+
+        $this->showPaymentDetails =
+            (bool) $this->receiptSetting->show_payment_details;
+
+        $this->showPaymentStatus =
+            (bool) $this->receiptSetting->show_payment_status;
+
+        $this->paymentQrCode =
+            $this->receiptSetting->payment_qr_code_url;
+
+        $this->showOrderType =
+            (bool) $this->receiptSetting->show_order_type;
+
+        $restaurant = restaurant();
+
+        $this->receiptLanguages =
+            $this->receiptSetting->receipt_languages
+            ?? [
+                $restaurant->receipt_language
+                ?? $restaurant->customer_site_language
+                ?? 'en',
+            ];
+
+        $this->usdToKhrRate =
+            $restaurant->usd_to_khr_rate !== null
+                ? (string) $restaurant->usd_to_khr_rate
+                : null;
+
+        $this->showKhrOnReceipt =
+            (bool) $restaurant->show_khr_on_receipt;
     }
 
     public function updatedPaymentQrCode()
@@ -70,20 +142,29 @@ class ReceiptSetting extends Component
 
         if ($this->paymentQrCode instanceof TemporaryUploadedFile) {
             // Validate image dimensions
-            $imageInfo = @getimagesize($this->paymentQrCode->getRealPath());
+            $imageInfo = @getimagesize(
+                $this->paymentQrCode->getRealPath()
+            );
+
             if ($imageInfo) {
                 $width = $imageInfo[0];
                 $height = $imageInfo[1];
 
-                // Only show error if dimensions are smaller than recommended (200 Ã— 200)
+                // Only show error if dimensions are smaller than recommended (200 × 200)
                 // Images larger than recommended size are acceptable and will not show an error
                 if ($width < 200 || $height < 200) {
-                    $this->addError('paymentQrCode', __('modules.settings.imageDimensionsTooSmall', [
-                        'width' => 200,
-                        'height' => 200,
-                        'currentWidth' => $width,
-                        'currentHeight' => $height
-                    ]));
+                    $this->addError(
+                        'paymentQrCode',
+                        __(
+                            'modules.settings.imageDimensionsTooSmall',
+                            [
+                                'width' => 200,
+                                'height' => 200,
+                                'currentWidth' => $width,
+                                'currentHeight' => $height,
+                            ]
+                        )
+                    );
                 }
             }
         }
@@ -91,6 +172,25 @@ class ReceiptSetting extends Component
 
     public function submitForm()
     {
+        $this->validate([
+            'usdToKhrRate' => $this->showKhrOnReceipt
+                ? [
+                    'required',
+                    'numeric',
+                    'min:1',
+                    'max:99999999',
+                ]
+                : [
+                    'nullable',
+                    'numeric',
+                    'min:1',
+                    'max:99999999',
+                ],
+
+            'showKhrOnReceipt' => [
+                'boolean',
+            ],
+        ]);
 
         $data = [
             'show_customer_name' => $this->customerName,
@@ -112,53 +212,130 @@ class ReceiptSetting extends Component
             'show_order_type' => $this->showOrderType,
         ];
 
-        if ($this->showPaymentQrCode && !$this->paymentQrCode) {
-            $this->addError('paymentQrCode', __('messages.paymentQrCodeRequired'));
+        $selectedReceiptLanguages = $this->receiptLanguages;
+
+        if (count($this->availableReceiptLanguages) > 1) {
+            $validLanguageCodes =
+                array_keys($this->availableReceiptLanguages);
+
+            $selectedReceiptLanguages = array_values(
+                array_intersect(
+                    $validLanguageCodes,
+                    $this->receiptLanguages
+                )
+            );
+
+            if (empty($selectedReceiptLanguages)) {
+                $this->addError(
+                    'receiptLanguages',
+                    __('validation.required', [
+                        'attribute' =>
+                            __('modules.settings.receiptLanguages'),
+                    ])
+                );
+
+                return;
+            }
+
+            $data['receipt_languages'] =
+                $selectedReceiptLanguages;
+        }
+
+        if (
+            $this->showPaymentQrCode &&
+            !$this->paymentQrCode
+        ) {
+            $this->addError(
+                'paymentQrCode',
+                __('messages.paymentQrCodeRequired')
+            );
+
             return;
         }
 
         // Validate QR code dimensions if a new file is provided
-        if ($this->paymentQrCode instanceof TemporaryUploadedFile) {
+        if (
+            $this->paymentQrCode
+            instanceof TemporaryUploadedFile
+        ) {
             $this->validatePaymentQrCode();
 
             // Check if there are validation errors
-            if ($this->getErrorBag()->has('paymentQrCode')) {
+            if (
+                $this->getErrorBag()
+                    ->has('paymentQrCode')
+            ) {
                 return;
             }
         }
 
         // Handle QR Code upload only if a new file is provided
-        if ($this->paymentQrCode instanceof TemporaryUploadedFile) {
-            $data['payment_qr_code'] = Files::uploadLocalOrS3(
-                $this->paymentQrCode,
-                'payment_qr_code',
-                200,
-                200
-            );
+        if (
+            $this->paymentQrCode
+            instanceof TemporaryUploadedFile
+        ) {
+            $data['payment_qr_code'] =
+                Files::uploadLocalOrS3(
+                    $this->paymentQrCode,
+                    'payment_qr_code',
+                    200,
+                    200
+                );
         }
 
         $this->receiptSetting->update($data);
 
+        $restaurant = restaurant();
+
+        $primaryReceiptLanguage =
+            $selectedReceiptLanguages[0]
+            ?? $restaurant->customer_site_language
+            ?? 'en';
+
+        $restaurant->update([
+            'usd_to_khr_rate' =>
+                $this->usdToKhrRate !== null &&
+                $this->usdToKhrRate !== ''
+                    ? $this->usdToKhrRate
+                    : null,
+
+            'show_khr_on_receipt' =>
+                $this->showKhrOnReceipt,
+
+            'receipt_language' =>
+                $primaryReceiptLanguage,
+        ]);
+
         // Refresh the session branch with a fresh DB instance so its cached relationships
         // (receiptSetting, etc.) are cleared everywhere, not just in this component.
-        session(['branch' => Branch::find(branch()->id)]);
+        session([
+            'branch' => Branch::find(branch()->id),
+        ]);
 
-        $this->receiptSetting = $this->receiptSetting->fresh();
-        $this->paymentQrCode = $this->receiptSetting->payment_qr_code_url;
+        $this->receiptSetting =
+            $this->receiptSetting->fresh();
 
+        $this->paymentQrCode =
+            $this->receiptSetting->payment_qr_code_url;
 
         $this->dispatch('settingsUpdated');
 
-        $this->alert('success', __('messages.settingsUpdated'), [
-            'toast' => true,
-            'position' => 'top-end',
-            'showCancelButton' => false,
-            'cancelButtonText' => __('app.close'),
-        ]);
+        $this->alert(
+            'success',
+            __('messages.settingsUpdated'),
+            [
+                'toast' => true,
+                'position' => 'top-end',
+                'showCancelButton' => false,
+                'cancelButtonText' => __('app.close'),
+            ]
+        );
     }
 
     public function render()
     {
-        return view('livewire.settings.receipt-setting');
+        return view(
+            'livewire.settings.receipt-setting'
+        );
     }
 }

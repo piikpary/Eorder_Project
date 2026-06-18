@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Printer;
 use App\Helper\Files;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 
 class PrintJobController extends Controller
@@ -74,6 +75,7 @@ class PrintJobController extends Controller
 
     public function pullMultiple(Request $request)
     {
+        // Log::info('PrintJobController::pullMultiple request', ['request' => $request]);
         $branch = $request->get('branch');
 
         $jobs = PrintJob::with('printer:id,name,printing_choice,print_format,share_name,type')
@@ -123,6 +125,7 @@ class PrintJobController extends Controller
     public function update(Request $request, PrintJob $printJob)
     {
 
+        Log::info('PrintJobController::update printJob', ['printJob' => $printJob]);
         $request->validate([
             'status'      => 'required|in:done,failed',
             'printed_at'  => 'nullable|date',

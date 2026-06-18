@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderStatus;
 use App\Models\Kot;
 use App\Models\KotSetting;
 use App\Events\KotUpdated;
@@ -9,6 +10,16 @@ use App\Services\KotStatusNotificationFeed;
 
 class KotObserver
 {
+    public function created(Kot $kot): void
+    {
+        OrderObserver::forgetTodayKotCountMemoForBranch($kot->branch_id);
+    }
+
+    public function deleted(Kot $kot): void
+    {
+        OrderObserver::forgetTodayKotCountMemoForBranch($kot->branch_id);
+    }
+
     public function creating(Kot $kot)
     {
         if (branch() && $kot->branch_id == null) {
@@ -57,12 +68,14 @@ class KotObserver
             ])
             ->first(['id', 'order_type', 'placed_via', 'order_status']);
 
-        if ($order && !$order->kot->isEmpty()) {
-            $aggregatedOrderStatus = $this->determineOrderStatusFromKots($order->kot, $order);
+        if ($order && !in_array($order->order_status->value, OrderStatus::terminalProgressValues(), true)) {
+            if (!$order->kot->isEmpty()) {
+                $aggregatedOrderStatus = $this->determineOrderStatusFromKots($order->kot, $order);
 
-            // Update order status if it changed (compare with enum value)
-            if ($aggregatedOrderStatus && $order->order_status->value !== $aggregatedOrderStatus) {
-                $order->updateQuietly(['order_status' => $aggregatedOrderStatus]);
+                // Update order status if it changed (compare with enum value)
+                if ($aggregatedOrderStatus && $order->order_status->value !== $aggregatedOrderStatus) {
+                    $order->updateQuietly(['order_status' => $aggregatedOrderStatus]);
+                }
             }
         }
 

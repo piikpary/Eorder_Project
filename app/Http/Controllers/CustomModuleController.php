@@ -20,8 +20,23 @@ class CustomModuleController extends Controller
 {
     use ModuleVerify;
 
+    private function canManageCustomModules(): bool
+    {
+        return user_can('Custom Modules');
+    }
+
     public function index()
     {
+        if (!$this->canManageCustomModules()) {
+            if (request()->ajax()) {
+                return Reply::error(__('messages.customModulesPermissionDeniedMessage'));
+            }
+
+            return view('module-settings.index', [
+                'permissionDenied' => true,
+            ]);
+        }
+
         $this->type = 'custom';
         $this->updateFilePath = config('froiden_envato.tmp_path');
         /** @phpstan-ignore-next-line */
@@ -145,11 +160,14 @@ class CustomModuleController extends Controller
      */
     public function show($id)
     {
+        abort_if(!$this->canManageCustomModules(), 403);
+
         return Reply::dataOnly(['status' => 'success', 'html' => $this->verifyModulePurchase($id)->render()]);
     }
 
     public function update(Request $request, $moduleName)
     {
+        abort_if(!$this->canManageCustomModules(), 403);
 
         /** @phpstan-ignore-next-line */
         $module = Module::findOrFail($moduleName);
@@ -196,6 +214,8 @@ class CustomModuleController extends Controller
 
     public function verifyingModulePurchase(Request $request)
     {
+        abort_if(!$this->canManageCustomModules(), 403);
+
         $request->validate([
             'purchase_code' => 'required|max:80',
         ]);
@@ -281,6 +301,12 @@ class CustomModuleController extends Controller
 
     public function create()
     {
+        if (!$this->canManageCustomModules()) {
+            return view('module-settings.index', [
+                'permissionDenied' => true,
+            ]);
+        }
+
         $this->pageTitle = 'app.menu.moduleSettingsInstall';
         $this->type = 'custom';
         $this->updateFilePath = config('froiden_envato.tmp_path');
@@ -290,6 +316,8 @@ class CustomModuleController extends Controller
 
     public function store(Request $request)
     {
+        abort_if(!$this->canManageCustomModules(), 403);
+
         if (!extension_loaded('zip')) {
             return Reply::error('<b>PHP-ZIP</b> extension is missing on your server. Please install the extension.');
         }

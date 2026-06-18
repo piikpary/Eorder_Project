@@ -19,6 +19,7 @@
 
 </head>
 <body>
+    @include('sections.offline-banner')
 
     @yield('content')
 

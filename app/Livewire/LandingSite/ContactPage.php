@@ -74,7 +74,7 @@ class ContactPage extends Component
             'email' => 'required',
             'address' => 'required',
             'contactCompany' => 'required',
-            'contactImage' => $this->existingImageUrl ? '' : 'required|image|mimes:jpeg,png,jpg|max:2048'
+            'contactImage' => $this->existingImageUrl ? '' : \App\Support\ImageUpload::requiredMimesRule()
         ]);
         $contact = Contact::updateOrCreate(
             ['language_setting_id' => $this->languageSettingid],
@@ -107,7 +107,7 @@ class ContactPage extends Component
     public function updatedContactImage()
     {
         $this->validate([
-            'contactImage' => 'image|mimes:jpeg,png,jpg|max:2048'
+            'contactImage' => \App\Support\ImageUpload::IMAGE_MIMES_MAX_2048
         ]);
 
         if ($this->contactImage) {
