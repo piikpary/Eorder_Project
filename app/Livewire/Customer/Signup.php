@@ -105,27 +105,16 @@ class Signup extends Component
 
     public function submitForm()
     {
-        if ($this->isSmsLoginEnabled()) {
-            $this->validate([
-                'phoneCode' => 'required',
-                'phone' => 'required|string',
-            ]);
+        $this->validate([
+            'phoneCode' => 'required',
+            'phone' => 'required|string',
+        ]);
 
-            // Find customer by phone number when SMS is enabled - restricted to current restaurant
-            $customer = Customer::where('phone_code', $this->phoneCode)
-                ->where('phone', $this->phone)
-                ->where('restaurant_id', $this->restaurant->id)
-                ->first();
-        } else {
-            $this->validate([
-                'email' => 'required|email'
-            ]);
-
-            // Find customer by email - restricted to current restaurant
-            $customer = Customer::where('email', $this->email)
-                ->where('restaurant_id', $this->restaurant->id)
-                ->first();
-        }
+        // Existing customers log in using phone number.
+        $customer = Customer::where('phone_code', $this->phoneCode)
+            ->where('phone', $this->phone)
+            ->where('restaurant_id', $this->restaurant->id)
+            ->first();
 
         if (!$customer && !$this->showSignUpProcess) {
             $this->showSignUpProcess = true;
@@ -151,9 +140,15 @@ class Signup extends Component
                     'required',
                     'string',
                 ],
-                'email' => $this->isSmsLoginEnabled()
-                    ? ['nullable', 'email', Rule::unique('customers', 'email')->where('restaurant_id', $this->restaurant->id)]
-                    : ['required', 'email', Rule::unique('customers', 'email')->where('restaurant_id', $this->restaurant->id)],
+                'email' => [
+                    'required',
+                    'email',
+                    Rule::unique('customers', 'email')
+                        ->where(
+                            'restaurant_id',
+                            $this->restaurant->id
+                        ),
+                ],
             ], [
                 // kept for backwards compatibility; no longer validated as unique here
                 'phone.unique' => __('messages.phoneAlreadyExists'),
@@ -183,17 +178,11 @@ class Signup extends Component
             'verificationCode' => 'required'
         ]);
 
-        // Use phone or email lookup based on SMS setting - restricted to current restaurant
-        if ($this->isSmsLoginEnabled()) {
-            $customer = Customer::where('phone_code', $this->phoneCode)
-                ->where('phone', $this->phone)
-                ->where('restaurant_id', $this->restaurant->id)
-                ->first();
-        } else {
-            $customer = Customer::where('email', $this->email)
-                ->where('restaurant_id', $this->restaurant->id)
-                ->first();
-        }
+        // Resolve the existing customer using phone number.
+        $customer = Customer::where('phone_code', $this->phoneCode)
+            ->where('phone', $this->phone)
+            ->where('restaurant_id', $this->restaurant->id)
+            ->first();
 
         if (!$customer) {
             $this->alert('error', __('messages.noCustomerFound'), [

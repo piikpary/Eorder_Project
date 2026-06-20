@@ -125,11 +125,7 @@ $useJsOrderTypeModal = $useClientMenuCatalog && ($clientShopBrowseConfig['use_js
     @if(!$isHeaderDisabled)
         <section class="px-4 bg-white dark:bg-gray-900">
             @if($headerType === 'text')
-                <div class="py-4 px-4 mx-auto max-w-screen-xl text-center lg:py-8 lg:px-12 bg-skin-base/[.1] dark:bg-gray-800 rounded-lg">
-                    <h1 class="text-4xl font-extrabold leading-none tracking-tight text-gray-900 md:text-5xl lg:text-3xl dark:text-white">
-                        {{ $headerText }}
-                    </h1>
-                </div>
+                
             @elseif($headerType === 'image' && count($headerImages) > 0)
                 <div id="default-carousel" class="relative w-full touch-pan-y" data-carousel="slide">
                     <div class="relative h-24 overflow-hidden border border-gray-200 rounded-lg shadow-lg sm:h-32 md:h-40 lg:h-48 dark:border-gray-700">
@@ -172,11 +168,7 @@ $useJsOrderTypeModal = $useClientMenuCatalog && ($clientShopBrowseConfig['use_js
                     @endif
                 </div>
             @else
-                <div class="py-4 px-4 mx-auto max-w-screen-xl text-center lg:py-8 lg:px-12 bg-skin-base/[.1] dark:bg-gray-800 rounded-lg">
-                    <h1 class="text-4xl font-extrabold leading-none tracking-tight text-gray-900 md:text-5xl lg:text-3xl dark:text-white">
-                        @lang('messages.frontHeroHeading')
-                    </h1>
-                </div>
+               
             @endif
         </section>
     @endif
@@ -184,7 +176,517 @@ $useJsOrderTypeModal = $useClientMenuCatalog && ($clientShopBrowseConfig['use_js
 
 
     @if (!$showCart)
-        @if ($useClientMenuCatalog)
+
+    @php
+        $loyaltyCardSettings = $shopBranch?->loyalty_card_settings ?? [];
+
+        if (is_string($loyaltyCardSettings)) {
+            $loyaltyCardSettings =
+                json_decode($loyaltyCardSettings, true) ?: [];
+        }
+
+        if (!is_array($loyaltyCardSettings)) {
+            $loyaltyCardSettings = [];
+        }
+
+        $loyaltyCardEnabled =
+            (bool) ($loyaltyCardSettings['enabled'] ?? true);
+
+        $loyaltyCardTitle =
+            $loyaltyCardSettings['title']
+            ?? $shopBranch?->name
+            ?? $restaurant?->name
+            ?? 'Loyalty Card';
+
+        $loyaltyCardSubtitle =
+            $loyaltyCardSettings['subtitle']
+            ?? 'Loyalty Member';
+
+        $loyaltyPrimaryColor =
+            $loyaltyCardSettings['primary_color']
+            ?? '#d4a017';
+
+        $loyaltySecondaryColor =
+            $loyaltyCardSettings['secondary_color']
+            ?? '#9a6b00';
+
+        $loyaltyBackgroundColor =
+            $loyaltyCardSettings['background_color']
+            ?? '#fffaf0';
+
+        $loyaltyTextColor =
+            $loyaltyCardSettings['text_color']
+            ?? '#2f2100';
+
+        $loyaltyMutedTextColor =
+            $loyaltyCardSettings['muted_text_color']
+            ?? '#786b55';
+
+        $loyaltyBorderColor =
+            $loyaltyCardSettings['border_color']
+            ?? $loyaltyPrimaryColor;
+
+        $loyaltyButtonColor =
+            $loyaltyCardSettings['button_color']
+            ?? $loyaltyPrimaryColor;
+
+        $loyaltyButtonTextColor =
+            $loyaltyCardSettings['button_text_color']
+            ?? '#ffffff';
+
+        $loyaltyShowCustomerName =
+            (bool) (
+                $loyaltyCardSettings['show_customer_name']
+                ?? true
+            );
+
+        $loyaltyShowPhone =
+            (bool) (
+                $loyaltyCardSettings['show_phone']
+                ?? true
+            );
+
+        $loyaltyShowMemberType =
+            (bool) (
+                $loyaltyCardSettings['show_member_type']
+                ?? true
+            );
+
+        $loyaltyShowPoints =
+            (bool) (
+                $loyaltyCardSettings['show_points']
+                ?? true
+            );
+
+        $loyaltyShowPointsValue =
+            (bool) (
+                $loyaltyCardSettings['show_points_value']
+                ?? true
+            );
+
+        $loyaltyCustomer =
+            $customer
+            ?? (
+                function_exists('customer')
+                    ? customer()
+                    : null
+            );
+
+        $loyaltyCustomerId =
+    (int) (
+        data_get($loyaltyCustomer, 'id')
+        ?? ($customerId ?? 0)
+    );
+
+$loyaltyRestaurantId =
+    (int) (
+        data_get($restaurant, 'id')
+        ?? data_get($shopBranch, 'restaurant_id')
+        ?? 0
+    );
+
+$loyaltyCardPoints =
+    (int) ($availableLoyaltyPoints ?? 0);
+
+$loyaltyCardPointsValue =
+    (float) ($loyaltyPointsValue ?? 0);
+
+if (
+    $loyaltyCustomerId > 0
+    && $loyaltyRestaurantId > 0
+    && class_exists(
+        \Modules\Loyalty\Services\LoyaltyService::class
+    )
+) {
+    try {
+        $loyaltyCardService = app(
+            \Modules\Loyalty\Services\LoyaltyService::class
+        );
+
+        $loyaltyCardPoints =
+            (int) $loyaltyCardService->getAvailablePoints(
+                $loyaltyRestaurantId,
+                $loyaltyCustomerId
+            );
+
+        $loyaltyCardSetting =
+            \Modules\Loyalty\Entities\LoyaltySetting::query()
+                ->where(
+                    'restaurant_id',
+                    $loyaltyRestaurantId
+                )
+                ->first();
+
+        $loyaltyCardPointUnitValue =
+            (float) (
+                $loyaltyCardSetting?->value_per_point
+                ?? 0
+            );
+
+        $loyaltyCardPointsValue =
+            $loyaltyCardPoints
+            * $loyaltyCardPointUnitValue;
+    } catch (\Throwable $exception) {
+        $loyaltyCardPoints =
+            (int) ($availableLoyaltyPoints ?? 0);
+
+        $loyaltyCardPointsValue =
+            (float) ($loyaltyPointsValue ?? 0);
+    }
+}
+        $loyaltyMemberType =
+            data_get($loyaltyCustomer, 'memberType.name')
+            ?? data_get($loyaltyCustomer, 'member_type.name')
+            ?? data_get($loyaltyCustomer, 'member_type_name')
+            ?? data_get($loyaltyCustomer, 'member_type')
+            ?? $loyaltyCardSubtitle;
+
+        $showStampCycle = false;
+        $loyaltyStampProgress = 0;
+        $loyaltyStampRequired = 0;
+
+        if (
+            $loyaltyCustomerId > 0
+            && $loyaltyRestaurantId > 0
+            && class_exists(
+                \Modules\Loyalty\Entities\LoyaltySetting::class
+            )
+            && class_exists(
+                \Modules\Loyalty\Entities\LoyaltyStampRule::class
+            )
+            && class_exists(
+                \Modules\Loyalty\Entities\CustomerStamp::class
+            )
+        ) {
+            try {
+                $stampSetting =
+                    \Modules\Loyalty\Entities\LoyaltySetting::query()
+                        ->where(
+                            'restaurant_id',
+                            $loyaltyRestaurantId
+                        )
+                        ->first();
+
+                $loyaltyType =
+                    $stampSetting?->loyalty_type ?? 'points';
+
+                $showStampCycle =
+                    (bool) ($stampSetting?->enable_stamps ?? false)
+                    && in_array(
+                        $loyaltyType,
+                        ['stamps', 'both'],
+                        true
+                    );
+
+                if ($showStampCycle) {
+                    $stampRule =
+                        \Modules\Loyalty\Entities\LoyaltyStampRule
+                            ::getActiveRulesForRestaurant(
+                                $loyaltyRestaurantId
+                            )
+                            ->first();
+
+                    if ($stampRule) {
+                        $loyaltyStampRequired = max(
+                            1,
+                            (int) (
+                                $stampRule->stamps_required ?? 1
+                            )
+                        );
+
+                        $customerStamp =
+                            \Modules\Loyalty\Entities\CustomerStamp
+                                ::query()
+                                ->where(
+                                    'restaurant_id',
+                                    $loyaltyRestaurantId
+                                )
+                                ->where(
+                                    'customer_id',
+                                    $loyaltyCustomerId
+                                )
+                                ->where(
+                                    'stamp_rule_id',
+                                    $stampRule->id
+                                )
+                                ->first();
+
+                        $availableStamps = max(
+                            0,
+                            (int) (
+                                $customerStamp?->stamps_earned ?? 0
+                            )
+                            - (int) (
+                                $customerStamp?->stamps_redeemed ?? 0
+                            )
+                        );
+
+                        $loyaltyStampProgress =
+                            $availableStamps > 0
+                                ? (
+                                    (
+                                        $availableStamps - 1
+                                    ) % $loyaltyStampRequired
+                                ) + 1
+                                : 0;
+                    } else {
+                        $showStampCycle = false;
+                    }
+                }
+
+                if ($showStampCycle) {
+                    $loyaltyShowPointsValue = false;
+                }
+            } catch (\Throwable $exception) {
+                $showStampCycle = false;
+                $loyaltyStampProgress = 0;
+                $loyaltyStampRequired = 0;
+            }
+        }
+
+    @endphp
+
+    @if (($cameFromQR ?? false) && $loyaltyCardEnabled)
+        <section
+    class="px-4 mt-4"
+    wire:poll.10s
+    wire:key="branch-loyalty-card-{{ $shopBranch?->id ?? 'default' }}"
+>
+            <div
+                class="overflow-hidden rounded-2xl p-4 shadow-sm"
+                style="
+                    background:
+                        linear-gradient(
+                            135deg,
+                            {{ $loyaltyBackgroundColor }} 0%,
+                            {{ $loyaltyPrimaryColor }}22 100%
+                        );
+                    border: 2px solid {{ $loyaltyBorderColor }};
+                    color: {{ $loyaltyTextColor }};
+                "
+            >
+                @if ($loyaltyCustomer)
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <p
+                                class="text-xs font-semibold uppercase tracking-wider"
+                                style="color: {{ $loyaltyPrimaryColor }};"
+                            >
+                                {{ $loyaltyCardSubtitle }}
+                            </p>
+
+                            <h3 class="mt-1 truncate text-lg font-bold">
+                                {{ $loyaltyCardTitle }}
+                            </h3>
+
+                            @if ($loyaltyShowCustomerName)
+                                <p class="mt-3 text-sm font-semibold">
+                                    {{
+                                        $loyaltyCustomer->name
+                                        ?? 'Customer'
+                                    }}
+                                </p>
+                            @endif
+
+                            @if (
+                                $loyaltyShowPhone
+                                && !empty($loyaltyCustomer->phone)
+                            )
+                                <p
+                                    class="mt-1 text-xs"
+                                    style="
+                                        color:
+                                            {{ $loyaltyMutedTextColor }};
+                                    "
+                                >
+                                    {{ $loyaltyCustomer->phone }}
+                                </p>
+                            @endif
+
+                            @if ($loyaltyShowMemberType)
+                                <p
+                                    class="mt-2 text-xs font-semibold"
+                                    style="
+                                        color:
+                                            {{ $loyaltyPrimaryColor }};
+                                    "
+                                >
+                                    {{
+                                        is_scalar($loyaltyMemberType)
+                                            ? $loyaltyMemberType
+                                            : $loyaltyCardSubtitle
+                                    }}
+                                </p>
+                            @endif
+                        </div>
+
+                        @if ($loyaltyShowPoints)
+                            <div
+                                class="shrink-0 rounded-xl px-4 py-2 text-right shadow-sm"
+                                style="
+                                    background:
+                                        linear-gradient(
+                                            135deg,
+                                            {{ $loyaltyButtonColor }},
+                                            {{ $loyaltySecondaryColor }}
+                                        );
+                                    color:
+                                        {{ $loyaltyButtonTextColor }};
+                                "
+                            >
+                                <p class="text-xs opacity-80">
+                                        {{ $showStampCycle ? 'Stamps' : 'Points' }}
+                                    </p>
+
+                                <p class="text-lg font-bold">
+                                    @if ($showStampCycle)
+                                        {{ $loyaltyStampProgress }}/{{ $loyaltyStampRequired }}
+                                    @else
+                                        {{ number_format($loyaltyCardPoints) }} P
+                                    @endif
+                                </p>
+                            </div>
+                        @endif
+                    </div>
+
+                    @if ($loyaltyShowPointsValue)
+                        <div
+                            class="mt-4 rounded-xl px-4 py-3 text-sm"
+                            style="
+                                background-color:
+                                    {{ $loyaltyPrimaryColor }}12;
+                                border:
+                                    1px solid
+                                    {{ $loyaltyBorderColor }}66;
+                            "
+                        >
+                            <div
+                                class="flex items-center justify-between gap-3"
+                            >
+                                <span
+                                    style="
+                                        color:
+                                            {{ $loyaltyMutedTextColor }};
+                                    "
+                                >
+                                    Points value
+                                </span>
+
+                                <strong>
+                                    {{
+                                        currency_format(
+                                            $loyaltyCardPointsValue,
+                                            $restaurant->currency_id
+                                        )
+                                    }}
+                                </strong>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($loyaltyCardPoints > 0)
+                        <button
+                            type="button"
+                            wire:click="$set(
+                                'showLoyaltyRedemptionModal',
+                                true
+                            )"
+                            class="mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold shadow-sm"
+                            style="
+                                background:
+                                    linear-gradient(
+                                        135deg,
+                                        {{ $loyaltyButtonColor }},
+                                        {{ $loyaltySecondaryColor }}
+                                    );
+                                color:
+                                    {{ $loyaltyButtonTextColor }};
+                            "
+                        >
+                            Redeem loyalty points
+                        </button>
+                    @else
+                        <div
+                            class="mt-4 rounded-xl px-4 py-3 text-center text-sm"
+                            style="
+                                background-color:
+                                    {{ $loyaltyPrimaryColor }}12;
+                                color:
+                                    {{ $loyaltyMutedTextColor }};
+                            "
+                        >
+                            @if ($showStampCycle)
+                                Order eligible items to earn loyalty stamps.
+                            @else
+                                Start ordering to earn loyalty points.
+                            @endif
+                        </div>
+                    @endif
+                @else
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <p
+                                class="text-xs font-semibold uppercase tracking-wider"
+                                style="
+                                    color:
+                                        {{ $loyaltyPrimaryColor }};
+                                "
+                            >
+                                {{ $loyaltyCardSubtitle }}
+                            </p>
+
+                            <h3 class="mt-1 truncate text-lg font-bold">
+                                {{ $loyaltyCardTitle }}
+                            </h3>
+
+                            <p
+                                class="mt-2 text-sm"
+                                style="
+                                    color:
+                                        {{ $loyaltyMutedTextColor }};
+                                "
+                            >
+                                Login to view your loyalty points and
+                                rewards.
+                            </p>
+                        </div>
+
+                        <div
+                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold"
+                            style="
+                                background:
+                                    {{ $loyaltyPrimaryColor }};
+                                color:
+                                    {{ $loyaltyButtonTextColor }};
+                            "
+                        >
+                            P
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        wire:click="$dispatch('showSignup')"
+                        class="mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold shadow-sm"
+                        style="
+                            background:
+                                linear-gradient(
+                                    135deg,
+                                    {{ $loyaltyButtonColor }},
+                                    {{ $loyaltySecondaryColor }}
+                                );
+                            color:
+                                {{ $loyaltyButtonTextColor }};
+                        "
+                    >
+                        Login to view loyalty points
+                    </button>
+                @endif
+            </div>
+        </section>
+    @endif
+
+    @if ($useClientMenuCatalog)
             @include('livewire.shop.partials.cart-client-menu')
         @elseif (!$showOrderTypeModal)
 
@@ -2740,3 +3242,5 @@ $useJsOrderTypeModal = $useClientMenuCatalog && ($clientShopBrowseConfig['use_js
     </x-dialog-modal>
     @endif
 </div>
+
+

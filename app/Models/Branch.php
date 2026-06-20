@@ -36,11 +36,13 @@ class Branch extends BaseModel
         'unique_hash',
         'lat',
         'lng',
+	'loyalty_card_settings',
     ];
 
     protected $casts = [
         'lat' => 'float',
         'lng' => 'float',
+	'loyalty_card_settings' => 'array',
     ];
 
     public function restaurant(): BelongsTo

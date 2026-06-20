@@ -567,7 +567,7 @@ if ($rewardsAfter > $rewardsBefore) {
     $rewardAvailableAlerts[] = [
         'reward' => $rule->reward_type ? str_replace('_', ' ', ucfirst($rule->reward_type)) : 'Reward',
         'required' => $requiredStamps,
-        'available' => $availableAfter,
+        'available' => $requiredStamps,
         'item_name' => $rule->menuItem->item_name ?? 'Item',
     ];
 }                    // Create transaction record
